@@ -8,7 +8,8 @@ Each case is a small world, a table of `bpre` and `hasBase` facts cut down from
 scala/scala b4ad4458da, and a few equations closed by `decide`. The worlds are tables,
 not derived from a class table, so each example proves "under these base-type facts,
 the walks compute this". Case B shows a mis-anchored chain; case A shows the plugin's
-fallback rewriting where scalac's walk stops.
+fallback rewriting where scalac's walk stops; case C shows a self-rooted link, right
+once and wrong twice.
 -/
 
 namespace Cases
@@ -130,5 +131,64 @@ example : Scalac.thisAsSeen E.toWorld im si fromPath = .this im := by decide
 example : IntelliJ.thisAsSeen E im si fromPath = fromPath := by decide
 
 end A
+
+/-! ## Case (c): `ast/parser/Scanners.scala` — a self-rooted link, right once, wrong twice
+
+    trait Scanners {                                                       -- sc
+      class UnitScanner … { lazy val parensAnalyzer = new ParensAnalyzer(…)  -- us
+                           def balance … }
+      class ParensAnalyzer … extends UnitScanner(…) }                       -- pa
+
+Inside `UnitScanner`, `parensAnalyzer.balance(token)` views a member that
+`ParensAnalyzer` inherits from `UnitScanner` through the link
+`` `this` -> UnitScanner.this.parensAnalyzer.type asSeenFrom UnitScanner ``. Its target
+is rooted in `UnitScanner.this`, the very this-type it rewrites: `Chain.SelfRooted`.
+Take a member type `UnitScanner.this.T`.
+-/
+namespace C
+
+def sc : Class := [0]
+def us : Class := [1, 0]
+def pa : Class := [2, 0]
+
+/-- The path `UnitScanner.this.parensAnalyzer`. -/
+def parensAnalyzer : Ty := .sel (.this us) 7
+
+/-- A `ParensAnalyzer` is a `UnitScanner`, and either one's base type `UnitScanner`
+has prefix `Scanners.this`. -/
+def bpre : Ty → Class → Ty
+  | _, [1, 0] => .this sc
+  | p, _      => p
+
+def hasBase : Ty → Class → Bool
+  | .sel (.this [1, 0]) 7, [1, 0] => true    -- parensAnalyzer : UnitScanner
+  | p, c => p == .this c
+
+def W : World := ⟨bpre, hasBase⟩
+
+def link : Link := ⟨parensAnalyzer, us⟩
+
+/-- A member type `UnitScanner.this.T`. -/
+def memberT : Ty := .sel (.this us) 42
+
+/-- scalac: the receiver's `UnitScanner.this` becomes `parensAnalyzer`; the
+`UnitScanner.this` inside `parensAnalyzer` is the enclosing scanner and stays. -/
+example : asf W parensAnalyzer us memberT = .sel (.sel (.this us) 7) 42 := by decide
+
+/-- The link once is scalac's; the link twice rewrites the enclosing scanner too, giving
+`UnitScanner.this.parensAnalyzer.parensAnalyzer.T`. -/
+example : applyChain W [link] memberT = asf W parensAnalyzer us memberT := by decide
+example : applyChain W [link, link] memberT = .sel (.sel (.sel (.this us) 7) 7) 42 := by decide
+example : applyChain W [link, link] memberT ≠ asf W parensAnalyzer us memberT := by decide
+
+/-- The link is self-rooted, so the general lemmas apply: it does not fix its target,
+and so lies outside `idempotent_of_fixed`. -/
+theorem selfRooted : SelfRooted W link.pre link.anchor :=
+  ⟨by decide, .sel 7 .root, by decide, by decide⟩
+
+example : asf W link.pre link.anchor link.pre ≠ link.pre :=
+  selfRooted_moves_target W _ _ selfRooted
+
+end C
 
 end Cases

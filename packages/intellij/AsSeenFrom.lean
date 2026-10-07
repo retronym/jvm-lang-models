@@ -15,7 +15,7 @@ type as scalac's single `asSeenFrom`? Read in order:
 * `Chain`: a chain of links is one `asSeenFrom`, and the conditions a runtime check can
   assert on a chain to make it the intended one;
 * `IntelliJ`: the plugin's walk, and where it agrees with scalac's;
-* `Cases`: two cases from scala/scala, decided by computation.
+* `Cases`: three cases from scala/scala, decided by computation.
 
 See `README.md` for the motivation and the map from theorems to the plugin's checks.
 -/

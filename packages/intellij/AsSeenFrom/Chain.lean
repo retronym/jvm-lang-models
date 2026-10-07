@@ -12,7 +12,8 @@ link, and `chain_is_single` extends that to a whole chain. The second half names
 conditions a runtime check can assert on a chain without knowing the type it will be
 applied to, and proves what each one buys: `wellAnchored` (the chain views from the
 intended prefix), `fixedTarget` (a link is idempotent), `stateSafe` (a chain cannot
-re-anchor anything).
+re-anchor anything). Last, `once_is_scalac` covers links that are not idempotent: a
+self-rooted link is scalac's result as long as it occurs once in a chain.
 
 The one assumption about the world is **lockstep**: an `asSeenFrom` map commutes with
 taking a base type's prefix. scalac relies on it (the base types of a mapped type are
@@ -134,8 +135,10 @@ theorem chain_is_single (l : Link) (ls : List Link) (t : Ty)
 when applied again to its own output. Without `hp` a link applied twice would view
 from its prefix as seen by itself, a different prefix.
 
-The plugin's check A1 tests `hp` directly, by applying the link to its target when the
-link is built. -/
+The plugin's check A1 tests `hp` directly, by applying the link to its target the first
+time the link is used. A link that fails `hp` is not necessarily wrong: a self-rooted
+link (`SelfRooted`) never satisfies it, and is right as long as it occurs once in a
+chain (`once_is_scalac`). -/
 theorem idempotent (p : Ty) (c : Class) (t : Ty)
     (h : inView W p c t) (hp : asf W p c p = p) :
     asf W p c (asf W p c t) = asf W p c t := by
@@ -296,5 +299,137 @@ theorem stateSafe_preserves_this (us : List Update) (hs : stateSafe us) (t : Ty)
     | thisTy l => exact absurd hs id
 
 end Constraints
+
+/-! ## Self-rooted links: correct once, wrong twice
+
+`idempotent_of_fixed` covers links whose target the link leaves alone. The plugin also
+mints links whose target is a path *rooted in the rewritten class itself*, and these
+are not idempotent at all. In scala/scala's `Scanners.scala`:
+
+    class UnitScanner … { lazy val parensAnalyzer = new ParensAnalyzer(…) }
+    class ParensAnalyzer … extends UnitScanner(…)
+
+Inside `UnitScanner`, `parensAnalyzer.balance(token)` selects a member that
+`ParensAnalyzer` inherits from `UnitScanner`, so its type is viewed through the link
+`` `this` -> UnitScanner.this.parensAnalyzer.type asSeenFrom UnitScanner ``. Two different
+`UnitScanner` instances now share a name. The `UnitScanner.this` in the member's type is
+the receiver, to become `parensAnalyzer`; the `UnitScanner.this` inside the target is the
+enclosing scanner. scalac's walk replaces the first and never looks inside what it put
+in its place, so the second survives and the result is right:
+`UnitScanner.this.parensAnalyzer.T`. A second application of the same link cannot tell
+the two apart. It rewrites the surviving one too and gives
+`UnitScanner.this.parensAnalyzer.parensAnalyzer.T`, which is wrong. (RefChecks'
+`class LevelInfo(val outer: LevelInfo)` gives the same shape, `LevelInfo.this.outer`.)
+
+So such a link relies on two things: the engine does not revisit a leaf it has replaced
+(true of `asf`, structurally, and of the plugin's `recursiveUpdate`, which hands a
+`ReplaceWith` result to the *next* link, never back to the current one), and the link
+does not occur again later in the chain. The lemmas below prove that the first is enough
+for one occurrence (`once_is_scalac`), and that a second copy always moves the target
+(`selfRooted_dup_not_fixed`) and, applied twice in a row, diverges from scalac
+(`selfRooted_twice_diverges`). **A self-rooted link is right exactly once.**
+-/
+
+/-- `RootedAt c q`: `q` is a path `C.this.v₁.….vₙ` rooted in `C.this`. -/
+inductive RootedAt (c : Class) : Ty → Prop
+  | root : RootedAt c (.this c)
+  | sel {q : Ty} (v : Nat) : RootedAt c q → RootedAt c (.sel q v)
+
+/-- `graft p q`: the path `q` with its root replaced by `p`. -/
+def graft (p : Ty) : Ty → Ty
+  | .this _  => p
+  | .sel q v => .sel (graft p q) v
+  | t        => t
+
+/-- How many selections a path has above its root. -/
+def pathDepth : Ty → Nat
+  | .sel q _ => pathDepth q + 1
+  | _        => 0
+
+/-- **Self-rooted.** The link `(p, c)` has a target `p` that is a proper path rooted in
+`C.this`, and `p` is an instance of `c` (`parensAnalyzer : ParensAnalyzer <: UnitScanner`),
+so the walk rewrites `C.this` at its first step. The plugin detects this shape with
+`ThisTypeSubstitution.embedsRewrittenThis`. -/
+structure SelfRooted (p : Ty) (c : Class) : Prop where
+  nonempty : c ≠ []
+  rooted   : RootedAt c p
+  proper   : p ≠ .this c
+  instance_ : W.hasBase p c = true
+
+omit [Lockstep W] in
+/-- **One pass grafts.** A link applied to a path rooted in its anchor's this-type
+replaces the root by the target and does not look inside the target. -/
+theorem asf_rooted (p : Ty) (c : Class) (q : Ty) (hc : c ≠ []) (hb : W.hasBase p c = true)
+    (hq : RootedAt c q) : asf W p c q = graft p q := by
+  induction hq with
+  | root =>
+    obtain ⟨x, rest, rfl⟩ := List.exists_cons_of_ne_nil hc
+    simp [asf, thisAsSeen, graft, hb]
+  | sel v _ ih => simp [asf, graft, ih]
+
+theorem depth_graft (p : Ty) (c : Class) (q : Ty) (hq : RootedAt c q) :
+    pathDepth (graft p q) = pathDepth p + pathDepth q := by
+  induction hq with
+  | root => simp [graft, pathDepth]
+  | sel v _ ih => simp [graft, pathDepth, ih]; omega
+
+omit [Lockstep W] in
+/-- **A self-rooted link does not fix its target.** Applied to its own target it grafts
+the target onto itself, which is strictly longer. So `idempotent`'s `hp` fails, and
+`idempotent_of_fixed` says nothing about these links. -/
+theorem selfRooted_moves_target (p : Ty) (c : Class) (h : SelfRooted W p c) :
+    asf W p c p ≠ p := by
+  rw [asf_rooted W p c p h.nonempty h.instance_ h.rooted]
+  intro heq
+  have hd := congrArg pathDepth heq
+  rw [depth_graft p c p h.rooted] at hd
+  have : pathDepth p ≠ 0 := by
+    cases h.rooted with
+    | root => exact absurd rfl h.proper
+    | sel v _ => simp [pathDepth]
+  omega
+
+omit [Lockstep W] in
+/-- **Twice diverges.** For a self-rooted link `l`, the chain `l >> l` applied to
+`C.this` (any member type that mentions the receiver) differs from `l` alone, which is
+scalac's `asf p c`. The second copy rewrites the `C.this` that the first copy brought in
+with the target. -/
+theorem selfRooted_twice_diverges (l : Link) (h : SelfRooted W l.pre l.anchor) :
+    applyChain W [l, l] (.this l.anchor) ≠ applyChain W [l] (.this l.anchor) := by
+  have h1 : asf W l.pre l.anchor (.this l.anchor) = l.pre :=
+    (asf_rooted W _ _ _ h.nonempty h.instance_ .root).trans (by simp [graft])
+  simp only [applyChain, List.foldl, h1]
+  exact selfRooted_moves_target W _ _ h
+
+omit [Lockstep W] in
+theorem composedPrefix_of_fixed (p : Ty) (ls : List Link)
+    (h : ∀ l' ∈ ls, asf W l'.pre l'.anchor p = p) : composedPrefix W ls p = p := by
+  induction ls with
+  | nil => rfl
+  | cons l' rest ih =>
+    simp only [composedPrefix]
+    rw [h l' (by simp)]
+    exact ih (fun l'' hl => h l'' (by simp [hl]))
+
+/-- **Once is scalac's.** If no later link of the chain moves the first link's target,
+the chain is that link alone: scalac's `asf p c`. This needs nothing of the link itself,
+so it covers self-rooted links, which `idempotent_of_fixed` does not. By
+`chain_is_single`, whose composed prefix the later links leave unchanged.
+
+For a self-rooted `l` the hypothesis excludes a second copy of `l` among the later
+links (`selfRooted_moves_target`). That is the condition the plugin's A1 checks for
+these links: **a self-rooted link may occur at most once in a chain.** -/
+theorem once_is_scalac (l : Link) (ls : List Link) (t : Ty)
+    (hv : inView W l.pre l.anchor t)
+    (hfix : ∀ l' ∈ ls, asf W l'.pre l'.anchor l.pre = l.pre) :
+    applyChain W (l :: ls) t = asf W l.pre l.anchor t := by
+  rw [chain_is_single W l ls t hv, composedPrefix_of_fixed W l.pre ls hfix]
+
+omit [Lockstep W] in
+/-- The hypothesis of `once_is_scalac` fails for any chain that holds a self-rooted
+link twice. -/
+theorem selfRooted_dup_not_fixed (l : Link) (ls : List Link) (h : SelfRooted W l.pre l.anchor)
+    (hdup : l ∈ ls) : ¬ ∀ l' ∈ ls, asf W l'.pre l'.anchor l.pre = l.pre :=
+  fun hfix => selfRooted_moves_target W _ _ h (hfix l hdup)
 
 end Chain
