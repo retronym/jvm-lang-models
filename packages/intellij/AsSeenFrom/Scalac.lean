@@ -50,20 +50,4 @@ prefix because scalac's match also needs `p baseType c`. -/
 def inView (p : Ty) (c : Class) (t : Ty) : Prop :=
   ∀ d ∈ t.thisLeaves, rewrites W d c p = true
 
-/-- P3: the result for a this-leaf is either the leaf itself or some iterated
-`bpre` of `p`; it never contains `D.this` by construction. Stated as: the result is
-`p` after `k` `bpre` steps, for the cursors walked. -/
-theorem thisAsSeen_shape (d : Class) (c : Class) (p : Ty) :
-    thisAsSeen W d c p = .this d ∨
-    ∃ cs : List Class, thisAsSeen W d c p = cs.foldl W.bpre p := by
-  induction c generalizing p with
-  | nil => left; rfl
-  | cons x rest ih =>
-    simp only [thisAsSeen]
-    split
-    · right; exact ⟨[], rfl⟩
-    · rcases ih (W.bpre p (x :: rest)) with h | ⟨cs, h⟩
-      · left; exact h
-      · right; exact ⟨(x :: rest) :: cs, by simpa using h⟩
-
 end Scalac

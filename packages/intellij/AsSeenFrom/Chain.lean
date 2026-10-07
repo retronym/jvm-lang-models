@@ -206,13 +206,6 @@ theorem idempotent_of_fixed (p : Ty) (c : Class) (t : Ty)
     asf W p c (asf W p c t) = asf W p c t :=
   idempotent W p c t hv (asf_eq_of_fixed W p c p hf)
 
-/-- … and a duplicated link in a chain safe to drop (`followed` dedup). -/
-theorem dedup (l : Link) (t : Ty) (hv : inView W l.pre l.anchor t)
-    (hf : fixedTarget W l.pre l.anchor) :
-    applyChain W [l, l] t = applyChain W [l] t := by
-  simp only [applyChain, List.foldl]
-  exact idempotent_of_fixed W l.pre l.anchor t hv hf
-
 /-- **C3 (threaded state carries no this-links).** A substitutor that is put into
 resolve state for *other* references (`matchClauseSubstitutor`) may bind type
 variables but must not re-anchor. Modelled as the two kinds of link a substitutor may
