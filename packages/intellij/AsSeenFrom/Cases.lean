@@ -1,5 +1,6 @@
 import AsSeenFrom.Chain
 import AsSeenFrom.IntelliJ
+import AsSeenFrom.Relaxations
 
 /-!
 # Two cases from scala/scala, as checked computations
@@ -9,7 +10,8 @@ scala/scala b4ad4458da, and a few equations closed by `decide`. The worlds are t
 not derived from a class table, so each example proves "under these base-type facts,
 the walks compute this". Case B shows a mis-anchored chain; case A shows the plugin's
 fallback rewriting where scalac's walk stops; case C shows a self-rooted link, right
-once and wrong twice.
+once and wrong twice. Cases D and E are the shapes `Relaxations` admits: a compound
+self-rooted target, and a target rooted in the anchor's owner.
 -/
 
 namespace Cases
@@ -190,5 +192,78 @@ example : asf W link.pre link.anchor link.pre ≠ link.pre :=
   selfRooted_moves_target W _ _ selfRooted
 
 end C
+
+/-! ## Case (d): a compound self-rooted link, and the `processType` duplicate
+
+    trait T1 { type M3 }      -- t1
+
+The link `T1.this -> T1 with T1.this.M3` has a compound target with a part rooted in the
+very this-type it rewrites (`Relax.PartSelfRooted`). `ScProjectionType.processType` used
+to apply it twice, growing `T1 with (T1 with T1.this.M3)#M3`. The package is the empty
+class, so `T1` the type is `<pkg>.this.T1`.
+-/
+namespace D
+open Relax
+
+def t1 : Class := [1]
+def T1 : Ty := .sel (.this []) 1
+def target : Ty := .pair T1 (.sel (.this t1) 3)
+
+def W : World where
+  bpre    := fun _ _ => .this []
+  hasBase := fun p c => p == target && c == t1 || p == .this c
+
+def link : Link := ⟨target, t1⟩
+
+example : applyChain W [link] (.this t1) = target := by decide
+example : applyChain W [link, link] (.this t1) = .pair T1 (.sel target 3) := by decide
+
+theorem partSelfRooted : PartSelfRooted W link.pre link.anchor :=
+  ⟨by decide, .right _ (.path (.sel 3 .root)), by decide, by decide⟩
+
+example : applyChain W [link, link] (.this t1) ≠ applyChain W [link] (.this t1) :=
+  partRooted_twice_diverges W link partSelfRooted
+
+end D
+
+/-! ## Case (e): an outer-rooted link, fixed or not depending on the world
+
+    trait T2 { val v12: I2; trait I2 }     -- t2, i2
+
+The link `I2.this -> T2.this.v12.type` is rooted in `T2.this`, the owner of its anchor.
+If `v12` is an `I2` of this very `T2`, `(v12 baseType I2).prefix` is `T2.this` and the
+link fixes its target. If instead `val v12: other.I2` for some `val other: T2`, the
+prefix is `T2.this.other`, and the link moves its target to `T2.this.other.v12`.
+-/
+namespace E
+open Relax
+
+def t2 : Class := [2]
+def i2 : Class := [5, 2]
+def v12 : Ty := .sel (.this t2) 12
+def other : Ty := .sel (.this t2) 99
+
+def hasBase : Ty → Class → Bool
+  | .sel (.this [2]) 12, [5, 2] => true   -- v12 : I2
+  | .sel (.this [2]) 99, [2]    => true   -- other : T2
+  | p, c => p == .this c
+
+/-- `val v12: I2`: an `I2` of this `T2`. -/
+def Wsame : World := ⟨fun p c => if p == v12 && c == i2 then .this t2 else p, hasBase⟩
+/-- `val v12: other.I2`: an `I2` of another `T2`. -/
+def Wother : World := ⟨fun p c => if p == v12 && c == i2 then other else p, hasBase⟩
+
+def link : Link := ⟨v12, i2⟩
+
+theorem outerSame : OuterRooted Wsame v12 i2 t2 := ⟨by decide, .sel 12 .root, by decide⟩
+theorem outerOther : OuterRooted Wother v12 i2 t2 := ⟨by decide, .sel 12 .root, by decide⟩
+
+example : asf Wsame v12 i2 v12 = v12 :=
+  (outerRooted_fixed_iff_owner Wsame v12 5 t2 outerSame).2 (by decide)
+example : asf Wother v12 i2 v12 = .sel other 12 := by decide
+example : applyChain Wother [link, link] (.this i2) ≠ applyChain Wother [link] (.this i2) :=
+  outerRooted_twice_diverges Wother link t2 outerOther (by decide) (by decide) (by decide)
+
+end E
 
 end Cases

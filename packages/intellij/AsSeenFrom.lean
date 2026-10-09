@@ -1,6 +1,7 @@
 import AsSeenFrom.Model
 import AsSeenFrom.Scalac
 import AsSeenFrom.Chain
+import AsSeenFrom.Relaxations
 import AsSeenFrom.IntelliJ
 import AsSeenFrom.Cases
 
