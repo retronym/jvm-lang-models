@@ -31,6 +31,11 @@ The model abstracts the environment to two facts read off base types (`Model.lea
 | `Chain.chain_is_intended` | if each link is anchored at the class of the prefix composed so far (`wellAnchored`), that one `asSeenFrom` is from the *intended* prefix | A3, A4: measurements, not gates (see link order below) |
 | `Chain.idempotent`, `Chain.idempotent_of_fixed` | a link that maps its own target to itself (`hp`) can be re-applied to its own output without effect; `fixedTarget` is a syntactic condition sufficient for `hp` | A1: checks `hp` directly, by applying the link to its target |
 | `Chain.once_is_scalac`, `Chain.selfRooted_twice_diverges` | a link whose target is a path rooted in the class it rewrites (`SelfRooted`) never satisfies `hp`, yet the chain is scalac's result if no later link moves that target; a second copy of the link always moves it (`selfRooted_dup_not_fixed`), and `l >> l` diverges from scalac | A1: a link that fails `hp` must be self-rooted, and a self-rooted link may occur at most once in a chain |
+| `Relax.partRooted_moves_target`, `Relax.partRooted_twice_diverges`, `Relax.partRooted_once_is_scalac` | a link whose compound target has a part rooted in the anchor's this-type (`T1.this -> T1 with T1.this.M3`) always moves its target, is scalac's result once, and diverges twice (the `processType` duplicate) | A1 relaxation (a): admit once per chain |
+| `Relax.outerRooted_fixed_iff_owner`, `Relax.outerRooted_once_is_scalac` | a path target rooted in the anchor's owner (`I2.this -> T2.this.v12.type`) moves exactly when `(v12 baseType I2).prefix` is not `T2.this`; once it is the model's scalac, which substitutes unstable prefixes where real scalac captures them existentially | A1 relaxation (b): admit once per chain, against model-scalac only |
+| `Relax.idempotent_eqv`, `Relax.once_is_scalac_eqv` | up to `Eqv` (singleton aliases, compound commutativity, associativity, idempotence), under the congruence assumptions `PathEqv`, a link that gives its target back is idempotent and a chain is scalac's | A1 relaxation (c): justifies `=:=` modulo aliases and reordering, narrower than the mutual conformance the plugin uses |
+| `Relax.once_is_scalac_of_disjoint` | no this-type of the first target is a later link's anchor or encloses it, so no later link moves the target | closes the gap between A1's "at most one copy" and `once_is_scalac`'s hypothesis |
+| `Relax.pluginAsf_agrees` | one pass of the plugin's map is scalac's where the fallback does not fire on the input, whatever it does on the target | A1 relaxation (a), inheritor case: the one pass only |
 | `Chain.stateSafe_preserves_this` | a chain with no this-type rewrites keeps every this-type of its input, so storing it in resolver state cannot re-anchor other references' types | A2: fails the tests if violated |
 | `IntelliJ.agrees` | the plugin's walk, fallback included, equals scalac's wherever the fallback does not fire; both start from an anchor | A6: every this-type rewrite has an anchor, now true by construction |
 
@@ -49,8 +54,9 @@ What is not proved: that `BaseTypes.baseType` satisfies lockstep (an assumption 
 | `Model.lean` | classes as owner paths, types with this-leaves, a `World` of base-type facts |
 | `Scalac.lean` | scalac's `thisTypeAsSeen` and `asSeenFrom` as structural recursion, so termination is the checker's; `inView` |
 | `Chain.lean` | lockstep; `compose`, `chain_is_single`, `idempotent`; then the checkable conditions `wellAnchored`, `fixedTarget`, `stateSafe` and their theorems; last, self-rooted links and `once_is_scalac` |
+| `Relaxations.lean` | three shapes of link that fail A1's arms and are admitted by a relaxation: compound self-rooted, outer-rooted, respelled; and a checkable condition for `once_is_scalac` |
 | `IntelliJ.lean` | the plugin's walk with its narrow-against-target fallback; `agrees` |
-| `Cases.lean` | three cases from scala/scala, decided by computation: a mis-anchored chain (`MatchWarnings`), the fallback firing where scalac's walk stops (`Importers`), and a self-rooted link applied once and twice (`Scanners`) |
+| `Cases.lean` | three cases from scala/scala, decided by computation: a mis-anchored chain (`MatchWarnings`), the fallback firing where scalac's walk stops (`Importers`), a self-rooted link applied once and twice (`Scanners`), and the shapes of `Relaxations` (D, E) |
 
 ```
 elan default stable   # Lean 4.34

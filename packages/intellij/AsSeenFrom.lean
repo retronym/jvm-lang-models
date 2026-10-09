@@ -15,8 +15,10 @@ type as scalac's single `asSeenFrom`? Read in order:
 * `Scalac`: scalac's walk, the reference semantics;
 * `Chain`: a chain of links is one `asSeenFrom`, and the conditions a runtime check can
   assert on a chain to make it the intended one;
+* `Relaxations`: links that are not idempotent and still right, the shapes a relaxed
+  check A1 admits;
 * `IntelliJ`: the plugin's walk, and where it agrees with scalac's;
-* `Cases`: three cases from scala/scala, decided by computation.
+* `Cases`: cases from scala/scala, decided by computation.
 
 See `README.md` for the motivation and the map from theorems to the plugin's checks.
 -/

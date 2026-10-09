@@ -1,4 +1,5 @@
 import AsSeenFrom.Chain
+import AsSeenFrom.IntelliJ
 
 /-!
 # Relaxing A1: which non-idempotent links are still right
@@ -26,7 +27,13 @@ to its own target, which is what decides whether a second copy is harmful, and c
 two gaps in the informal argument: that "at most one copy" is not the same as "no later
 link moves the target" (`once_is_scalac_of_disjoint` gives a checkable condition for the
 latter), and that (c) needs `once_is_scalac` up to an equivalence, which only holds for
-an equivalence the map respects (`PathEqv`).
+an equivalence the map respects (`PathEqv`). The inheritor variant of (a) is only
+partly within the model (`pluginAsf_agrees`).
+
+In short: (a) for a part rooted in the anchor is justified outright; (b) is justified
+against the model's scalac, which differs from real scalac on unstable prefixes; (c) is
+justified for `=:=` modulo aliases and compound reordering, which is narrower than the
+mutual conformance the plugin checks.
 -/
 
 namespace Relax
@@ -255,6 +262,48 @@ theorem partRooted_once_is_scalac [Lockstep W] (l : Link) (ls : List Link) (t : 
     applyChain W (l :: ls) t = asf W l.pre l.anchor t :=
   once_is_scalac W l ls t hv hfix
 
+/-! ## (a), inheritor case: one pass of the plugin's walk
+
+`T2.this -> T0 with T3.this.type with T3.this.I5`, with `T3 <: T2`, has a part rooted in
+an inheritor's this-type. scalac's walk anchored at `T2` never matches `T3.this`, so in
+the model's scalac this link fixes its target. Over scala/scala the plugin's walk does
+rewrite `T3.this` when the link is applied to its own target, which is why A1 sees a
+moved target. One pass of the link over a member type `t` only walks `t`'s this-leaves,
+never the target's, so what the plugin does to the target does not matter for that
+pass: `pluginAsf_agrees` says one pass is scalac's wherever the fallback does not fire
+on `t`'s leaves.
+
+The model cannot exhibit the moved target itself. Its fallback fires only when the
+prefix lacks the cursor as a base class, and a target that is an instance of the anchor
+has it at the first step, so the model's plugin walk climbs past `T2` and leaves `T3.this`
+alone, as scalac's does (unless a class enclosing `T2` inherits `T3`). The plugin's rewrite of an inheritor's this-type comes from its handling of
+superclass this-types (`toPrefix`'s first branch, not modelled; see `IntelliJ`). So the
+model justifies the inheritor arm of (a) only for the one pass over `t`; that a later
+copy of the link is harmless or harmful there is outside it. -/
+
+/-- The plugin's whole map: its walk at every this-leaf. -/
+def pluginAsf (E : IntelliJ.Env) (p : Ty) (c : Class) : Ty → Ty
+  | .this d   => IntelliJ.thisAsSeen E d c p
+  | .sel q v  => .sel (pluginAsf E p c q) v
+  | .pair a b => .pair (pluginAsf E p c a) (pluginAsf E p c b)
+  | .tvar n   => .tvar n
+
+/-- **One pass is scalac's where the fallback does not fire on the input.** Nothing is
+assumed about the target's own this-leaves, so this holds even for a link whose target
+the fallback would move. -/
+theorem pluginAsf_agrees (E : IntelliJ.Env) [IntelliJ.Coherent E] (p : Ty) (c : Class) (t : Ty)
+    (hf : ∀ d ∈ t.thisLeaves, IntelliJ.faithfulOn E d c p) :
+    pluginAsf E p c t = asf E.toWorld p c t := by
+  induction t with
+  | this d => exact IntelliJ.agrees E d c p (hf d (by simp [Ty.thisLeaves]))
+  | sel q v ih =>
+    simp only [pluginAsf, asf]; rw [ih (fun d hd => hf d (by simpa [Ty.thisLeaves] using hd))]
+  | pair a b iha ihb =>
+    simp only [pluginAsf, asf]
+    rw [iha (fun d hd => hf d (by simp [Ty.thisLeaves, hd])),
+        ihb (fun d hd => hf d (by simp [Ty.thisLeaves, hd]))]
+  | tvar n => rfl
+
 /-! ## (b) Path targets rooted in an enclosing class
 
 `I2.this -> T2.this.v12.type`, where `T2` encloses `I2`: the target is rooted not in the
@@ -339,32 +388,7 @@ theorem outerRooted_once_is_scalac [Lockstep W] (l : Link) (ls : List Link) (t :
     applyChain W (l :: ls) t = asf W l.pre l.anchor t :=
   once_is_scalac W l ls t hv hfix
 
-/-! ## "At most once" versus "no later link moves the target"
-
-A1 counts copies of a link; `once_is_scalac` needs every later link to leave the target
-alone. The two differ: a *different* later link can move the target too. The following
-is a condition on anchors and this-leaves alone that a runtime check can assert where
-the chain is built: no this-type of the target is a later link's anchor or one of its
-enclosing classes. -/
-
-/-- A link leaves alone a type none of whose this-types is its anchor or encloses it. -/
-theorem asf_eq_of_disjoint (p : Ty) (c : Class) (t : Ty)
-    (h : ∀ d ∈ t.thisLeaves, ¬ d <:+ c) : asf W p c t = t :=
-  asf_eq_of_fixed W p c t fun d hd => by
-    cases hr : rewrites W d c p
-    · rfl
-    · exact absurd (rewrites_suffix W d c p hr) (h d hd)
-
-/-- **A checkable sufficient condition for `once_is_scalac`.** If no this-type of the
-first link's target is the anchor of a later link or encloses it, the chain is the first
-link alone, scalac's result. A second copy of the link violates this condition (its
-anchor is a this-leaf of a self-rooted target), as does any later link anchored in or
-inside a class the target mentions. -/
-theorem once_is_scalac_of_disjoint [Lockstep W] (l : Link) (ls : List Link) (t : Ty)
-    (hv : inView W l.pre l.anchor t)
-    (hd : ∀ l' ∈ ls, ∀ d ∈ l.pre.thisLeaves, ¬ d <:+ l'.anchor) :
-    applyChain W (l :: ls) t = asf W l.pre l.anchor t :=
-  once_is_scalac W l ls t hv fun l' hl' => asf_eq_of_disjoint W _ _ _ (hd l' hl')
+section Respelled
 
 /-! ## (c) Targets that come back respelled
 
@@ -489,6 +513,33 @@ theorem once_is_scalac_eqv [Lockstep W] (l : Link) (ls : List Link) (t : Ty)
     Eqv A (applyChain W (l :: ls) t) (asf W l.pre l.anchor t) := by
   rw [chain_is_single W l ls t hv]
   exact asf_congr_pre W A l.anchor (composedPrefix_of_eqv_fixed W A l.pre ls hfix) t
+end Respelled
 
+/-! ## "At most once" versus "no later link moves the target"
+
+A1 counts copies of a link; `once_is_scalac` needs every later link to leave the target
+alone. The two differ: a *different* later link can move the target too. The following
+is a condition on anchors and this-leaves alone that a runtime check can assert where
+the chain is built: no this-type of the target is a later link's anchor or one of its
+enclosing classes. -/
+
+/-- A link leaves alone a type none of whose this-types is its anchor or encloses it. -/
+theorem asf_eq_of_disjoint (p : Ty) (c : Class) (t : Ty)
+    (h : ∀ d ∈ t.thisLeaves, ¬ d <:+ c) : asf W p c t = t :=
+  asf_eq_of_fixed W p c t fun d hd => by
+    cases hr : rewrites W d c p
+    · rfl
+    · exact absurd (rewrites_suffix W d c p hr) (h d hd)
+
+/-- **A checkable sufficient condition for `once_is_scalac`.** If no this-type of the
+first link's target is the anchor of a later link or encloses it, the chain is the first
+link alone, scalac's result. A second copy of the link violates this condition (its
+anchor is a this-leaf of a self-rooted target), as does any later link anchored in or
+inside a class the target mentions. -/
+theorem once_is_scalac_of_disjoint [Lockstep W] (l : Link) (ls : List Link) (t : Ty)
+    (hv : inView W l.pre l.anchor t)
+    (hd : ∀ l' ∈ ls, ∀ d ∈ l.pre.thisLeaves, ¬ d <:+ l'.anchor) :
+    applyChain W (l :: ls) t = asf W l.pre l.anchor t :=
+  once_is_scalac W l ls t hv fun l' hl' => asf_eq_of_disjoint W _ _ _ (hd l' hl')
 
 end Relax
