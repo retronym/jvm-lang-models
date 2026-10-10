@@ -1,4 +1,5 @@
 import AsSeenFrom.Scalac
+import AsSeenFrom.Port
 
 /-!
 # Chains of links versus one `asSeenFrom`
@@ -81,15 +82,10 @@ intended one; `chain_is_intended` below is about that, and `Cases.B` shows a wro
 theorem compose (p₁ : Ty) (c₁ : Class) (p₂ : Ty) (c₂ : Class) (t : Ty)
     (h : inView W p₁ c₁ t) :
     asf W p₂ c₂ (asf W p₁ c₁ t) = asf W (asf W p₂ c₂ p₁) c₁ t := by
-  induction t with
-  | this d => exact thisAsSeen_asf W d c₁ p₂ c₂ p₁ (h d (by simp [Ty.thisLeaves]))
-  | sel q v ih =>
-    simp only [asf]; rw [ih (fun d hd => h d (by simpa [Ty.thisLeaves] using hd))]
-  | pair a b iha ihb =>
-    simp only [asf]
-    rw [iha (fun d hd => h d (by simp [Ty.thisLeaves, hd])),
-        ihb (fun d hd => h d (by simp [Ty.thisLeaves, hd]))]
-  | tvar n => rfl
+  -- the shared theorem (`Shared.lean`), through `Port`: `asf` is the shared map
+  haveI := Port.lockstep W Lockstep.bpre_comm Lockstep.hasBase_comm
+  simp only [Port.asf_eq]
+  exact AsSeenFrom.compose W.shared _ _ _ _ _ ((Port.inView_iff W _ _ _).1 h)
 
 /-- A this-type link, `ThisTypeSubstitution(pre, anchor)`. A chain is a list of links
 applied left to right: `applyChain [a, b]` applies `a` first, as `a.followed(b)` does. -/
