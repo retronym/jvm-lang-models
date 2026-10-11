@@ -1,5 +1,7 @@
 # Zinc incrementality, modelled in Lean
 
+Moved from `retronym/talks` (`zinc-incrementality/lean/`) with its history (talks repo `b9058db`). The talks there still point at the old path until step 8 of `PLAN-repo.md`. `PLAN-repo.md` has the plan for splitting it into packages for the JVM, Java, Scala, incremental compilation, Zinc, MiMa and IntelliJ.
+
 A Lean 4 + Mathlib model of Zinc's incremental compilation. It states the obligations that a compiler bridge's recorded keys, and Zinc's invalidation policy, must meet so that an incremental build equals a clean one, and proves Zinc's loop sound under them. It instantiates that framework for real language features (name resolution, implicits and givens, inline and opaque types, erasure, Java in mixed builds, SAM conversion, macros, …): today's bridge as keys, each bug family as a failed obligation with a witness, each fix as keys with the obligations proved for every program. Bounded program spaces calibrate the model against the real tools: Zinc (through the conformance harness), scalac and dotc, javac, HotSpot and MiMa. The hypotheses are the point: they are the bridge spec. The model does not verify scalac.
 
 ```bash
