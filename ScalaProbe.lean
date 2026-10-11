@@ -1,5 +1,5 @@
 import Scala.Space
-import Scala.Members
+import ScalaTypes.Members
 
 /-! `scalaprobe OUT`: write each case of `Scala.space` as Scala source, and the model's
 classfiles for each dialect as `OUT/expected-2.12.txt`, `OUT/expected-2.13.txt` and

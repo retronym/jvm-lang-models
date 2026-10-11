@@ -7,6 +7,10 @@ name = "query"
 path = "query"
 
 [[require]]
+name = "scala-types"
+path = "scala-types"
+
+[[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.1"

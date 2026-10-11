@@ -1,4 +1,5 @@
-import Scala.Members
+import ScalaTypes.Members
+import Scala.Lower
 
 /-!
 # Bounded program spaces for calibrating lowering against scalac
