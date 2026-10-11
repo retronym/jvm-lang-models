@@ -28,7 +28,7 @@ namespace Jvm.Clients
 open Jvm.Catalogue
 
 /-- `r` is `c` or a subtype of `c` in `w`, by superclasses and superinterfaces, with fuel. -/
-def isSub (w : W) : ℕ → C → C → Bool
+def isSub (w : W) : Nat → C → C → Bool
   | 0, _, _ => false
   | k + 1, r, c =>
     r == c ||

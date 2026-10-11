@@ -1,4 +1,4 @@
-import Zinc.Task
+import Query.Task
 import Zinc.Model
 import Zinc.Soundness
 import Zinc.Uniqueness

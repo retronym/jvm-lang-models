@@ -1,5 +1,5 @@
-import Zinc.Task
-import Mathlib.Data.List.Dedup
+import Query.Basic
+import Query.Task
 
 /-!
 # JVM linkage as a query tree
@@ -43,7 +43,7 @@ structure Header (C : Type) where
   super : Option C := none
   ifaces : List C := []
   isPublic : Bool := true
-  pkg : ℕ := 0
+  pkg : Nat := 0
   /-- The `PermittedSubclasses` attribute: `some ps` for a sealed class or interface. -/
   permitted : Option (List C) := none
   deriving DecidableEq, Repr
@@ -146,10 +146,10 @@ def hdr (c : C) : M C N D (Header C) := do
   | none => throw .noClassDef
 
 /-- Bound on the depth of a hierarchy walk. -/
-def depth : ℕ := 6
+def depth : Nat := 6
 
 /-- The superinterfaces of `c`, through its superclasses and transitively; with repeats. -/
-def ifacesOf : ℕ → C → M C N D (List C)
+def ifacesOf : Nat → C → M C N D (List C)
   | 0, _ => pure []
   | k + 1, c => do
     let h ← hdr c
@@ -162,7 +162,7 @@ def ifacesOf : ℕ → C → M C N D (List C)
     pure (ii.flatten ++ up)
 
 /-- `x` is `c` or a subclass of `c`, by superclasses. -/
-def subclassOf (c : C) : ℕ → C → M C N D Bool
+def subclassOf (c : C) : Nat → C → M C N D Bool
   | 0, _ => pure false
   | k + 1, x => do
     if x = c then return true
@@ -172,7 +172,7 @@ def subclassOf (c : C) : ℕ → C → M C N D Bool
 
 /-- Look a method up in `c` and its superclasses (resolution, §5.4.3.3 step 2, which finds static
 and private methods too). -/
-def chain (inst : Bool) (n : N) (d : D) : ℕ → C → M C N D (Option (C × MethodInfo))
+def chain (inst : Bool) (n : N) (d : D) : Nat → C → M C N D (Option (C × MethodInfo))
   | 0, _ => pure none
   | k + 1, c => do
     let h ← hdr c
@@ -198,7 +198,7 @@ def overrides (x : C) (mi : MethodInfo) (a : C) (ma : MethodInfo) : M C N D Bool
 /-- Selection's walk (§5.4.6 step 2): the first declaration in `c` or a superclass that overrides
 the resolved method `(a, ma)`. -/
 def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo) :
-    ℕ → C → M C N D (Option (C × MethodInfo))
+    Nat → C → M C N D (Option (C × MethodInfo))
   | 0, _ => pure none
   | k + 1, c => do
     let h ← hdr c
@@ -226,7 +226,7 @@ them in that order): each superinterface must be an interface, the superclass a 
 both accessible from the class and, if sealed, permitting it (§5.3.5), and none of the class's instance methods may override a final one. The JVM loads a class when a
 site, the verifier or a subclass first refers to it; the model loads it at each such reference,
 which repeats queries but not answers. -/
-def loadK : ℕ → C → M C N D Unit
+def loadK : Nat → C → M C N D Unit
   | 0, _ => pure ()
   | k + 1, x => do
     let h ← hdr x
@@ -262,7 +262,7 @@ def cls (c : C) : M C N D (Header C) := do
 /-- The class whose code executes a site: `none` is a class of its own in the unnamed package. -/
 abbrev Cur (C : Type) := Option C
 
-def curPkg : Cur C → M C N D ℕ
+def curPkg : Cur C → M C N D Nat
   | none => pure 0
   | some x => do pure (← hdr x).pkg
 
@@ -290,7 +290,8 @@ methods, not private, declared in a superinterface of `c` that no other such met
 extends. -/
 def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo)) := do
   let is ← ifacesOf depth c
-  let cands ← is.dedup.filterMapM fun i => do
+  -- Mathlib's `dedup` keeps the last occurrence of each interface; so does this.
+  let cands ← (Query.dedupLast is).filterMapM fun i => do
     let m ← askMethod i n d
     pure ((m.filter fun mi => !mi.isStatic && mi.access != .priv).map fun mi => (i, mi))
   cands.filterM fun p => do
@@ -344,7 +345,7 @@ def select (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo) : M C N D C := do
     | _ => throw .incompatibleClassChange
 
 /-- Field resolution, §5.4.3.2: `c`, then its superinterfaces, then its superclass. -/
-def lookupField (n : N) (d : D) : ℕ → C → M C N D (Option (C × FieldInfo))
+def lookupField (n : N) (d : D) : Nat → C → M C N D (Option (C × FieldInfo))
   | 0, _ => pure none
   | k + 1, c => do
     if let some f ← askField c n d then return some (c, f)

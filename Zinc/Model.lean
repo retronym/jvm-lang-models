@@ -1,4 +1,5 @@
-import Zinc.Task
+import Query.Task
+import Mathlib.Data.Finset.Basic
 
 /-!
 # The abstract model of a compiler and of Zinc's loop

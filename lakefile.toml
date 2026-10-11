@@ -3,6 +3,10 @@ version = "0.1.0"
 defaultTargets = ["Zinc", "Jvm", "Scala", "BinCompat", "Java"]
 
 [[require]]
+name = "query"
+path = "query"
+
+[[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.1"

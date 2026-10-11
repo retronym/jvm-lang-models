@@ -1,4 +1,5 @@
 import Jvm.Catalogue
+import Mathlib.Data.Finset.Basic
 
 /-!
 # MiMa's checks, as a function of the library's classfiles

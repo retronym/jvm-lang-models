@@ -1,4 +1,4 @@
-import Zinc.Task
+import Query.Task
 import Jvm.Link
 import Java.Syntax
 
@@ -39,7 +39,7 @@ def need (n : String) : M Decl := do
   | some d => pure d
   | none => throw s!"not found: {n}"
 
-def fuel : ℕ := 6
+def fuel : Nat := 6
 
 /-! ## Constants (JLS §15.29) -/
 
@@ -60,7 +60,7 @@ def isConstVar (d : Decl) (f : Field) : Bool :=
   (f.final || d.kind == .iface) && (f.ty == .int || f.ty == .str) && f.init.isSome
 
 /-- The value of a constant expression, reading other types' constants; `none` if it is not one. -/
-def eval : ℕ → Expr → M (Option CVal)
+def eval : Nat → Expr → M (Option CVal)
   | 0, _ => pure none
   | _ + 1, .int n => pure (some (.int n))
   | _ + 1, .str s => pure (some (.str s))
@@ -177,7 +177,7 @@ def isJava (n : String) : Bool := n.startsWith "java/"
 
 /-- The `getstatic`s a body or initialiser runs: none for a constant expression (folded), else one
 per non-constant field it reads, in evaluation order. -/
-def reads : ℕ → Expr → M (List Insn)
+def reads : Nat → Expr → M (List Insn)
   | 0, _ => pure []
   | k + 1, e => do
     if (← eval fuel e).isSome then return []
@@ -192,7 +192,7 @@ def reads : ℕ → Expr → M (List Insn)
 
 /-- The constants a body or initialiser pushes: a constant expression's value, folded, else those
 of its operands; `Integer.parseInt("1")` pushes `"1"`. -/
-def pushes : ℕ → Expr → M (List CVal)
+def pushes : Nat → Expr → M (List CVal)
   | 0, _ => pure []
   | k + 1, e => do
     if let some v ← eval fuel e then return [v]
@@ -215,7 +215,7 @@ def seen (outer : Option Ty) : Option Ty → Option Ty
 def parentsOf (d : Decl) : List Parent := d.super.toList ++ d.ifaces
 
 /-- Every proper supertype of `d`, with type arguments composed; with repeats. -/
-def supers : ℕ → Decl → Option Ty → M (List Anc)
+def supers : Nat → Decl → Option Ty → M (List Anc)
   | 0, _, _ => pure []
   | k + 1, d, a => do
     let mut out : List Anc := []
@@ -309,7 +309,7 @@ def lowerDecl (unit : List Decl) (pub : Bool) (d : Decl) : M ClassOut := do
        { name := "<init>", desc := ctorD, acc := .priv },
        { name := "$values", desc := s!"(){arr}", acc := .priv, static := true, synthetic := true,
          calls := d.consts.map fun c => ⟨"getstatic", d.name, c, self⟩,
-         pushes := .int d.consts.length :: (List.range d.consts.length).map fun i => .int i },
+         pushes := .int d.consts.length :: (List.range d.consts.length).map fun (i : Nat) => .int (Int.ofNat i) },
        { name := "<clinit>", desc := "()V", acc := .pkg, static := true,
          calls := (d.consts.map fun _ => ⟨"invokespecial", d.name, "<init>", ctorD⟩) ++
                   [⟨"invokestatic", d.name, "$values", s!"(){arr}"⟩] ++

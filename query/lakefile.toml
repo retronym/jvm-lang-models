@@ -1,0 +1,8 @@
+name = "query"
+version = "0.1.0"
+defaultTargets = ["Query"]
+
+# A computation that asks questions: `Task`, its trace, and T1. No Mathlib, so that any model can
+# depend on it cheaply.
+[[lean_lib]]
+name = "Query"

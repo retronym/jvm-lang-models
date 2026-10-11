@@ -1,4 +1,4 @@
-import Zinc.Task
+import Query.Task
 import Jvm.Link
 import Scala.Syntax
 import Scala.Desugar
@@ -77,7 +77,7 @@ def seenFrom (self : String) (l : List Anc) (owner : String) (t : Ty) : Ty :=
 /-- Scala's linearization, the class first: `L(C) = C, L(Pn) +⃗ … +⃗ L(P1)`. A parent `P[a]`'s base
 types are viewed from `C` by `asSeenFrom(C.this, P)`, which replaces `P`'s parameter by `a`
 (scalac's `baseType`). -/
-def lin : ℕ → Decl → M (List Anc)
+def lin : Nat → Decl → M (List Anc)
   | 0, _ => throw "linearization too deep"
   | k + 1, d => do
     let mut acc : List Anc := []
@@ -89,7 +89,7 @@ def lin : ℕ → Decl → M (List Anc)
       acc := lp.filter (fun e => !acc.any (·.1.name == e.1.name)) ++ acc
     pure ((d, (List.range d.tparams).map (Ty.tp [d.name])) :: acc)
 
-def fuel : ℕ := 8
+def fuel : Nat := 8
 
 /-- A member as seen from the class: its owner, the owner's type argument, the member. -/
 abbrev Hit := Anc × Mem
@@ -116,7 +116,7 @@ def overridesIn (self : String) (l : List Anc) (h h' : Hit) : Bool :=
   h.2.name == h'.2.name && paramsSeen self l h == paramsSeen self l h'
 
 def memberNames (l : List Anc) : List String :=
-  (l.flatMap fun (d, _) => d.members.map (·.name)).dedup
+  Query.dedupLast (l.flatMap fun (d, _) => d.members.map (·.name))
 
 def Hit.same (h h' : Hit) : Bool := h.1.1.name == h'.1.1.name && h.2 == h'.2
 

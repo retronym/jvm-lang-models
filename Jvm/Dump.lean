@@ -19,11 +19,11 @@ def cBase : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X =>
 
 /-- The package of each class, from the first table that has it (packages are part of a name and
 must agree between tables). -/
-def pkgIn (l : List (C × Classfile C N D)) (c : C) : ℕ :=
+def pkgIn (l : List (C × Classfile C N D)) (c : C) : Nat :=
   ((l.find? (·.1 = c)).map (·.2.header.pkg)).getD 0
 
 /-- The binary name: package `n > 0` is `p<n>`. -/
-def qual (pk : C → ℕ) (c : C) : String :=
+def qual (pk : C → Nat) (c : C) : String :=
   if pk c = 0 then cBase c else s!"p{pk c}.{cBase c}"
 def nName : N → String | .m => "m" | .init => "<init>"
 def dName : D → String | .v => "()V" | .i => "()I" | .s => "Ljava/lang/String;" | .iv => "(I)V"
@@ -53,7 +53,7 @@ def fieldJson (m : N × D × FieldInfo) : String :=
   ",\"access\":" ++ jstr (accName m.2.2.access) ++ "}"
 
 section
-variable (pk : C → ℕ)
+variable (pk : C → Nat)
 
 def classJson (c : C × Classfile C N D) : String :=
   let h := c.2.header

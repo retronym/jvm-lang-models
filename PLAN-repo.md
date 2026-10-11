@@ -79,7 +79,7 @@ Each package carries the same files: a `README.md` (the question it answers, its
 Each step builds and keeps the talks' links working.
 
 - DONE 1. Create the repository from `zinc-incrementality/lean/` with history (`git filter-repo`). Keep one package for now. CI as today. Done 2026-10-12: `retronym/jvm-lang-models`, public, one toolchain; history from retronym/talks `b9058db`.
-- TODO 2. Extract `Query`, remove the Mathlib import from `Task`, and point `Jvm`, `Java`, `Scala` at it.
+- DONE 2. Extract `Query`, remove the Mathlib import from `Task`, and point `Jvm`, `Java`, `Scala` at it. `query/` is a Lake package of its own; `Jvm`, `Java` and `Scala` no longer depend on Mathlib. What they took from it is in `Query.Basic`: decidable equality of `Except`, a low-priority `List` monad, and `dedupLast` (Mathlib's `dedup`, structural so `decide` reduces it); `ℕ` is spelled `Nat` there. `Task` keeps the `Zinc` namespace for now.
 - TODO 3. Split `ScalaTypes` out of `Scala`: `AsSeenFrom` and `Syntax` move as they are; `Members` imports `Lower` today, so its membership core has to be separated from lowering first. Both packages are already Mathlib-free once `Query` is.
 - TODO 4. Split `IncComp` from `Zinc`. This is the largest step: `Compiler`, `TCompiler`, `GCompiler` and `NCompiler` still define their own loops (central review, finding 1's residue), so first move the general theorems, then retire the per-variant loops.
 - TODO 5. Split `MiMa` and `Links` out of `BinCompat`.
