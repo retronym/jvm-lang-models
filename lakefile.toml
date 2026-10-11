@@ -1,14 +1,26 @@
 name = "zinc"
 version = "0.1.0"
-defaultTargets = ["Zinc", "Jvm", "Scala", "BinCompat", "Java"]
+defaultTargets = ["All"]
 
 [[require]]
 name = "query"
-path = "query"
+path = "packages/query"
 
 [[require]]
 name = "scala-types"
-path = "scala-types"
+path = "packages/scala-types"
+
+[[require]]
+name = "jvm"
+path = "packages/jvm"
+
+[[require]]
+name = "java"
+path = "packages/java"
+
+[[require]]
+name = "scala"
+path = "packages/scala"
 
 [[require]]
 name = "mathlib"
@@ -37,15 +49,9 @@ root = "Conformance"
 name = "jconformance"
 root = "JConformance"
 
-[[lean_lib]]
-name = "Jvm"
-
 [[lean_exe]]
 name = "jvmcases"
 root = "JvmCases"
-
-[[lean_lib]]
-name = "Scala"
 
 [[lean_exe]]
 name = "scalaprobe"
@@ -54,9 +60,6 @@ root = "ScalaProbe"
 [[lean_lib]]
 name = "BinCompat"
 
-[[lean_lib]]
-name = "Java"
-
 [[lean_exe]]
 name = "javaprobe"
 root = "JavaProbe"
@@ -64,3 +67,6 @@ root = "JavaProbe"
 [[lean_exe]]
 name = "bincompat"
 root = "BinCompatMain"
+
+[[lean_lib]]
+name = "All"

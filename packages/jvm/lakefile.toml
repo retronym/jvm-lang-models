@@ -1,0 +1,10 @@
+name = "jvm"
+version = "0.1.0"
+defaultTargets = ["Jvm"]
+
+[[require]]
+name = "query"
+path = "../query"
+
+[[lean_lib]]
+name = "Jvm"

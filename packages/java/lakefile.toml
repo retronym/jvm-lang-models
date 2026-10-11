@@ -1,0 +1,14 @@
+name = "java"
+version = "0.1.0"
+defaultTargets = ["Java"]
+
+[[require]]
+name = "query"
+path = "../query"
+
+[[require]]
+name = "jvm"
+path = "../jvm"
+
+[[lean_lib]]
+name = "Java"
