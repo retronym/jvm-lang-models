@@ -368,11 +368,16 @@ def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
   | none => checkAccess cur (← fromIfaces c n d)
 
 /-- Method selection on the receiver's class `r` for the resolved method `(a, ma)`, §5.4.6, with
-`invokevirtual`'s and `invokeinterface`'s errors. A private resolved method is selected itself. -/
-def select (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo) : M C N D C := do
+`invokevirtual`'s and (`iface`) `invokeinterface`'s errors. A private resolved method is selected
+itself. `invokeinterface` also fails if it selects a method that is neither public nor private (JVMS
+§6.5), before the check for an abstract one: a package-private class method can override a public
+interface method (§5.4.5) but not run for it. -/
+def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo) : M C N D C := do
   if ma.access = .priv then return a
   match ← chainOver n d a ma depth r with
-  | some (o, i) => if i.isAbstract then throw .abstractMethod else pure o
+  | some (o, i) =>
+    if iface && (i.access = .pkg || i.access = .prot) then throw .illegalAccess
+    if i.isAbstract then throw .abstractMethod else pure o
   | none =>
     let ms ← maxSpecific r n d
     match ms.filter fun p => !p.2.isAbstract with
@@ -481,14 +486,14 @@ def runSiteK (cur : Cur C) : Site C N D → M C N D C
     instantiate cur r
     let (a, i) ← resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
-    select r n d a i
+    select false r n d a i
   | .invokeinterface c n d r => do
     assignable r c
     instantiate cur r
     let (a, i) ← resolveIface cur c n d
     if i.isStatic then throw .incompatibleClassChange
     if !(← ifacesOf depth r).contains c then throw .incompatibleClassChange
-    select r n d a i
+    select true r n d a i
   | .new c => do
     instantiate cur c
     pure c

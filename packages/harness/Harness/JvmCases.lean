@@ -14,6 +14,9 @@ catalogue's own.
 group or space, clients, programs) for `scripts/model_stats.py`. A space's programs are the well-typed
 (case, client) pairs that `space` dumps; `chainSpace`'s are its cases; MiMa's `spaceB` is counted in clients.
 
+`lake exe jvmcases defaults`: the Track J7 space of default methods along superinterface chains
+(`Jvm.Clients.defaultsSpace`).
+
 `lake exe jvmcases verdicts`: per edit, MiMa's problem, the Track J2 verdicts and the number of clients in
 the space that break or change, as a markdown table. -/
 
@@ -29,14 +32,20 @@ def main (args : List String) : IO Unit := do
     IO.println s!"catalogue\tJ1–J2\t{all.length}"
     IO.println s!"catalogue\tJ3\t{j3.length}"
     IO.println s!"catalogue\tJ5\t{j5.length}"
+    IO.println s!"catalogue\tJ7\t{j7.length}"
     IO.println s!"space\tspace\t{space.length}\t{programs all space}"
     IO.println s!"space\tspace3\t{space3.length}\t{programs j3 space3}"
     IO.println s!"space\tspace5\t{space5.length}\t{programs j5 space5}"
     IO.println s!"space\tchainSpace\t{chainSpace.length}\t{chainSpace.length}"
+    IO.println s!"space\tdefaultsSpace\t{defaultsSpace.length}\t{defaultsSpace.length}"
     IO.println s!"space\tMiMa.spaceB\t{MiMa.spaceB.length}\t"
     return
   if args.contains "chain" then
     for k in chainSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
+  if args.contains "defaults" then
+    for k in defaultsSpace do
       IO.println (Jvm.Dump.caseJson k)
     return
   if args.contains "j3" then
@@ -44,8 +53,8 @@ def main (args : List String) : IO Unit := do
       IO.println s!"{k.name}\t{repr k.before}\t{repr k.after}"
     return
   let cases := if args.contains "space" || args.contains "verdicts" then
-      all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5)
-    else (all ++ j3 ++ j5).map (·, space)
+      all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5) ++ j7.map (·, space)
+    else (all ++ j3 ++ j5 ++ j7).map (·, space)
   for (k, space) in cases do
     if args.contains "verdicts" then
       let ok := space.filter fun cl => let k' := k.withClient cl; wellTyped k'.w0 cl.2 && links k'.w0 cl.2

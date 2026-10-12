@@ -205,7 +205,7 @@ def accs : List Access := [.pub, .prot, .pkg, .priv]
 
 def accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg" | .priv => "priv"
 
-def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y"
 
 /-- `m()V` with `mi`, or nothing. -/
 def declM : Option MethodInfo → List (N × D × MethodInfo)
@@ -224,6 +224,11 @@ def build (space : String) (parts : List Part) : List Case :=
     let k : Case := { name := s!"{space}/{p.label}", mima := none, v0 := p.lib, v1 := p.lib,
                       client := p.client, prog := { sites := p.sites } }
     if wellTyped k.w0 k.prog then some k else none
+
+/-! ## Track J7 verdicts -/
+
+/-- Breaks `invokeinterface I.m` on `X extends A implements I`: it selects the new package-private `A.m`. -/
+example : breaksSomeClient pkgMethodAboveDefault = true := by decide +kernel
 
 /-- The Track J6 space: overriding along a chain of library classes, the shape of JVMS §5.4.5's
 example. `A` (package 1), `B extends A` and `I extends B` (`I` is a class here; `B` and `I` each in
@@ -254,5 +259,64 @@ def chainSpace : List Case :=
     pure { label := s!"site={cName owner}.m@p{pkg}", client := [(.J, { header := { pkg } })],
            sites := [.within .J (.invokevirtual owner .m .v .X)] }
   build "chain" (a ⊗ below .B .A ⊗ below .I .B ⊗ x ⊗ site)
+
+/-- A site's tag in a program's name: the instruction's initials and the owner: `vA.m` is
+`invokevirtual A.m`, `iK.m` `invokeinterface K.m`, `gfB.m` `getfield B.m`, `psJ.m` `putstatic J.m`. -/
+def siteTag : Site C N D → String
+  | .invokevirtual c .. => s!"v{cName c}.m"
+  | .invokeinterface c .. => s!"i{cName c}.m"
+  | .getfield c .. => s!"gf{cName c}.m"
+  | .putfield c .. => s!"pf{cName c}.m"
+  | .getstatic c .. => s!"gs{cName c}.m"
+  | .putstatic c .. => s!"ps{cName c}.m"
+  | _ => "?"
+
+/-- One site from a client class `Y` in package 0, 1 or 2. -/
+def fromY (ss : List (Site C N D)) : List Part := do
+  let s ← ss
+  let pkg ← [0, 1, 2]
+  pure { label := s!"site={siteTag s}@p{pkg}", client := [(.Y, { header := { pkg } })],
+         sites := [.within .Y s] }
+
+/-- The Track J7 space: default methods along a chain of superinterfaces, `K extends J extends I`
+(JVMS §5.4.3.3's maximally-specific methods, §5.4.6 step 2). Each interface declares `m()V` as a
+default, abstract, static or private method or not at all; the interfaces are in package 2 (an
+interface's package matters to no rule here: its members are public or private). A
+library class `A` in package 1 implements none, `I`, `K` or both, or `K` and `B`, an interface off the
+chain declaring a default or abstract `m()V` (the region of two maximally-specific methods,
+JDK-8356942), and declares `m()V` public,
+package-private or not at all. The client's `X`, in the unnamed package, extends `A` or implements one
+of the interfaces directly, and declares a public `m()V` or nothing. One `invokeinterface` of `I.m`,
+`J.m` or `K.m`, or `invokevirtual` of `A.m` or `X.m`, on an `X`, from a client class `Y` in package
+0, 1 or 2. -/
+def defaultsSpace : List Case :=
+  let decls : List (String × Option MethodInfo) :=
+    [("-", none), ("default", some {}), ("abstract", some { isAbstract := true }),
+     ("static", some { isStatic := true }), ("private", some { access := .priv })]
+  let iface (c : C) (sup : List C) : List Part := decls.map fun (t, mi) =>
+    { label := s!"{cName c}={t}",
+      lib := [(c, { header := { isInterface := true, pkg := 2, ifaces := sup }, methods := declM mi })] }
+  let ifaces := iface .I [] ⊗ iface .J [.I] ⊗ iface .K [.J]
+  -- `B`, an interface off the chain, so that `A` can inherit two maximally-specific methods.
+  let sib : List Part := [("default", inst), ("abstract", abs)].map fun (t, mi) =>
+    { label := s!"B={t}", lib := [(.B, { header := { isInterface := true, pkg := 2 }, methods := declM (some mi) })] }
+  let a : List Part := do
+    let (is, extra) ← ([[], [C.I], [.K], [.I, .K]].map fun is => (is, [({ label := "" } : Part)])) ++ [([.B, .K], sib)]
+    let b ← extra
+    let acc ← [none, some .pub, some .pkg]
+    let impl := if is.isEmpty then "" else "<" ++ "+".intercalate (is.map cName) ++ ">"
+    pure (b.join { label := s!"A{impl}={optTag accTag acc}",
+                   lib := [(.A, { header := { pkg := 1, ifaces := is },
+                                  methods := declM (acc.map fun a => { access := a }) })] })
+  let xm : List (String × Option MethodInfo) := [("-", none), ("pub", some {})]
+  let xA : List Part := xm.map fun (t, mi) =>
+    { label := s!"X<A>={t}", client := [(.X, { header := { super := some .A }, methods := declM mi })] }
+  let xI : List Part := do
+    let i ← [C.I, .J, .K]
+    let (t, mi) ← xm
+    pure { label := s!"X<{cName i}>={t}", client := [(.X, { header := { ifaces := [i] }, methods := declM mi })] }
+  let sites := fromY ([C.I, .J, .K].map (Site.invokeinterface · .m .v .X) ++
+    [C.A, .X].map (Site.invokevirtual · .m .v .X))
+  build "defaults" (ifaces ⊗ a ⊗ xA ⊗ sites) ++ build "defaults" (ifaces ⊗ xI ⊗ sites)
 
 end Jvm.Clients

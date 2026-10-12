@@ -8,12 +8,13 @@ before and after, by kernel `decide` (no `native_decide`), and names the MiMa pr
 `lake exe jvmcases` dumps the cases; `packages/jvm/probes` renders them to classfiles and checks the outcomes on
 HotSpot.
 
-Classes: `A`, `B` (library classes), `I`, `J` (library interfaces), `X` (the client's class).
+Classes: `A`, `B` (library classes), `I`, `J` (library interfaces), `X` (the client's class); the
+calibration spaces of `Clients.lean` also use `K` (a third interface) and `Y` (a second client class).
 -/
 
 namespace Jvm.Catalogue
 
-inductive C | A | B | I | J | X
+inductive C | A | B | I | J | X | K | Y
   deriving DecidableEq, Repr
 
 /-- `init` is `<init>`, a constructor. -/
@@ -503,6 +504,24 @@ def j5 : List Case :=
    sealedPermitsNonPublicElsewhere, sealedPermitsPublicElsewhere, ctorRemoved, ctorBecomesPrivate,
    ctorBecomesPackagePrivate, ctorPulledUp, ctorPulledUpPrivate, ctorClassBecomesAbstract]
 
+/-! ## Track J7: default methods along superinterface chains -/
+
+/-- A package-private method above a default. The client's `X extends A implements I` inherits `I`'s
+default `m`; `A`, in package 1 and not implementing `I`, gains a package-private `m`, which javac
+accepts. `A.m` can override `I.m` (§5.4.5: `I.m` is public), so `invokeinterface I.m` selects it, and
+fails: a selected method that is neither public nor private is an `IllegalAccessError` (JVMS §6.5,
+`invokeinterface`). -/
+def pkgMethodAboveDefault : Case where
+  name := "pkgMethodAboveDefault"
+  mima := none
+  v0 := [(.I, { header := { isInterface := true }, methods := [(.m, .v, inst)] }), (.A, { header := p1 })]
+  v1 := [(.I, { header := { isInterface := true }, methods := [(.m, .v, inst)] }),
+         (.A, { header := p1, methods := [(.m, .v, { access := .pkg })] })]
+  client := [(.X, { header := { super := some .A, ifaces := [.I] } })]
+  prog := { sites := [invokeinterface .I .m .v .X] }
+
+def j7 : List Case := [pkgMethodAboveDefault]
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,
@@ -568,5 +587,7 @@ example : ctorBecomesPrivate.before = .ok [.A] ∧ ctorBecomesPrivate.after = .e
 example : ctorBecomesPackagePrivate.before = .ok [.A] ∧ ctorBecomesPackagePrivate.after = .error .illegalAccess := by decide
 example : ctorPulledUp.before = .ok [.B] ∧ ctorPulledUp.after = .error .noSuchMethod := by decide
 example : ctorClassBecomesAbstract.before = .ok [.A] ∧ ctorClassBecomesAbstract.after = .error .instantiation := by decide
+
+example : pkgMethodAboveDefault.before = .ok [.I] ∧ pkgMethodAboveDefault.after = .error .illegalAccess := by decide
 
 end Jvm.Catalogue

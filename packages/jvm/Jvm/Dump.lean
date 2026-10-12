@@ -14,7 +14,7 @@ def jstr (s : String) : String := "\"" ++ s ++ "\""
 def jarr (l : List String) : String := "[" ++ ",".intercalate l ++ "]"
 def jbool (b : Bool) : String := if b then "true" else "false"
 
-def cBase : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+def cBase : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y"
 
 /-- The package of each class, from the first table that has it (packages are part of a name and
 must agree between tables). -/

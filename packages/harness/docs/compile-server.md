@@ -42,7 +42,7 @@ Prior art: Zinc's `CachedCompiler` keeps one `nsc.Global` and does `new Run` per
 
 ## Steps
 
-1. **javac server.** Smallest, sets the protocol and the Python client (`packages/harness/scripts/compiler.py`). Switch [`packages/java/probes/probe.py`](../../java/probes/probe.py) to it; results must equal today's on the 99 programs.
+1. **javac server.** Smallest, sets the protocol and the Python client ([`packages/harness/scripts/compiler.py`](../scripts/compiler.py)). Switch [`packages/java/probes/probe.py`](../../java/probes/probe.py) to it; results must equal today's on the 99 programs.
 2. **scalac 2 server** with a cached `Global`. Differential check against the batch results on the membership space (4,704 programs, both 2.12.21 and 2.13.18), then switch `members.py` (dropping the rounds) and `probe.py`.
 3. **dotc server.** Same check on 3.9.0.
 4. **`run` in-process.** Switch the runtime check in `members.py` and the per-case compile in `scala.sh`.
