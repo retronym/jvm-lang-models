@@ -525,6 +525,9 @@ def selfCall : Case where
   v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
   prog := { sites := [invokevirtual .A .m .v .A] }
 
+/-- The Track J4 cases the probe runs (`selfCall` overflows the JVM's stack instead). -/
+def j4 : List Case := [thisCallOverridden]
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,

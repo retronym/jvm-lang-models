@@ -29,6 +29,7 @@ def main (args : List String) : IO Unit := do
     IO.println s!"catalogue\tJ1–J2\t{all.length}"
     IO.println s!"catalogue\tJ3\t{j3.length}"
     IO.println s!"catalogue\tJ5\t{j5.length}"
+    IO.println s!"catalogue\tJ4\t{j4.length}"
     IO.println s!"space\tspace\t{space.length}\t{programs all space}"
     IO.println s!"space\tspace3\t{space3.length}\t{programs j3 space3}"
     IO.println s!"space\tspace5\t{space5.length}\t{programs j5 space5}"
@@ -45,7 +46,7 @@ def main (args : List String) : IO Unit := do
     return
   let cases := if args.contains "space" || args.contains "verdicts" then
       all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5)
-    else (all ++ j3 ++ j5).map (·, space)
+    else (all ++ j3 ++ j5 ++ j4).map (·, space)
   for (k, space) in cases do
     if args.contains "verdicts" then
       let ok := space.filter fun cl => let k' := k.withClient cl; wellTyped k'.w0 cl.2 && links k'.w0 cl.2
