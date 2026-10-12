@@ -48,7 +48,9 @@ structure Bounds where
   hi : List Ty
   deriving DecidableEq, Repr
 
-/-- Conformance on the space's types: `Nothing`, `Int`, `String`, `Any`. -/
+/-- Conformance on the space's types: `Nothing`, `Int`, `String`, `Any`.
+
+Spec: cites SLS §3.5.2 -/
 def conforms : Ty → Ty → Bool
   | .nothing, _ => true
   | _, .any => true
@@ -67,7 +69,13 @@ def _root_.Scala.TMem.bounds (m : TMem) : Bounds := ⟨[m.lo], [m.hi]⟩
 
 def _root_.Scala.Decl.tmem (d : Decl) (n : String) : Option TMem := d.tmems.find? (·.name == n)
 
-/-- Member `n` of the intersection of `ds`, in order. -/
+/-- Member `n` of the intersection of `ds`, in order.
+
+Spec: cites SLS §3.2.7
+Spec: unspecified SLS §3.2.7: the bounds of an abstract type member of a compound type `A with B`
+whose parents both declare it. scalac takes the last parent's; dotc, for `A & B`, the union of the
+lower bounds and the intersection of the upper ones (the Scala 3 reference on intersection types).
+Calibrated on 2,430 programs per setting (`PathsOracle.calibrated`). -/
 def interBounds (s : Setting) (ds : List Decl) (n : String) : Bounds :=
   let ms := ds.filterMap (·.tmem n)
   if s.scala2 then (ms.getLast?.map TMem.bounds).getD ⟨[.nothing], [.any]⟩
@@ -141,11 +149,19 @@ inductive Verdict
   deriving DecidableEq, Repr
 
 /-- scalac's check of an abstract type member overriding another: the overriding bounds lie within
-the overridden ones. -/
+the overridden ones.
+
+Spec: cites SLS §5.1.4 -/
 def overrideOk (high low : Bounds) : Bool :=
   high.lo.all (fun l => low.lo.all (conforms l ·)) && low.hi.all (fun h => high.hi.all (conforms h ·))
 
-/-- The compiler's check, as a task over the program's declarations. -/
+/-- The compiler's check, as a task over the program's declarations.
+
+Spec: cites SLS §4.3, SLS §5.1.4
+Spec: contradicts SLS §4.3 / dotc 3.9.0: "It is a compile-time error if L does not conform to U",
+but dotc accepts `trait B { type L >: Int <: String }` and rejects it only where the type is
+realized; scalac rejects the declaration (`PathsOracle.calibrated`). With a `null` path such a
+program throws a cast-free `ClassCastException` (`PathsOracle.accepted_sound_except`). -/
 def check (s : Setting) (p : Prog) : M Verdict := do
   let a ← boundsOf s ["A"] "L"
   let b ← boundsOf s ["B"] "L"

@@ -6,7 +6,7 @@ Zinc as instances of `IncComp`: its loop and policies (`Zinc.Loop`), its bridges
 
 **Calibration.** The conformance harness ([retronym/zinc#25](https://github.com/retronym/zinc/issues/25), #36) runs these spaces through real Zinc and compares classfiles with a clean build; on the names and givens spaces the model and Zinc agree on every verdict and recompiled set (2,331 + 2,372 cases). 20 failures the model predicted all failed on Zinc `develop`.
 
-**Gaps.** `Erasure` keeps its own two-parameter walk (its erasure is [`Scala.erase`](../scala/Scala/Lower.lean#L44)), and `ImplicitScope` its own companion search; `Hier`, `Flat` and `ImplicitScope`'s base classes are the shared walk. The port is [`docs/29-shared-scala.md`](docs/29-shared-scala.md).
+**Gaps.** `Erasure` keeps its own two-parameter walk (its erasure is [`Scala.erase`](../scala/Scala/Lower.lean#L51)), and `ImplicitScope` its own companion search; `Hier`, `Flat` and `ImplicitScope`'s base classes are the shared walk. The port is [`docs/29-shared-scala.md`](docs/29-shared-scala.md).
 
 ## Files
 

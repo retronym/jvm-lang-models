@@ -29,7 +29,9 @@ def jname (n : String) : String := s!"L{n};"
 /-- The erasure of an intersection `a with b`: its *intersection dominator* (scalac's
 `intersectionDominator`, for two components): the one that is a subclass of the other, else the
 class if one is a class and the other a trait, else the first. It reads both headers (their kinds)
-and their linearizations, not their members. -/
+and their linearizations, not their members.
+
+Spec: cites SLS §3.7 -/
 def eraseInter (a b : String) : M String := do
   let ha ← needHeader a
   let hb ← needHeader b
@@ -40,7 +42,12 @@ def eraseInter (a b : String) : M String := do
     else if ha.kind == .trt && hb.kind != .trt then b else a))
 
 /-- Erasure of a type in a descriptor. A value class erases to its underlying type, which needs
-its declaration. -/
+its declaration.
+
+Spec: cites SLS §3.7
+Spec: unspecified SLS §3.7: the erasure of a value class to its underlying type (SIP-15, outside the
+specification); calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
+`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
 def erase : Ty → M String
   | .int => pure "I"
   | .long => pure "J"
@@ -66,7 +73,11 @@ def erase : Ty → M String
     | .vcls, some _ => pure "Ljava/lang/Object;"
     | _, _ => pure (jname n)
 
-/-- Erasure as a parameter: `Unit` is boxed. -/
+/-- Erasure as a parameter: `Unit` is boxed.
+
+Spec: unspecified SLS §3.7: that `Unit` is boxed as a parameter; calibrated against scalac 2.12.21,
+2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for
+Scala 3). -/
 def eraseP (t : Ty) : M String := do
   let e ← erase t
   pure (if e == "V" then "Lscala/runtime/BoxedUnit;" else e)
@@ -162,7 +173,12 @@ def setterName (t : String) (v : String) : String := s!"{t}$_setter_${v}_$eq"
 to initialise; here, a concrete `val`. Also, *when the trait is compiled in the same run*, if it has
 a `lazy val` or an extension method (even an abstract one). Read from TASTy, such a trait has
 `NoInits`, so a subclass compiled apart from it does not call the `$init$` the trait has (F6 in
-`docs/status.md`; the extension case is new). -/
+`docs/status.md`; the extension case is new).
+
+Spec: unspecified SLS §5.3.3: when a trait has an initialiser `$init$` and a subclass's constructor
+calls it, which differs between Scala 2 and 3 and, in Scala 3, with separate compilation; calibrated
+against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs
+for Scala 2, 1,363 for Scala 3). -/
 def hasInit (dl : Dialect) (inRun : Bool) (t : Decl) : Bool :=
   match dl with
   | .s212 | .s213 => t.members.any (!·.abs)
@@ -195,7 +211,11 @@ def vclsOf (t : Ty) : M (Option (String × String × String)) := do
 
 /-- Bridges in class `d`: for each method `d` defines (its own and its mixin forwarders), an
 ancestor's member it overrides (`overridesIn`, by `memberType`) whose erasure differs, unless the
-superclass already pairs the two. -/
+superclass already pairs the two.
+
+Spec: unspecified SLS §3.7: which bridge methods a class gets; calibrated against scalac 2.12.21,
+2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for
+Scala 3). -/
 def bridges (self : String) (l : List Anc) (sup : List Anc) (ms : List MOut) :
     M (List MOut) := do
   let mut out := ms
@@ -220,7 +240,12 @@ def bridges (self : String) (l : List Anc) (sup : List Anc) (ms : List MOut) :
 
 /-- Members of a class, object or value class body: its own members and, for each trait it mixes
 in, forwarders to the trait's concrete methods and implementations of the trait's fields. Fields of an
-object are static from 2.13 on; a trait's field implemented in a class is final in 2.12 only. -/
+object are static from 2.13 on; a trait's field implemented in a class is final in 2.12 only.
+
+Spec: unspecified SLS §5.3.3: the encoding of a trait's concrete members in a class that mixes it
+in: mixin forwarders to static `m$` methods, and fields with setters for a trait's `val`s;
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348
+programs for Scala 2, 1,363 for Scala 3). -/
 def classBody (dl : Dialect) (d : Decl) (isObj : Bool) (l : List Anc) :
     M (List MOut × List FOut × List Anc) := do
   let mut ms : List MOut := []
@@ -253,7 +278,9 @@ def classBody (dl : Dialect) (d : Decl) (isObj : Bool) (l : List Anc) :
         ms := addM ms { name := m.name, desc := e, final := m.final, calls := some [call] }
   pure (ms, fs, mx)
 
-/-- The `$init$` calls of a constructor: the mixed-in traits, base first. -/
+/-- The `$init$` calls of a constructor: the mixed-in traits, base first.
+
+Spec: cites SLS §5.1 -/
 def initCalls (dl : Dialect) (mx : List Anc) : M (List Insn) := do
   let ts ← mx.reverse.filterM fun (t, _) => do pure (hasInit dl (← needView t.name).inRun t)
   pure <| ts.map fun (t, _) => ⟨"invokestatic", t.name, "$init$", s!"({jname t.name})V"⟩
@@ -296,7 +323,11 @@ def superLin (d : Decl) : M (List Anc) := do
 
 /-- An inner class (nested in a class or trait, `outer`) holds its outer instance: a field `$outer`
 (public in Scala 2, private in Scala 3), an accessor (`final` in Scala 3), and a constructor
-parameter before the others. -/
+parameter before the others.
+
+Spec: unspecified SLS §5.3: the outer instance of an inner class, as a field, an accessor and a
+constructor parameter; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
+`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
 def lowerClass (dl : Dialect) (d : Decl) (outer : Option String := none) : M ClassOut := do
   let l ← lin fuel d
   let (ms, fs, mx) ← classBody dl d false l
@@ -316,7 +347,11 @@ def lowerClass (dl : Dialect) (d : Decl) (outer : Option String := none) : M Cla
 def moduleName (n : String) : String := n ++ "$"
 
 /-- A value class: the underlying field and its getter, each method forwarding to its extension
-method in the companion, and `hashCode`/`equals` likewise. -/
+method in the companion, and `hashCode`/`equals` likewise.
+
+Spec: unspecified SLS §5.3: the encoding of value classes and their extension methods (SIP-15,
+outside the specification); calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
+`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
 def lowerVcls (d : Decl) : M ClassOut := do
   let some (x, u) := d.under | throw "value class without parameter"
   let eu ← erase u
@@ -347,7 +382,11 @@ def extensions (d : Decl) : M (List MOut) := do
     pure ({ name := n ++ "$extension", desc := s!"({eu}{String.join (← ps.mapM eraseP)}){r'}", final := true } : MOut)
 
 /-- An object nested in an object: its module class has a public constructor, and is final only in
-Scala 3. -/
+Scala 3.
+
+Spec: unspecified SLS §5.4: the encoding of an object as a module class with a `MODULE$` field;
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348
+programs for Scala 2, 1,363 for Scala 3). -/
 def lowerObject (dl : Dialect) (d : Decl) (vc : Option Decl) (nested : Bool := false) : M ClassOut := do
   let self := moduleName d.name
   let l ← lin fuel d
@@ -379,7 +418,11 @@ def lowerObject (dl : Dialect) (d : Decl) (vc : Option Decl) (nested : Bool := f
 
 /-- Static forwarders in the companion class (or a mirror class) for the object's public methods,
 its own and inherited, except those whose name the companion class also has. Scala 2 skips
-trait setters and bridges; Scala 3 forwards setters, and some bridges. -/
+trait setters and bridges; Scala 3 forwards setters, and some bridges.
+
+Spec: unspecified SLS §5.4: which static forwarders a companion class gets; calibrated against
+scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala
+2, 1,363 for Scala 3). -/
 def forwarders (dl : Dialect) (od : Decl) (o : ClassOut) (clsNames : List String) : M (List MOut) := do
   let l ← lin fuel od
   let mut cands := o.methods.filter fun m =>

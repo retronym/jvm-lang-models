@@ -56,11 +56,15 @@ def CVal.asStr : CVal → String
   | .str s => s
 
 /-- A constant variable: `static final` (or an interface field), of type `int` or `String`, with a
-constant initialiser. -/
+constant initialiser.
+
+Spec: cites JLS §4.12.4 -/
 def isConstVar (d : Decl) (f : Field) : Bool :=
   (f.final || d.kind == .iface) && (f.ty == .int || f.ty == .str) && f.init.isSome
 
-/-- The value of a constant expression, reading other types' constants; `none` if it is not one. -/
+/-- The value of a constant expression, reading other types' constants; `none` if it is not one.
+
+Spec: cites JLS §15.29 -/
 def eval : Nat → Expr → M (Option CVal)
   | 0, _ => pure none
   | _ + 1, .int n => pure (some (.int n))
@@ -189,7 +193,9 @@ def toWorld (cs : List ClassOut) : Jvm.World String String String :=
 def isJava (n : String) : Bool := n.startsWith "java/"
 
 /-- The `getstatic`s a body or initialiser runs: none for a constant expression (folded), else one
-per non-constant field it reads, in evaluation order. -/
+per non-constant field it reads, in evaluation order.
+
+Spec: cites JLS §13.1, JLS §13.4.9 -/
 def reads : Nat → Expr → M (List Insn)
   | 0, _ => pure []
   | k + 1, e => do
@@ -204,7 +210,9 @@ def reads : Nat → Expr → M (List Insn)
     | _ => pure []
 
 /-- The constants a body or initialiser pushes: a constant expression's value, folded, else those
-of its operands; `Integer.parseInt("1")` pushes `"1"`. -/
+of its operands; `Integer.parseInt("1")` pushes `"1"`.
+
+Spec: cites JLS §13.1 -/
 def pushes : Nat → Expr → M (List CVal)
   | 0, _ => pure []
   | k + 1, e => do
@@ -240,7 +248,12 @@ def supers : Nat → Decl → Option Ty → M (List Anc)
 
 /-- Bridges in `d`: for each method `d` declares and each method of a supertype it overrides (the
 same name, and parameters equal once the supertype's type parameter is substituted) whose erased
-descriptor differs. -/
+descriptor differs.
+
+Spec: cites JLS §8.4.8.1, JLS §15.12.4.5
+Spec: unspecified JLS §13.1: which bridge methods a class file contains. The JLS says a bridge may
+be needed (§15.12.4.5) but not which; the model has javac's, calibrated against javac 17, 21 and 25
+by `packages/java/probes/probe.py`. -/
 def bridges (d : Decl) (ms : List MOut) : M (List MOut) := do
   let ss ← supers fuel d none
   let mut out := ms
@@ -276,7 +289,9 @@ def fieldOut (d : Decl) (f : Field) : M FOut := do
     | none => pure none
   pure { name := f.name, desc := erase f.ty, static := f.static || itf, final := f.final || itf, const := c }
 
-/-- The static initialiser, if a static field has an initialiser that is not a constant. -/
+/-- The static initialiser, if a static field has an initialiser that is not a constant.
+
+Spec: cites JLS §12.4.2 -/
 def clinit (d : Decl) (fs : List FOut) : M (List MOut) := do
   let dyn := (d.fields.zip fs).filter fun (f, o) => (f.static || d.kind == .iface) && f.init.isSome && o.const.isNone
   if dyn.isEmpty then return []

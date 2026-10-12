@@ -20,4 +20,4 @@ object Main { def main(a: Array[String]): Unit = println((new L).c(0)) }
 | scalac 2.13.18 | error: cannot override final member |
 | dotc 3.9.0 | error: overriding method c in trait SO … cannot override final member |
 
-The model ([`Scala.Members.errors`](../../packages/scala-types/ScalaTypes/Members.lean#L197)) gives no error for 2.12, `finalOverride` on `L` for 2.13, and no error for Scala 3. The last disagrees with dotc: the model's Scala 3 rules lack the re-check that dotc, like 2.13, performs, tracked as an issue in this repository. Nothing to report upstream.
+The model ([`Scala.Members.errors`](../../packages/scala-types/ScalaTypes/Members.lean#L222)) gives no error for 2.12, `finalOverride` on `L` for 2.13, and no error for Scala 3. The last disagrees with dotc: the model's Scala 3 rules lack the re-check that dotc, like 2.13, performs, tracked as an issue in this repository. Nothing to report upstream.

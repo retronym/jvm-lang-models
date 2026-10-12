@@ -35,3 +35,15 @@ Both prove `Obligations` and inherit T3a and the `Classpath` results. The narrow
 ## Prior art
 
 Build systems à la carte (Mokhov, Mitchell, Peyton Jones): a build task as a monadic computation whose trace is its dependencies, which is `Task` here. Kotlin's incremental JPS compilation: a `LookupTracker` records every name lookup per scope, misses included, and invalidation is by lookup, not by resolved symbol. Zinc's own `ExtractUsedNames` records the name but not the scope, which is the gap the families fall through.
+
+## The specification ledger
+
+The models of the JVM, Java and Scala implement clauses of the JVMS, the JLS and the SLS, and calibrating them against HotSpot, javac and scalac/dotc found where those clauses say nothing or disagree with each other or with the implementation. The ledger keeps these in one place, generated from the Lean sources: [`specification-ledger.md`](specification-ledger.md), by [`scripts/spec_ledger.py`](../scripts/spec_ledger.py) (`--check` in CI).
+
+**The tag.** A rule's docstring ends with one or more lines that start with `Spec:`, each running on to the next tag, a blank line or the end of the docstring:
+
+- `Spec: cites JVMS §5.4.3.3, JVMS §5.4.3.4`: the rule implements these clauses.
+- `Spec: unspecified JVMS §5.3.5: <evidence>`: the clause leaves something open that the model needs, and the model takes it from an implementation; the evidence says which, and on what calibration.
+- `Spec: contradicts SLS §5.1.4 / dotc 3.9.0: <witness>`: two sources disagree on a program, a clause against an implementation, another clause or its own example; the witness names the case, by a qualified Lean name where there is one.
+
+A clause is a specification (`JVMS`, `JLS` or `SLS`) and an optional section, with words after it as a note (`JVMS §6.5 invokeinterface`). Sections are those of Java SE 25 and of the Scala 2.13 specification. Tag the definition that encodes the rule, not its callers; a witness is a catalogue case or a theorem over a calibrated space, not prose.

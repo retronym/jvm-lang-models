@@ -64,7 +64,9 @@ def Kind.phase : Kind → Nat
 def isBase (l : List Anc) (a : String) : Bool := l.any (·.1.name == a)
 
 /-- Does a member carry `override`? Explicitly, or as printed: iff it overrides something in its
-own class's linearization. -/
+own class's linearization.
+
+Spec: cites SLS §5.1.4, SLS §5.2 -/
 def hasOverride (owner : Decl) (m : Mem) : M Bool := do
   match m.ov with
   | some b => pure b
@@ -74,13 +76,22 @@ def hasOverride (owner : Decl) (m : Mem) : M Bool := do
     | some a => pure ((hitsAbove lo m.name).any (overridesIn owner.name lo (a, m)))
     | none => pure false
 
-/-- `t <: u` for the types the spaces use: equal, or a reference type below `Object`. -/
+/-- `t <: u` for the types the spaces use: equal, or a reference type below `Object`.
+
+Spec: cites SLS §3.5.2 -/
 def conforms (t u : Ty) : Bool :=
   t == u || (u == .obj && match t with | .int | .bool | .unit => false | _ => true)
 
 /-- The member of a signature group that a selection on the class runs: the first concrete,
 non-private one, unless an abstract member of a subclass of its owner comes earlier (the subclass
-re-abstracts it). Only a class re-abstracts; an abstract member of a trait does not. `none` when the group has no such member: the class's member is abstract. -/
+re-abstracts it). Only a class re-abstracts; an abstract member of a trait does not. `none` when the group has no such member: the class's member is abstract.
+
+Spec: cites SLS §5.1.2, SLS §5.1.3, SLS §5.1.4
+Spec: contradicts SLS §5.1.4 / scalac 2.12.21, 2.13.18, dotc 3.9.0: "a concrete definition always
+overrides an abstract one", but a class's abstract declaration re-abstracts an inherited concrete
+member in both compilers, even with the concrete trait mixed in directly
+(`Members.reabsAbstractClass`, `Members.reabsClassDirect`; draft
+[spec-reabstraction.md](../../../docs/upstream/spec-reabstraction.md)). -/
 def effWinner (self : String) (g : List Hit) : M (Option Hit) := do
   let mut seen : List Hit := []
   for h in g do
@@ -104,7 +115,12 @@ unless the class also has that parent directly (`class B extends A`, with
 Neither is in the specification, which says a concrete definition always overrides an abstract
 one (SLS §5.1.4, and the Scala 3 spec's copy of it): by the text, all of these compile. Scala 2
 follows it for traits (and emits a mixin forwarder to the concrete member); javac, by contrast,
-always lets an abstract redeclaration win (JLS §9.4.1, §8.4.8), as JVM selection does. -/
+always lets an abstract redeclaration win (JLS §9.4.1, §8.4.8), as JVM selection does.
+
+Spec: contradicts SLS §5.1.4 / dotc 3.9.0: a trait's abstract declaration re-abstracts a concrete
+member of its own parent unless a direct parent supplies it (`Members.reabsTraitOnly`,
+`Members.reabsTraitDirect`, `Members.reabsTraitViaClass`; draft
+[dotc-reabstraction-direct-parent.md](../../../docs/upstream/dotc-reabstraction-direct-parent.md)). -/
 def concreteS3 (n : String) : Nat → Decl → M Bool
   | 0, _ => pure false
   | k + 1, d => do
@@ -116,7 +132,16 @@ def concreteS3 (n : String) : Nat → Decl → M Bool
         if ← concreteS3 n k (← need p) then r := true
       pure r
 
-/-- The refchecks errors of definition `d` (a class, trait or object). -/
+/-- The refchecks errors of definition `d` (a class, trait or object).
+
+Spec: cites SLS §5.1.4, SLS §5.2
+Spec: unspecified SLS §5.1.4: which errors refchecks reports for a member, and in which order. Both
+compilers report one per member, in the order access, `final`, missing `override`, accidental
+override, `def` over `val`, lazy against strict, result type; calibrated on the 4,704 programs of
+`Members.membersSpace` by `packages/scala/probes/members.py`.
+Spec: unspecified SLS §5.1.4: whether a subclass checks again an overriding pair its parent already
+checked. 2.13 does, 2.12 and 3 do not (`Members.recheck`;
+[mixin-final-override-recheck.md](../../../docs/upstream/mixin-final-override-recheck.md)). -/
 def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   let l ← lin fuel d
   let pls ← d.parents.mapM fun (p, _) => do lin fuel (← need p)
@@ -205,7 +230,9 @@ def errors (dl : Dialect) (p : Program) : Except String (List Err) := do
   | some ph => pure (es.filter (·.kind.phase == ph))
   | none => pure []
 
-/-- For each concrete class, the owner of the `m` a selection runs (none if `m` is private). -/
+/-- For each concrete class, the owner of the `m` a selection runs (none if `m` is private).
+
+Spec: cites SLS §5.1.2, SLS §5.1.3 -/
 def runs (p : Program) : List (String × String) :=
   p.filterMap fun s => do
     let d ← s.cls

@@ -8,6 +8,7 @@ Four kinds of document, by what they are for. Per-package notes are in each pack
 |---|---|
 | [`status.md`](status.md) | see, per package, what is proved for every program and what is checked on a space or calibrated against the real tool, with the bug-map counts and the trust checks |
 | [`specification.md`](specification.md) | understand why the model is a specification of the compiler bridge, and the rules that follow (theorems vs `example`s, witnesses, calibration) |
+| [`specification-ledger.md`](specification-ledger.md) | find, per JVMS, JLS and SLS section, the rules that cite it, the behaviour it leaves unspecified and the contradictions the calibrations found (generated) |
 | [`stats.md`](stats.md) | see each package's size: Lean files, lines, theorems and checked examples (generated) |
 | [`roadmap.md`](roadmap.md) | find open work on the JVM, Java, Scala and binary-compatibility layers |
 | [the root README](../README.md#the-theorems) | read the obligations and T1–T5, stated once |

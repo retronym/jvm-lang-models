@@ -34,12 +34,16 @@ namespace Jvm
 
 variable {C N D : Type} [DecidableEq C] [DecidableEq N] [DecidableEq D]
 
-/-- A member's access (JVMS §4.6, §5.4.4). -/
+/-- A member's access (JVMS §4.6, §5.4.4).
+
+Spec: cites JVMS §4.6, JVMS §5.4.4 -/
 inductive Access | pub | prot | pkg | priv
   deriving DecidableEq, Repr
 
 /-- `pkg` is the class's runtime package (0 is the unnamed one). A class's package is part of its
-name, so it must not differ between the class tables a model compares. -/
+name, so it must not differ between the class tables a model compares.
+
+Spec: cites JVMS §4.1, JVMS §5.3 -/
 structure Header (C : Type) where
   isInterface : Bool := false
   isAbstract : Bool := false
@@ -62,7 +66,9 @@ structure Header (C : Type) where
 `C c = new R(); c.m()` when `R ≠ C`), or a `new C()` whose constructor is not modelled (`construct`
 models one); field accesses likewise.
 `invokespecial` is a `super` call (`iface` for `I.super.m()`) from the site's class, so it is wrapped in a
-`within`. `within x s` runs `s` from a static method of the client's class `x`. -/
+`within`. `within x s` runs `s` from a static method of the client's class `x`.
+
+Spec: cites JVMS §6.5 -/
 inductive Site (C N D : Type)
   | invokestatic (c : C) (n : N) (d : D)
   | invokevirtual (c : C) (n : N) (d : D) (recv : C)
@@ -152,7 +158,9 @@ theorem agrees_iff (w w' : World C N D) (q : Q C N D) :
   cases q <;> simp only [agrees, answer, decide_eq_true_eq] <;> exact Iff.rfl
 
 /-- The `LinkageError`s the model raises. `packages/jvm/probes/Run.java` maps each to the JVM's class, calibrated on
-HotSpot 21, 25 and 27: `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`s. -/
+HotSpot 21, 25 and 27: `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`s.
+
+Spec: cites JVMS §5.3.5, JVMS §5.4.3, JVMS §6.5 -/
 inductive LinkError
   | noClassDef
   | incompatibleClassChange
@@ -219,7 +227,9 @@ def subclassOf (c : C) : Nat → C → M C N D Bool
     | some s => subclassOf c k s
 
 /-- Look a method up in `c` and its superclasses (resolution, §5.4.3.3 step 2, which finds static
-and private methods too). -/
+and private methods too).
+
+Spec: cites JVMS §5.4.3.3 -/
 def chain (inst : Bool) (n : N) (d : D) : Nat → C → M C N D (Option (C × MethodInfo C N D))
   | 0, _ => pure none
   | k + 1, c => do
@@ -248,7 +258,9 @@ def below (a : C) : Nat → C → M C N D (Option (List C))
 /-- Can `(x, mi)` override `(a, ma)`, both named `n` with descriptor `d` (§5.4.5)? Private and
 static methods neither override nor are overridden. A package-private `ma` is overridden from its
 own run-time package, or (case (b)) through a method `mb` of a class between them that `mi` can
-override and that can override `ma`. -/
+override and that can override `ma`.
+
+Spec: cites JVMS §5.4.5 -/
 def overridesK (n : N) (d : D) : Nat → C → MethodInfo C N D → C → MethodInfo C N D → M C N D Bool
   | 0, _, _, _, _ => pure false
   | k + 1, x, mi, a, ma => do
@@ -268,7 +280,9 @@ def overrides (n : N) (d : D) (x : C) (mi : MethodInfo C N D) (a : C) (ma : Meth
   overridesK n d depth x mi a ma
 
 /-- Selection's walk (§5.4.6 step 2): the first declaration in `c` or a superclass that overrides
-the resolved method `(a, ma)`. -/
+the resolved method `(a, ma)`.
+
+Spec: cites JVMS §5.4.6 -/
 def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo C N D) :
     Nat → C → M C N D (Option (C × MethodInfo C N D))
   | 0, _ => pure none
@@ -287,13 +301,17 @@ def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo C N D) :
 
 /-- May `x` (with header `h`) extend or implement `s` (with header `hs`)? JVMS §5.3.5: if `s` is
 sealed, `x` must be listed in its `PermittedSubclasses` and, unless `x` is public, be in the same
-run-time package (all classes here are in one module). -/
+run-time package (all classes here are in one module).
+
+Spec: cites JVMS §5.3.5 -/
 def permits (x : C) (h hs : Header C) : Bool :=
   match hs.permitted with
   | none => true
   | some ps => (h.isPublic || h.pkg == hs.pkg) && ps.contains x
 
-/-- The final instance methods named `n` with descriptor `d` declared in `c` or a superclass. -/
+/-- The final instance methods named `n` with descriptor `d` declared in `c` or a superclass.
+
+Spec: cites JVMS §5.3.5 -/
 def finalsAbove (n : N) (d : D) : Nat → C → M C N D (List (C × MethodInfo C N D))
   | 0, _ => pure []
   | k + 1, c => do
@@ -308,7 +326,16 @@ def finalsAbove (n : N) (d : D) : Nat → C → M C N D (List (C × MethodInfo C
 them in that order): each superinterface must be an interface, the superclass a non-final class,
 both accessible from the class and, if sealed, permitting it (§5.3.5), and none of the class's instance methods may override a final one. The JVM loads a class when a
 site, the verifier or a subclass first refers to it; the model loads it at each such reference,
-which repeats queries but not answers. -/
+which repeats queries but not answers.
+
+Spec: cites JVMS §5.3.5, JVMS §5.4.4
+Spec: contradicts JVMS §5.3.5 / HotSpot 21, 25 and 27: the order of the loading checks. §5.3.5
+resolves the superclass, with its access check (§5.4.3.1), then checks that it is a non-final class
+and permits the subclass (step 3), then resolves and checks the superinterfaces (step 4). HotSpot's
+class file parser, and the model, check the superinterfaces first, and a final superclass and
+`PermittedSubclasses` before the superclass's access: `Catalogue.finalSuperInaccessible` and
+`Catalogue.ifaceNotIfaceSuperInaccessible` throw `IncompatibleClassChangeError` where §5.3.5 gives
+`IllegalAccessError`. -/
 def loadK : Nat → C → M C N D Unit
   | 0, _ => pure ()
   | k + 1, x => do
@@ -350,7 +377,9 @@ def curPkg : Cur C → M C N D Nat
   | none => pure 0
   | some x => do pure (← hdr x).pkg
 
-/-- Resolve a class reference from `cur` (§5.4.3.1): load it, and check it is accessible. -/
+/-- Resolve a class reference from `cur` (§5.4.3.1): load it, and check it is accessible.
+
+Spec: cites JVMS §5.4.3.1, JVMS §5.4.4 -/
 def resolveCls (cur : Cur C) (c : C) : M C N D (Header C) := do
   let h ← cls c
   if !h.isPublic && h.pkg != (← curPkg cur) then throw .illegalAccess
@@ -358,7 +387,9 @@ def resolveCls (cur : Cur C) (c : C) : M C N D (Header C) := do
 
 /-- The nest host of `c` (JVMS §5.4.4): the class its `NestHost` attribute names, if that class is
 present, in `c`'s run-time package and lists `c` in its `NestMembers`; otherwise `c` itself (since
-JDK 15 a failed nest-host check is not an error, `c` is just alone in its nest). -/
+JDK 15 a failed nest-host check is not an error, `c` is just alone in its nest).
+
+Spec: cites JVMS §5.4.4 -/
 def nestHostOf (c : C) : M C N D C := do
   let h ← hdr c
   let some n := h.nestHost | return c
@@ -367,7 +398,9 @@ def nestHostOf (c : C) : M C N D C := do
   | none => pure c
 
 /-- Member access from `cur` to a member of `decl` (§5.4.4). A private member is accessible from its
-own class and from the classes of its nest: `cur` and `decl` have the same nest host. -/
+own class and from the classes of its nest: `cur` and `decl` have the same nest host.
+
+Spec: cites JVMS §5.4.4 -/
 def accessible (cur : Cur C) (decl : C) (acc : Access) : M C N D Bool := do
   match acc with
   | .pub => pure true
@@ -384,7 +417,9 @@ def accessible (cur : Cur C) (decl : C) (acc : Access) : M C N D Bool := do
 
 /-- The maximally-specific superinterface methods of `c` for `n` and `d` (§5.4.3.3): instance
 methods, not private, declared in a superinterface of `c` that no other such method's interface
-extends. -/
+extends.
+
+Spec: cites JVMS §5.4.3.3 -/
 def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo C N D)) := do
   let is ← ifacesOf depth c
   -- Mathlib's `dedup` keeps the last occurrence of each interface; so does this.
@@ -398,7 +433,9 @@ def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo C N D))
     pure !below
 
 /-- Step 3 of §5.4.3.3 and §5.4.3.4: a unique non-abstract maximally-specific method, else any
-superinterface method. -/
+superinterface method.
+
+Spec: cites JVMS §5.4.3.3, JVMS §5.4.3.4 -/
 def fromIfaces (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let ms ← maxSpecific c n d
   match ms.filter fun p => !p.2.isAbstract with
@@ -412,7 +449,9 @@ def checkAccess (cur : Cur C) (r : C × MethodInfo C N D) : M C N D (C × Method
   if !(← accessible cur r.1 r.2.access) then throw .illegalAccess
   pure r
 
-/-- Method resolution against a class, §5.4.3.3. -/
+/-- Method resolution against a class, §5.4.3.3.
+
+Spec: cites JVMS §5.4.3.3 -/
 def resolveClass (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let h ← resolveCls cur c
   if h.isInterface then throw .incompatibleClassChange
@@ -420,7 +459,9 @@ def resolveClass (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
   | some r => checkAccess cur r
   | none => checkAccess cur (← fromIfaces c n d)
 
-/-- Interface method resolution, §5.4.3.4. -/
+/-- Interface method resolution, §5.4.3.4.
+
+Spec: cites JVMS §5.4.3.4 -/
 def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let h ← resolveCls cur c
   if !h.isInterface then throw .incompatibleClassChange
@@ -437,7 +478,12 @@ def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
 `invokevirtual`'s and (`iface`) `invokeinterface`'s errors. A private resolved method is selected
 itself. `invokeinterface` also fails if it selects a method that is neither public nor private (JVMS
 §6.5), before the check for an abstract one: a package-private class method can override a public
-interface method (§5.4.5) but not run for it. -/
+interface method (§5.4.5) but not run for it.
+
+Spec: cites JVMS §5.4.6, JVMS §6.5 invokevirtual, JVMS §6.5 invokeinterface
+Spec: contradicts JVMS §6.5 invokeinterface / HotSpot 10 to 24: a receiver with two
+maximally-specific defaults throws `AbstractMethodError` where the JVMS says
+`IncompatibleClassChangeError` (JDK-8356942, fixed in 25; `Catalogue.defaultConflict`). -/
 def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo C N D) : M C N D C := do
   if ma.access = .priv then return a
   match ← chainOver n d a ma depth r with
@@ -451,7 +497,9 @@ def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo C N D
     | [] => throw .abstractMethod
     | _ => throw .incompatibleClassChange
 
-/-- Field resolution, §5.4.3.2: `c`, then its superinterfaces, then its superclass. -/
+/-- Field resolution, §5.4.3.2: `c`, then its superinterfaces, then its superclass.
+
+Spec: cites JVMS §5.4.3.2 -/
 def lookupField (n : N) (d : D) : Nat → C → M C N D (Option (C × FieldInfo))
   | 0, _ => pure none
   | k + 1, c => do
@@ -473,14 +521,21 @@ def resolveField (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × FieldInfo
 
 /-- The verifier's assignability of class type `r` to `c` (JVMS §4.10.1.2, as HotSpot checks it):
 equal names pass without loading; otherwise `c` is loaded, an interface passes, and a class must be
-a superclass of `r`. -/
+a superclass of `r`.
+
+Spec: cites JVMS §4.10.1.2
+Spec: unspecified JVMS §4.10.1.2: when the verifier loads the classes of an assignability check.
+HotSpot passes equal names without loading, loads the target, and passes an interface target;
+calibrated on `Clients.space3` (`Catalogue.classBecomesInterface`). -/
 def assignable (r c : C) : M C N D Unit := do
   if r = c then return
   if (← cls c).isInterface then return
   discard <| cls r
   if !(← subclassOf c depth r) then throw .verify
 
-/-- `new c`: resolve it; it must be a concrete class. -/
+/-- `new c`: resolve it; it must be a concrete class.
+
+Spec: cites JVMS §6.5 new -/
 def instantiate (cur : Cur C) (c : C) : M C N D Unit := do
   let h ← resolveCls cur c
   if h.isInterface || h.isAbstract then throw .instantiation
@@ -490,7 +545,12 @@ def instantiate (cur : Cur C) (c : C) : M C N D Unit := do
 assignable to `c`, and `c` must not be an interface (an indirect superinterface). Calibrated on
 HotSpot 25+: what matters is whether `c` is an interface, not the constant's tag; an
 `InterfaceMethodref` to a class passes here and fails in resolution. HotSpot 21 checked the tag
-instead (JDK-8350029, fixed in 25). -/
+instead (JDK-8350029, fixed in 25).
+
+Spec: cites JVMS §4.10.1.9 invokespecial
+Spec: contradicts JVMS §4.10.1.9 invokespecial / HotSpot 21: JDK 21 checks the constant's tag
+instead of whether the class is an interface (JDK-8350029, fixed in 25); 56 programs of `Clients.space3` and 4 of
+`Clients.space5`, in forms javac never emits. -/
 def verifySpecial (x c : C) : M C N D Unit := do
   let h ← hdr x
   if c = x || h.super = some c || h.ifaces.contains c then return
@@ -499,7 +559,9 @@ def verifySpecial (x c : C) : M C N D Unit := do
 
 /-- The verifier's protected check (§4.10.1.8, HotSpot's `verify_protected_access`): from `x`, a
 reference through a proper superclass `c` of `x` to a protected member declared in another package
-needs a receiver `r` that is an `x`. `acc` looks the member up from `c`. -/
+needs a receiver `r` that is an `x`. `acc` looks the member up from `c`.
+
+Spec: cites JVMS §4.10.1.8 -/
 def verifyProtected (cur : Cur C) (c r : C) (acc : M C N D (Option (C × Access))) :
     M C N D Unit := do
   let some x := cur | return
@@ -532,7 +594,13 @@ body); a method the site selects is entered with `enter'`, and a new instance's 
 the receiver as their first argument (Scala's `$init$` and `m$`) see it as `aload_0`. The result is the sequence of methods
 entered, or for a site that enters none, the class whose field is accessed or that is instantiated.
 The verifier checks the receiver's upcast before the site runs; then the receiver is instantiated,
-the member resolved and selected. -/
+the member resolved and selected.
+
+Spec: cites JVMS §5.4, JVMS §6.5
+Spec: unspecified JVMS §5.4: when symbolic references are resolved. The model resolves lazily, at a
+site's first execution, as HotSpot does, and verifies each site just before it runs.
+Spec: cites JVMS §6.5 invokespecial, linking exceptions (resolution, then "Otherwise" the
+constructor's declaring class) -/
 def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (init' : C → M C N D Unit)
     (cur : Cur C) (self : Option C) : Site C N D → M C N D (List C)
   | .invokestatic c n d => do

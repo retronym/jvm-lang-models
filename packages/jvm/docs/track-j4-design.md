@@ -4,7 +4,7 @@
 
 ## Problem
 
-[`Jvm.Program`](../Jvm/Link.lean#L692) is a list of classes to load and sites to execute, each site run from a static method of a client class. A library method is a [`MethodInfo`](../Jvm/Link.lean#L95) with flags and no body. So a library method's *own* sites are invisible, and four things cannot be judged:
+[`Jvm.Program`](../Jvm/Link.lean#L760) is a list of classes to load and sites to execute, each site run from a static method of a client class. A library method is a [`MethodInfo`](../Jvm/Link.lean#L101) with flags and no body. So a library method's *own* sites are invisible, and four things cannot be judged:
 
 - **MiMa's `ReversedMissingMethodProblem`.** 17 of the edit space's reported edits break no client of the space, because the only client they break is one whose subclass is called *by the library*: `A.run()` calls `this.m()`, the client's `X extends A`, and the edit adds abstract `m` to `A`. HotSpot throws `AbstractMethodError` inside `run`. Today these are "outside the space", neither confirmed nor refuted ([`track-b.md`](../../mima/docs/track-b.md)).
 - **Nestmates.** A nest change breaks a client only through a library method's body: the inner class's body accesses a private member of the outer class, and whether that links depends on `NestHost`/`NestMembers` at the time of the call. With no bodies there is nothing to break.
@@ -21,7 +21,7 @@ That is all. No data, no control flow, no exceptions, no `<clinit>`: the body is
 
 ## Key decisions
 
-**Bodies live in [`MethodInfo`](../Jvm/Link.lean#L95).** `MethodInfo.body : List (Site C N D)`, default empty. The answer to `Q.method c n d` then carries the body, so a body edit changes a footprint query exactly when the body is run, and [`link_congr`](../Jvm/Link.lean#L714) holds unchanged: T1 needs no new argument. Every existing `World`, space and catalogue case keeps its meaning with empty bodies. [`Jvm.World`](../Jvm/Link.lean#L116), `Program` and `Site` change additively, as the contract promises.
+**Bodies live in [`MethodInfo`](../Jvm/Link.lean#L101).** `MethodInfo.body : List (Site C N D)`, default empty. The answer to `Q.method c n d` then carries the body, so a body edit changes a footprint query exactly when the body is run, and [`link_congr`](../Jvm/Link.lean#L782) holds unchanged: T1 needs no new argument. Every existing `World`, space and catalogue case keeps its meaning with empty bodies. [`Jvm.World`](../Jvm/Link.lean#L122), `Program` and `Site` change additively, as the contract promises.
 
 **`this` is a receiver.** Today a site's receiver is a runtime class `recv`, instantiated at the site (`new recv; invokevirtual c.m`). Inside a body, the receiver of `this.m()` is whatever the caller instantiated, which for the interesting cases is the client's class. So the run carries a current receiver class, and sites gain `this`-receiver forms (additive constructors; the existing ones are unchanged). Static sites and `new` sites in bodies need nothing new. `invokespecial` from a body is a `super` call from the declaring class, which `within` already expresses.
 
@@ -31,7 +31,7 @@ That is all. No data, no control flow, no exceptions, no `<clinit>`: the body is
 
 **The probe observes exactly the outcome.** `Render.java` already makes every rendered method log its owner through `ProbeLog.ran` on entry; it emits the body's sites after that log, with the same `emit` used for client sites and `this` as `aload_0`. `ProbeLog` keeps the list of owners entered instead of the last one, and `Run.java` compares the list and the `Throwable`. The known-deviation handling and the ledger are unchanged.
 
-**The front ends already produce bodies.** [`Scala.ClassOut`](../../scala/Scala/Lower.lean#L113) and [`Java.ClassOut`](../../java/Java/Lower.lean#L142) carry "the invokes of synthesized bodies" (`$init$` calls, forwarders, super calls, bridges) because the probes compare them; `toJvm` drops them today. With bodies in [`MethodInfo`](../Jvm/Link.lean#L95), `toJvm` keeps them, and the Scala catalogue's `valAddedToTrait`, `superCall*` and `traitOverrideAdded` are judged with the library's own calls. That is the first place the design is tested against something the model already got wrong.
+**The front ends already produce bodies.** [`Scala.ClassOut`](../../scala/Scala/Lower.lean#L124) and [`Java.ClassOut`](../../java/Java/Lower.lean#L146) carry "the invokes of synthesized bodies" (`$init$` calls, forwarders, super calls, bridges) because the probes compare them; `toJvm` drops them today. With bodies in [`MethodInfo`](../Jvm/Link.lean#L101), `toJvm` keeps them, and the Scala catalogue's `valAddedToTrait`, `superCall*` and `traitOverrideAdded` are judged with the library's own calls. That is the first place the design is tested against something the model already got wrong.
 
 ## What stays out, and why
 
@@ -54,7 +54,7 @@ Each step is one commit series with the lints green; steps 3 and 6 each add a Tr
 
 All six steps are done; results are in [`track-j.md`](track-j.md), [`track-b.md`](../../mima/docs/track-b.md) and [`track-s.md`](../../scala/docs/track-s.md). Where the code departs from the decisions above:
 
-- **[`MethodInfo`](../Jvm/Link.lean#L95) takes the class table's type parameters**, since a body is a list of `Site C N D`. Every mention of it became `MethodInfo C N D`; `World`, `Program` and `Site` changed only additively (four `this` sites, `Program.init`).
+- **[`MethodInfo`](../Jvm/Link.lean#L101) takes the class table's type parameters**, since a body is a list of `Site C N D`. Every mention of it became `MethodInfo C N D`; `World`, `Program` and `Site` changed only additively (four `this` sites, `Program.init`).
 - **The outcome is the list of owners entered**, not (class, method) pairs: that is what `ProbeLog` can see, and it is the per-site class list when bodies are empty. Running out of fuel is `LinkError.outOfFuel`, which no JVM outcome matches.
 - **A new instance can run its constructor.** `Program.init` names the no-argument constructor; when set, building a receiver or `new c` runs that constructor's body, its entries muted as the probe mutes them. The Scala and Java catalogues set it, which is how `valAddedToTrait` fails at `new X`; the `Jvm` catalogue's constructors have empty bodies and leave it unset.
 - **A static method entered from a body keeps the caller's `this`**, which is how Scala's `$init$(this)` and `m$(this)` see their receiver.
