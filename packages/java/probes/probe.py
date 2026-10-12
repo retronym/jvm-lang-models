@@ -3,8 +3,9 @@
 
     probe.py OUT [--jdk 17=/path/to/jdk17 ...]
 
-Runs `lake exe javaprobe OUT` (sources and the model's classfiles), compiles OUT/src with javac at
-each release (`--release N`, with that release's own javac), reads the classfiles, and diffs them
+Runs `lake exe javaprobe OUT` (sources and the model's classfiles), compiles each program OUT/src/pN with
+javac at each release (`--release N`, with that release's own javac, in a compile server: see
+packages/harness/scripts/compiler.py), reads the classfiles, and diffs them
 against the model. Writes OUT/report-<release>.txt with every divergence grouped by shape, and
 prints the agreement counts. JDKs default to $JAVA<N>_HOME, then ~/.sdkman/candidates/java/<N>*.
 
@@ -14,11 +15,14 @@ enum, ConstantValue) and methods (access, static, final, abstract, bridge, synth
 descriptor, every method's getstatic and invoke instructions on classes outside java/ and
 arrays, and the int and String constants it pushes (where folded constants show up). Package prefixes are stripped.
 """
-import glob, os, re, struct, subprocess, sys
+import glob, importlib.util, os, re, struct, subprocess, sys
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LEAN = os.path.normpath(os.path.join(HERE, '..', '..', '..'))  # the repository root
+_spec = importlib.util.spec_from_file_location('compiler', os.path.join(LEAN, 'packages', 'harness', 'scripts', 'compiler.py'))
+compiler = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compiler)
 
 def opcode_len(code, pc):
     op = code[pc]
@@ -197,30 +201,35 @@ def jdk_home(rel, overrides):
     return hits[0] if hits else None
 
 def compile_all(out, rel, home):
+    """Each program in its own compile; returns the output directories, each holding a pN/."""
     dest = os.path.join(out, f'classes-{rel}')
-    if os.path.isdir(dest) and os.listdir(dest):
-        return dest
-    os.makedirs(dest, exist_ok=True)
-    srcs = sorted(glob.glob(os.path.join(out, 'src', 'p*', '*.java')))
-    argfile = os.path.join(out, f'sources-{rel}.txt')
-    with open(argfile, 'w') as f:
-        f.write('\n'.join(srcs))
-    r = subprocess.run([os.path.join(home, 'bin', 'javac'), '--release', rel, '-d', dest, '@' + argfile],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.stderr.write(r.stdout + r.stderr)
-        raise SystemExit(f'javac {rel} failed')
-    return dest
+    dests, failed = [], []
+    with compiler.javac(home, work=os.path.join(out, f'server-{rel}')) as server:
+        for pdir in sorted(glob.glob(os.path.join(out, 'src', 'p*'))):
+            pid = os.path.basename(pdir)
+            r = server.compile(files=sorted(glob.glob(os.path.join(pdir, '*.java'))), options=['--release', rel],
+                               out=os.path.join(dest, pid), id=pid)
+            if not r['ok']:
+                failed.append(r)
+            dests.append(r['out'])
+    if failed:
+        for r in failed:
+            for d in r.get('diagnostics', []):
+                sys.stderr.write(f"{d['file']}:{d['line']}:{d['column']}: {d['severity']}: {d['message']}\n")
+            sys.stderr.write(r.get('crash', ''))
+        raise SystemExit(f'javac {rel} failed on {len(failed)} programs')
+    return dests
 
-def actual(dest):
+def actual(dests):
     out = {}
-    for pdir in sorted(os.listdir(dest)):
-        full = os.path.join(dest, pdir)
-        if not (os.path.isdir(full) and re.fullmatch(r'p\d+', pdir)):
-            continue
-        for f in os.listdir(full):
-            if f.endswith('.class'):
-                out.update(dump(pdir, read_class(os.path.join(full, f))))
+    for dest in dests:
+        for pdir in sorted(os.listdir(dest)):
+            full = os.path.join(dest, pdir)
+            if not (os.path.isdir(full) and re.fullmatch(r'p\d+', pdir)):
+                continue
+            for f in os.listdir(full):
+                if f.endswith('.class'):
+                    out.update(dump(pdir, read_class(os.path.join(full, f))))
     return out
 
 def main():

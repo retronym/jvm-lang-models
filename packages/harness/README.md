@@ -19,6 +19,8 @@ The executables that enumerate program spaces, write the dumps the conformance h
 | [`Harness/ScalaProbe.lean`](Harness/ScalaProbe.lean) | `lake exe scalaprobe OUT`: Scala sources and the model's classfiles, for [`packages/scala/probes`](../scala/probes) |
 | [`Harness/JavaProbe.lean`](Harness/JavaProbe.lean) | `lake exe javaprobe OUT`: Java sources and the model's classfiles, for [`packages/java/probes`](../java/probes) |
 | [`Harness/MimaMain.lean`](Harness/MimaMain.lean) | `lake exe bincompat edits\|mima\|gaps\|scala\|verdicts`: the edit space and MiMa verdicts, for [`packages/mima/probes`](../mima/probes) |
+| [`server/`](server) | The compile server ([design](docs/compile-server.md)): `Server.java` reads JSON-lines requests (compile, run) and keeps one compiler warm; `JavacBackend.java` is javac through `javax.tools` |
+| [`scripts/compiler.py`](scripts/compiler.py) | The probes' client for the compile server: builds it on first use, starts one per JDK or compiler version, compiles and runs programs one at a time |
 | [`scripts/select.py`](scripts/select.py), `jselect.py` | Pick bases from a `conformance names` or `jconformance names` dump until every signature has an edit |
 | [`scripts/analyse.py`](scripts/analyse.py), `janalyse.py` | Compare a harness run of the names or Java spaces with the model: resolution, verdict, recompiled sets, divergences |
 | [`scripts/inline_opaque.py`](scripts/inline_opaque.py) | The same for the inline and opaque spaces |
