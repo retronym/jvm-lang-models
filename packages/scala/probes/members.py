@@ -6,21 +6,23 @@
 Runs `lake exe scalaprobe OUT` (which writes OUT/srcm/qN.scala and the model's verdicts
 OUT/members-<dialect>.txt), then for each compiler:
 
-1. compiles every program in one run, in rounds: a compiler stops before refchecks when an earlier
-   phase reported an error, so the programs that reported errors are recorded and dropped, and the
-   rest recompiled, until a run is clean;
+1. compiles each program on its own, in a compile server (packages/harness/scripts/compiler.py) that
+   keeps one compiler warm, so an error in one program cannot stop another's refchecks;
 2. maps each error to its program (the file), its class (the definition enclosing the error's line)
    and its kind (by message);
-3. for the programs that compiled, runs a `Main` that prints, for each concrete class, which
-   owner's `m` ran.
+3. for the programs that compiled, runs a `Main` per program that prints, for each concrete class, which
+   owner's `m` ran, in the server's `run` op (a throwaway class loader), so one bad program breaks only itself.
 
 Writes OUT/members-report-<dialect>.txt with every divergence grouped by shape, and prints counts.
 """
-import os, re, shutil, subprocess, sys
+import importlib.util, json, os, re, subprocess, sys
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LEAN = os.path.normpath(os.path.join(HERE, '..', '..', '..'))  # the repository root
+_spec = importlib.util.spec_from_file_location('compiler', os.path.join(LEAN, 'packages', 'harness', 'scripts', 'compiler.py'))
+compiler = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compiler)
 
 KINDS = [  # (kind, substrings of scalac's or dotc's message)
     ('illegalModifiers', ['illegal combination of modifiers']),
@@ -36,9 +38,6 @@ KINDS = [  # (kind, substrings of scalac's or dotc's message)
     ('resultType', ['incompatible type']),
 ]
 
-ANSI = re.compile(r'\x1b\[[0-9;]*m')
-HDR2 = re.compile(r'^(?:\[error\] )?(\S+\.scala):(\d+)(?::\d+)?: error: (.*)$')
-HDR3 = re.compile(r'^-- (?:\[E\d+\] )?.*Error: (\S+\.scala):(\d+):\d+\s*$')
 DEF = re.compile(r'^(?:(?:abstract|final|sealed) )*(class|trait|object) (\w+)')
 
 
@@ -49,24 +48,6 @@ def classify(msg):
         if any(s in msg for s in subs):
             return kind
     return 'other:' + msg.strip().splitlines()[0][:80] if msg.strip() else 'other'
-
-
-def parse_errors(text):
-    """[(file, line, message)] from scalac 2 or dotc output."""
-    out, cur = [], None
-    for raw in ANSI.sub('', text).splitlines():
-        m2, m3 = HDR2.match(raw), HDR3.match(raw)
-        if m2 or m3:
-            if cur:
-                out.append(cur)
-            m = m2 or m3
-            cur = [m.group(1), int(m.group(2)), m2.group(3) if m2 else '']
-        elif cur is not None:
-            line = raw.split('|', 1)[1] if raw.lstrip().startswith('|') else raw
-            cur[2] += '\n' + line
-    if cur:
-        out.append(cur)
-    return out
 
 
 def enclosing_class(path, line):
@@ -81,67 +62,50 @@ def enclosing_class(path, line):
     return name
 
 
-def scalac(version, files, dest, extra=()):
-    os.makedirs(dest, exist_ok=True)
-    opts = ['-O', '-Xmaxerrs', '-O', '1000000'] if not version.startswith('3') else []
-    cmd = ['scala-cli', 'compile', '--server=false', '-S', version] + opts + list(extra) + files + ['-d', dest]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    return r.returncode, r.stdout + r.stderr
-
-
-def verdicts(out, tag, version):
-    """Compile in rounds; return ({pid: set((cls, kind))}, accepted pids)."""
+def verdicts(out, tag, server, pids=None):
+    """Compile each program (or those in `pids`, in that order) in its own run; return ({pid: set((cls, kind))},
+    accepted pids)."""
     src = os.path.join(out, 'srcm')
-    files = sorted(os.path.join(src, f) for f in os.listdir(src) if f.endswith('.scala'))
-    errs = defaultdict(set)
-    rnd = 0
-    while files:
-        rnd += 1
-        dest = os.path.join(out, f'mclasses-{tag}-{rnd}')
-        rc, text = scalac(version, files, dest)
-        found = parse_errors(text)
-        if rc == 0:
-            break
+    if pids is None:
+        pids = sorted(f[:-len('.scala')] for f in os.listdir(src) if f.endswith('.scala'))
+    errs, accepted = defaultdict(set), []
+    for pid in pids:
+        path = os.path.join(src, pid + '.scala')
+        r = server.compile(files=[path], out=os.path.join(out, f'mclasses-{tag}', pid), id=pid)
+        if 'crash' in r:
+            raise SystemExit(f'{server.name}: crashed on {pid}:\n{r["crash"]}')
+        found = compiler.errors(r)
+        for d in found:
+            errs[pid].add((enclosing_class(path, d['line']), classify(d['message'])))
         if not found:
-            sys.stderr.write(text)
-            raise SystemExit(f'{version}: compilation failed without parsable errors')
-        bad = set()
-        for path, line, msg in found:
-            pid = os.path.basename(path)[:-len('.scala')]
-            errs[pid].add((enclosing_class(path, line), classify(msg)))
-            bad.add(path)
-        files = [f for f in files if f not in bad]
-        print(f'  {version} round {rnd}: {len(bad)} programs with errors', flush=True)
-    accepted = [os.path.basename(f)[:-len('.scala')] for f in files]
+            accepted.append(pid)
     return errs, accepted
 
 
-def run_main(out, tag, version, accepted, news):
-    """Compile the accepted programs with a Main and run it; {pid: {cls: owner}}."""
+def run_main(out, tag, server, accepted, news):
+    """For each accepted program, compile it with a `Main_qN` that prints which owner's `m` ran for each
+    concrete class, and run that in its own class loader; {pid: {cls: owner}}."""
     d = os.path.join(out, f'mrun-{tag}')
     os.makedirs(d, exist_ok=True)
-    calls = [f'    try println("{pid} {c} " + new {pid}.{c}().m) catch {{ case e: Throwable => println("{pid} {c} !" + e.getClass.getSimpleName) }}'
-             for pid in accepted for c in news.get(pid, [])]
-    # split into chunks to keep methods small
-    chunks = [calls[i:i + 200] for i in range(0, len(calls), 200)]
-    body = '\n'.join(f'  def run{i}(): Unit = {{\n' + '\n'.join(ch) + '\n  }' for i, ch in enumerate(chunks))
-    main = 'object Main {\n' + body + '\n  def main(args: Array[String]): Unit = {\n' + \
-        '\n'.join(f'    run{i}()' for i in range(len(chunks))) + '\n  }\n}\n'
-    with open(os.path.join(d, 'Main.scala'), 'w') as f:
-        f.write(main)
-    files = [os.path.join(out, 'srcm', p + '.scala') for p in accepted] + [os.path.join(d, 'Main.scala')]
-    opts = ['-O', '-Xmaxerrs', '-O', '1000000'] if not version.startswith('3') else []
-    cmd = ['scala-cli', 'run', '--server=false', '-S', version] + opts + files + ['--main-class', 'Main']
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    with open(os.path.join(d, 'log.txt'), 'w') as f:
-        f.write(r.stdout + r.stderr)
-    if r.returncode != 0:
-        raise SystemExit(f'{version}: Main failed, see {d}/log.txt')
+    server.recycle()  # the programs' packages again, in a fresh compiler
     ran = defaultdict(dict)
-    for line in r.stdout.splitlines():
-        parts = line.split()
-        if len(parts) == 3 and parts[0].startswith('q'):
-            ran[parts[0]][parts[1]] = parts[2]
+    with open(os.path.join(d, 'log.txt'), 'w') as log:
+        for pid in accepted:
+            calls = '\n'.join(f'    try println("{pid} {c} " + new {pid}.{c}().m) catch {{ case e: Throwable => println("{pid} {c} !" + e.getClass.getSimpleName) }}'
+                              for c in news.get(pid, []))
+            main = f'object Main_{pid} {{\n  def main(args: Array[String]): Unit = {{\n{calls}\n  }}\n}}\n'
+            r = server.compile(files=[os.path.join(out, 'srcm', pid + '.scala')], sources={f'Main_{pid}.scala': main},
+                               out=os.path.join(d, pid), id=f'run-{pid}')
+            if not r['ok']:
+                raise SystemExit(f'{server.name}: {pid} with its Main failed to compile: {r}')
+            x = server.run([r['id']], main=f'Main_{pid}', timeout=10)
+            log.write(f'{pid}\t{json.dumps(x)}\n')
+            if not x['ok']:
+                raise SystemExit(f'{server.name}: Main_{pid} failed, see {d}/log.txt')
+            for line in x['stdout'].splitlines():
+                parts = line.split()
+                if len(parts) == 3 and parts[0] == pid:
+                    ran[pid][parts[1]] = parts[2]
     return ran
 
 
@@ -176,9 +140,10 @@ def main():
     desc = dict(l.rstrip('\n').split('\t') for l in open(os.path.join(out, 'members-index.txt')) if l.strip())
     for tag, version in versions.items():
         merrs, mruns = read_model(os.path.join(out, f'members-{tag}.txt'))
-        aerrs, accepted = verdicts(out, tag, version)
-        news = {pid: list(mruns.get(pid, {}).keys()) for pid in accepted if not merrs.get(pid)}
-        ran = run_main(out, tag, version, [p for p in accepted if p in news], news)
+        with compiler.scala(version, work=os.path.join(out, f'server-{tag}')) as server:
+            aerrs, accepted = verdicts(out, tag, server)
+            news = {pid: list(mruns.get(pid, {}).keys()) for pid in accepted if not merrs.get(pid)}
+            ran = run_main(out, tag, server, [p for p in accepted if p in news], news)
         groups = defaultdict(list)
         agree = 0
         for pid in desc:

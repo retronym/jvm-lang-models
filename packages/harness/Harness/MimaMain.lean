@@ -5,6 +5,9 @@ import Scala.Catalogue
 import Scala.Space
 /-! `lake exe bincompat`, for `packages/mima/probes`.
 
+* `finalBehind`: `MiMa.finalBehindEdits` (Track J6's `methodBecomesFinalBehind` over the chain
+  space): how many break their client, how many of those `Fixed` misses, and how many of those have a
+  library that still loads by itself;
 * `edits`: the edit space (`packages/mima/MiMa/Edits.lean`) as `Jvm` case JSON lines (no client), for
   `packages/jvm/probes/probe.sh` to render with `OUT=dir`;
 * `mima`: the model's MiMa problems per edit and per `Jvm` catalogue case, as JSON lines;
@@ -37,11 +40,16 @@ def main (args : List String) : IO Unit := do
       IO.FS.writeFile s!"{out}/{k.name}/v0.scala" (k.v0.show "p")
       IO.FS.writeFile s!"{out}/{k.name}/v1.scala" (k.v1.show "p")
       IO.println s!"{k.name}\t{k.mima.getD ""}\t{repr k.before}\t{repr k.after}\t{repr k.fresh}"
+  else if args.contains "finalBehind" then
+    let ks := finalBehindEdits
+    let br := ks.filter fun k => links k.w0 k.prog && !links k.w1 k.prog
+    let silent := br.filter fun k => !fixedReports k.v0 k.v1
+    IO.println s!"{ks.length} edits, {br.length} break their client, {silent.length} of them unreported by Fixed, {(ks.filter finalBehindMissed).length} of those with a library that still loads by itself"
   else if args.contains "edits" then
     for e in edits do IO.println (Jvm.Dump.caseJson e.case)
   else if args.contains "mima" then
     for e in edits do IO.println (problemsJson e.name (mima e.v0 e.v1))
-    for k in all ++ j3 do IO.println (problemsJson k.name (mima k.v0 k.v1))
+    for k in all ++ j3 ++ j5 do IO.println (problemsJson k.name (mima k.v0 k.v1))
   else if args.contains "unreported" then
     for b in [1, 2] do
       for c in [C.A, C.B, C.I, C.J] do

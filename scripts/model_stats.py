@@ -1,17 +1,20 @@
-"""Writes `docs/stats.md`: per package, its Lean files, lines, theorems and checked examples.
+"""Writes `docs/stats.md`: per package, its Lean files, lines, theorems and checked examples; and the
+JVM catalogue's size and each client space's, from `lake exe jvmcases count`.
 
 These numbers used to be counted by hand and went stale within days. Run this after changing the
 Lean; CI runs it with `--check`, which fails if the committed file differs from what it would write.
 
 Counted over each package's `.lean` files outside `.lake/`: lines with `wc -l` semantics,
 theorems as `theorem` and `lemma` declarations, examples as `example`s (not the `Spec` modules'
-`example := @name` checks).
+`example := @name` checks). The catalogue and space sizes need the harness built, so run this
+from a built workspace; CI checks it after the build.
 
 Usage: python3 -I scripts/model_stats.py [--check]
 """
 import glob
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +38,29 @@ def count(pkg):
     return len(files), lines, theorems, examples
 
 
+def jvm_counts():
+    out = subprocess.run(['lake', 'exe', 'jvmcases', 'count'], cwd=ROOT, check=True,
+                         capture_output=True, text=True).stdout
+    rows = [line.split('\t') for line in out.splitlines() if line.startswith(('catalogue\t', 'space\t'))]
+    cases = [(r[1], int(r[2])) for r in rows if r[0] == 'catalogue']
+    spaces = [(r[1], int(r[2]), int(r[3]) if r[3] else None) for r in rows if r[0] == 'space']
+    return cases, spaces
+
+
+SPACE_FILES = {'space': 'packages/jvm/Jvm/Clients.lean', 'space3': 'packages/jvm/Jvm/Clients.lean',
+               'space5': 'packages/jvm/Jvm/Clients.lean', 'chainSpace': 'packages/jvm/Jvm/Clients.lean',
+               'MiMa.spaceB': 'packages/mima/MiMa/Edits.lean'}
+
+
+def decl_link(name):
+    """`name` linked to its `def` line, as `scripts/lint_links.py` requires of a declaration."""
+    path = SPACE_FILES[name]
+    short = name.rsplit('.', 1)[-1]
+    lines = open(os.path.join(ROOT, path), encoding='utf-8').read().splitlines()
+    n = next(i for i, l in enumerate(lines, 1) if re.match(rf'def {short}\b', l))
+    return f'[`{name}`](../{path}#L{n})'
+
+
 def render():
     pkgs = [p for p in ORDER if os.path.isdir(os.path.join(ROOT, 'packages', p))]
     pkgs += sorted(p for p in os.listdir(os.path.join(ROOT, 'packages')) if p not in pkgs)
@@ -47,6 +73,15 @@ def render():
     for p, f, l, t, e in rows:
         out.append(f'| [`{p}`](../packages/{p}/README.md) | {f} | {l:,} | {t:,} | {e:,} |')
     out.append(f'| **total** | **{total[0]}** | **{total[1]:,}** | **{total[2]:,}** | **{total[3]:,}** |')
+    cases, spaces = jvm_counts()
+    out += ['', '## JVM catalogue and client spaces', '',
+            'From `lake exe jvmcases count`. Programs are the well-typed (case, client) pairs the HotSpot probe runs (`jvmcases space`, `jvmcases chain`); the MiMa space is checked by kernel `decide` and not probed.', '',
+            '| catalogue | cases |', '|---|---|']
+    out += [f'| {g} | {n} |' for g, n in cases]
+    out.append(f'| **total** | **{sum(n for _, n in cases)}** |')
+    out += ['', '| space | clients | programs |', '|---|---|---|']
+    out += [f'| {decl_link(s)} | {c:,} | {"—" if p is None else f"{p:,}"} |' for s, c, p in spaces]
+    out.append(f'| **probed** | | **{sum(p for _, _, p in spaces if p is not None):,}** |')
     return '\n'.join(out) + '\n'
 
 

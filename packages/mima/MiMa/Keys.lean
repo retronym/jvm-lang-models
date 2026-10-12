@@ -162,7 +162,7 @@ example : protectedRemoved.missed = true ∧ protectedRemoved.uncovered (.method
 
 /-- The `mima` field of each `Jvm` catalogue case is the first problem the model of MiMa reports
 (which MiMa itself reports too: `packages/mima/probes`). -/
-example : (all ++ j3).all (fun k => k.mima == ((mima k.v0 k.v1).head?.map Problem.name)) = true := by
+example : (all ++ j3 ++ j5).all (fun k => k.mima == ((mima k.v0 k.v1).head?.map Problem.name)) = true := by
   decide +kernel
 
 end MiMa

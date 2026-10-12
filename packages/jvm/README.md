@@ -4,7 +4,7 @@ When does a classfile link against a library, and to which method? JVM linkage (
 
 **Start here.** [`Jvm/Link.lean`](Jvm/Link.lean), then [`Jvm/Catalogue.lean`](Jvm/Catalogue.lean).
 
-**Calibration.** `probes/` renders the catalogue with the Classfile API and runs each client on HotSpot 21, 25 and 27: 58,400 client programs over 45 library edits agree, except where they hit two known JDK 21 bugs (JDK-8356942, JDK-8350029). [`docs/track-j.md`](docs/track-j.md).
+**Calibration.** `probes/` renders the catalogue with the Classfile API and runs each client on HotSpot 21, 25 and 27: every program of the client spaces agrees ([sizes](../../docs/stats.md#jvm-catalogue-and-client-spaces)), except where they hit two known JDK 21 bugs (JDK-8356942, JDK-8350029). [`docs/track-j.md`](docs/track-j.md).
 
 **Gaps.** No method bodies yet (Track J4), nestmates and smaller linkage gaps ([`docs/roadmap.md`](../../docs/roadmap.md) at the repository root).
 
