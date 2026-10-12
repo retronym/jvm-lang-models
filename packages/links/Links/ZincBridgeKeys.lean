@@ -1,4 +1,4 @@
-import BinCompat.ZincBridge
+import Links.ZincBridge
 /-!
 # Track B4 with Zinc's actual keys
 

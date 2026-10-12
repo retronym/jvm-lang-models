@@ -1,4 +1,4 @@
-import BinCompat.Edits
+import MiMa.Edits
 /-!
 # MiMa as a bridge design: keys, covering, and its gaps
 

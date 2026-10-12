@@ -1,4 +1,5 @@
-import BinCompat
+import MiMa
+import Links
 import Jvm.Dump
 import Scala.Catalogue
 import Scala.Space

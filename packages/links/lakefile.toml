@@ -1,0 +1,20 @@
+name = "links"
+version = "0.1.0"
+defaultTargets = ["Links"]
+
+# Theorems that connect layers: B4, a unit Zinc never recompiles links as a fresh build does.
+[[require]]
+name = "inc-comp"
+path = "../inc-comp"
+
+[[require]]
+name = "scala"
+path = "../scala"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_lib]]
+name = "Links"

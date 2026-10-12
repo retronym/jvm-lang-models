@@ -1,4 +1,4 @@
-import BinCompat.Fixed
+import MiMa.Fixed
 /-!
 # The corrected rules are sound on the space
 

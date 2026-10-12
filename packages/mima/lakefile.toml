@@ -1,0 +1,17 @@
+name = "mima"
+version = "0.1.0"
+defaultTargets = ["MiMa"]
+
+# MiMa as a bridge design over the JVM model: what it reports, the gaps (MiMa-F1, M1, F2, D1, P1),
+# and corrected rules (`MiMa.Sound`).
+[[require]]
+name = "jvm"
+path = "../jvm"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_lib]]
+name = "MiMa"

@@ -31,6 +31,14 @@ name = "zinc"
 path = "packages/zinc"
 
 [[require]]
+name = "mima"
+path = "packages/mima"
+
+[[require]]
+name = "links"
+path = "packages/links"
+
+[[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.1"
@@ -54,9 +62,6 @@ root = "JvmCases"
 [[lean_exe]]
 name = "scalaprobe"
 root = "ScalaProbe"
-
-[[lean_lib]]
-name = "BinCompat"
 
 [[lean_exe]]
 name = "javaprobe"

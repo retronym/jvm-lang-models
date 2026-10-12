@@ -1,4 +1,4 @@
-import BinCompat.Keys
+import MiMa.Keys
 /-!
 # A corrected rule set
 

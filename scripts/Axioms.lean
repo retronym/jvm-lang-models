@@ -1,8 +1,8 @@
 import Zinc
 import Scala
-import BinCompat.ZincBridgeScala3
-import BinCompat.ZincBridgeKeys
-import BinCompat.ZincBridgeLibs
+import Links.ZincBridgeScala3
+import Links.ZincBridgeKeys
+import Links.ZincBridgeLibs
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
