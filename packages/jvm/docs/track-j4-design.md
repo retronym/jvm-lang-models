@@ -4,7 +4,7 @@
 
 ## Problem
 
-[`Jvm.Program`](../Jvm/Link.lean#L641) is a list of classes to load and sites to execute, each site run from a static method of a client class. A library method is a [`MethodInfo`](../Jvm/Link.lean#L87) with flags and no body. So a library method's *own* sites are invisible, and four things cannot be judged:
+[`Jvm.Program`](../Jvm/Link.lean#L646) is a list of classes to load and sites to execute, each site run from a static method of a client class. A library method is a [`MethodInfo`](../Jvm/Link.lean#L87) with flags and no body. So a library method's *own* sites are invisible, and four things cannot be judged:
 
 - **MiMa's `ReversedMissingMethodProblem`.** 17 of the edit space's reported edits break no client of the space, because the only client they break is one whose subclass is called *by the library*: `A.run()` calls `this.m()`, the client's `X extends A`, and the edit adds abstract `m` to `A`. HotSpot throws `AbstractMethodError` inside `run`. Today these are "outside the space", neither confirmed nor refuted ([`track-b.md`](../../mima/docs/track-b.md)).
 - **Nestmates.** A nest change breaks a client only through a library method's body: the inner class's body accesses a private member of the outer class, and whether that links depends on `NestHost`/`NestMembers` at the time of the call. With no bodies there is nothing to break.
@@ -21,7 +21,7 @@ That is all. No data, no control flow, no exceptions, no `<clinit>`: the body is
 
 ## Key decisions
 
-**Bodies live in [`MethodInfo`](../Jvm/Link.lean#L87).** `MethodInfo.body : List (Site C N D)`, default empty. The answer to `Q.method c n d` then carries the body, so a body edit changes a footprint query exactly when the body is run, and [`link_congr`](../Jvm/Link.lean#L662) holds unchanged: T1 needs no new argument. Every existing `World`, space and catalogue case keeps its meaning with empty bodies. [`Jvm.World`](../Jvm/Link.lean#L108), `Program` and `Site` change additively, as the contract promises.
+**Bodies live in [`MethodInfo`](../Jvm/Link.lean#L87).** `MethodInfo.body : List (Site C N D)`, default empty. The answer to `Q.method c n d` then carries the body, so a body edit changes a footprint query exactly when the body is run, and [`link_congr`](../Jvm/Link.lean#L667) holds unchanged: T1 needs no new argument. Every existing `World`, space and catalogue case keeps its meaning with empty bodies. [`Jvm.World`](../Jvm/Link.lean#L108), `Program` and `Site` change additively, as the contract promises.
 
 **`this` is a receiver.** Today a site's receiver is a runtime class `recv`, instantiated at the site (`new recv; invokevirtual c.m`). Inside a body, the receiver of `this.m()` is whatever the caller instantiated, which for the interesting cases is the client's class. So the run carries a current receiver class, and sites gain `this`-receiver forms (additive constructors; the existing ones are unchanged). Static sites and `new` sites in bodies need nothing new. `invokespecial` from a body is a `super` call from the declaring class, which `within` already expresses.
 

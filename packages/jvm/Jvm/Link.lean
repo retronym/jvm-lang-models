@@ -408,11 +408,16 @@ def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
   | none => checkAccess cur (← fromIfaces c n d)
 
 /-- Method selection on the receiver's class `r` for the resolved method `(a, ma)`, §5.4.6, with
-`invokevirtual`'s and `invokeinterface`'s errors. A private resolved method is selected itself. -/
-def select (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo C N D) : M C N D C := do
+`invokevirtual`'s and (`iface`) `invokeinterface`'s errors. A private resolved method is selected
+itself. `invokeinterface` also fails if it selects a method that is neither public nor private (JVMS
+§6.5), before the check for an abstract one: a package-private class method can override a public
+interface method (§5.4.5) but not run for it. -/
+def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo C N D) : M C N D C := do
   if ma.access = .priv then return a
   match ← chainOver n d a ma depth r with
-  | some (o, i) => if i.isAbstract then throw .abstractMethod else pure o
+  | some (o, i) =>
+    if iface && (i.access = .pkg || i.access = .prot) then throw .illegalAccess
+    if i.isAbstract then throw .abstractMethod else pure o
   | none =>
     let ms ← maxSpecific r n d
     match ms.filter fun p => !p.2.isAbstract with
@@ -517,14 +522,14 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
     instantiate cur r
     let (a, i) ← resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
-    enter' (← select r n d a i) n d (some r)
+    enter' (← select false r n d a i) n d (some r)
   | .invokeinterface c n d r => do
     assignable r c
     instantiate cur r
     let (a, i) ← resolveIface cur c n d
     if i.isStatic then throw .incompatibleClassChange
     if !(← ifacesOf depth r).contains c then throw .incompatibleClassChange
-    enter' (← select r n d a i) n d (some r)
+    enter' (← select true r n d a i) n d (some r)
   | .new c => do
     instantiate cur c
     pure [c]
@@ -599,14 +604,14 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
       pure ((← chain false n d depth c).map fun (a, i) => (a, i.access))
     let (a, i) ← resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
-    enter' (← select t n d a i) n d (some t)
+    enter' (← select false t n d a i) n d (some t)
   | .invokeinterfaceThis c n d => do
     let (x, t) ← thisOf cur self
     assignable x c
     let (a, i) ← resolveIface cur c n d
     if i.isStatic then throw .incompatibleClassChange
     if !(← ifacesOf depth t).contains c then throw .incompatibleClassChange
-    enter' (← select t n d a i) n d (some t)
+    enter' (← select true t n d a i) n d (some t)
   | .getfieldThis c n d => do
     let (x, _) ← thisOf cur self
     assignable x c

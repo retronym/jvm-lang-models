@@ -15,6 +15,8 @@ import Scala.Space
 * `scala OUT`: each `packages/scala/Scala/Catalogue.lean` case's library sources as `OUT/<case>/v0.scala` and
   `v1.scala` (package `p`), and per case a TSV line: name, expected MiMa problem, the model's
   outcome before, after and fresh;
+* `reversed`: the 17 `ReversedMissingMethodProblem` edits with a hook (`MiMa.Reversed`), each with
+  every well-typed client of its hook space, as `Jvm` case JSON lines for `packages/jvm/probes/probe.sh`;
 * `verdicts`: per edit, the model's MiMa problems and whether some client of `spaceB` breaks or
   changes, as TSV. -/
 
@@ -60,6 +62,12 @@ def main (args : List String) : IO Unit := do
         match breaking e.case spaceB with
         | some cl => IO.println s!"{e.name}\t{Jvm.Dump.caseJson (e.case.withClient cl)}"
         | none => IO.println s!"{e.name}\tnone"
+  else if args.contains "reversed" then
+    for e in reversedEdits do
+      if let some (k, c, itf) := e.withHook then
+        for (cl, i) in (hookClients c itf).zipIdx do
+          let k' := k.withClient cl
+          if wellTyped k'.w0 cl.2 then IO.println (Jvm.Dump.caseJson { k' with name := s!"{k.name}/{i}" })
   else if args.contains "verdicts" then
     for e in edits do
       let k := e.case

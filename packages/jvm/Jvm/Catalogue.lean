@@ -545,8 +545,22 @@ def hookBecomesPrivate : Case where
   client := [(.X, { header := { super := some .A }, methods := [(.m, .v, inst)] })]
   prog := { sites := [invokevirtual .A .run .v .X] }
 
+/-- An interface gains an abstract hook that its default `run()` calls (MiMa's
+`ReversedMissingMethodProblem`). The client's `X implements J` already had a package-private `m()I`:
+it overrides `J.m` (§5.4.5), so selection finds it, and `invokeinterface` then fails because it is not
+public (JVMS §6.5 `invokeinterface`, run-time exceptions). Found by the 17 reversed edits of
+`MiMa.Reversed`; the same rule as Track J7's `pkgMethodAboveDefault`. -/
+def ifaceHookPackagePrivate : Case where
+  name := "ifaceHookPackagePrivate"
+  mima := some "ReversedMissingMethodProblem"
+  v0 := [(.J, { header := { iface with pkg := 1 }, methods := [(.run, .v, inst)] })]
+  v1 := [(.J, { header := { iface with pkg := 1 },
+                methods := [(.run, .v, { body := [invokeinterfaceThis .J .m .i] }), (.m, .i, abs)] })]
+  client := [(.X, { header := { ifaces := [.J] }, methods := [(.m, .i, { access := .pkg })] })]
+  prog := { sites := [invokeinterface .J .run .v .X] }
+
 /-- The Track J4 cases the probe runs (`selfCall` overflows the JVM's stack instead). -/
-def j4 : List Case := [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate]
+def j4 : List Case := [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate, ifaceHookPackagePrivate]
 
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
@@ -619,5 +633,7 @@ example : selfCall.before = .error .outOfFuel := by decide
 example : hookBecomesAbstract.before = .ok [.A, .A] ∧
     hookBecomesAbstract.after = .error .abstractMethod := by decide
 example : hookBecomesPrivate.before = .ok [.A, .X] ∧ hookBecomesPrivate.after = .ok [.A, .A] := by decide
+example : ifaceHookPackagePrivate.before = .ok [.J] ∧
+    ifaceHookPackagePrivate.after = .error .illegalAccess := by decide
 
 end Jvm.Catalogue
