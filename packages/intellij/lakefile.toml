@@ -1,0 +1,6 @@
+name = "AsSeenFrom"
+version = "0.1.0"
+defaultTargets = ["AsSeenFrom"]
+
+[[lean_lib]]
+name = "AsSeenFrom"
