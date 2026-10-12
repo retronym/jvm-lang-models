@@ -20,7 +20,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J3, J5 | JVM linkage, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks J1–J3, J5, J6 | JVM linkage, overriding along library chains, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
@@ -37,7 +37,16 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Why.** These are what [`packages/jvm/Jvm/Link.lean`](../packages/jvm/Jvm/Link.lean) still says it doesn't model, and each can hide a MiMa gap.
 
-**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); `Object`'s methods in interface resolution; clients in the library's package; a space over two client classes; protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
+**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Clients in the library's package and a space over two client classes are done by Track J6's `chainSpace` (client class `J` in package 0, 1 or 2 beside `X`); the catalogue's own spaces still have one client class, in the unnamed package. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
+
+### Next seams
+
+Each is one shape, one space and one probe run, as Track J6 was.
+
+- **Track J7: default methods along superinterface chains.** `I1 ← I2 ← I3` with `m` default, abstract, static, private or absent, a library class implementing some of them, `invokeinterface` and `invokevirtual` sites: maximally-specific selection (JVMS §5.4.3.3, §5.4.6) and the JDK-8356942 region.
+- **Track J8: field resolution through superinterfaces at depth.** Fields named `m` at several levels of classes and interfaces, any flags, all four field instructions: JVMS §5.4.3.2's order as a space, where it has one witness today ([scala-garden/mima#995](https://github.com/scala-garden/mima/issues/995)).
+- **`Object`'s methods in interface resolution.** JVMS §5.4.3.4 step 2: an interface method reference to `hashCode` or `toString` resolves to `Object`'s; needs `Object` in the class table, a few catalogue cases and a column in Track J7's space.
+- **`var` and constructor parameters in the source models.** Scala setters (where scalac 2's trait-setter `AbstractMethodError` lives) and constructor parameters, `var` in Java; they widen Track B3 directly (see the layer remainders below).
 
 ### Track B3: source-level spaces
 

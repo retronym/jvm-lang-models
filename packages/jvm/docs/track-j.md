@@ -20,6 +20,8 @@ Steps:
 - Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in [`docs/roadmap.md`](../../../docs/roadmap.md).
 - Track J5: sealed classes (`PermittedSubclasses`) and constructor calls. Done.
 - Track J6: overriding along a chain of library classes, the shape of JVMS §5.4.5's example: `chainSpace` in [`Clients.lean`](../Jvm/Clients.lean) (`lake exe jvmcases chain`). Done; it found two model bugs, below.
+- Clients in the library's package and a space over two client classes: done by `chainSpace` (client class `J` in package 0, 1 or 2 beside `X`); the catalogue's spaces still have one client class, in the unnamed package.
+- Tracks J7 (default methods along superinterface chains) and J8 (field resolution through superinterfaces at depth): open, see [`docs/roadmap.md`](../../../docs/roadmap.md).
 - Track J4: behaviour (constants, method bodies). Open, see [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## Results
@@ -98,7 +100,7 @@ MiMa 1.2.1 is silent on five cases that break some client: `defaultConflict`, `o
 
 ## Not modelled
 
-Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in [`docs/roadmap.md`](../../../docs/roadmap.md).
+Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## PRs
 
