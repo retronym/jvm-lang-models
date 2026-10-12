@@ -3,8 +3,9 @@
 
     probe.py OUT [--scala212 2.12.21] [--scala2 2.13.18] [--scala3 3.9.0]
 
-Runs `lake exe scalaprobe OUT` (sources and the model's classfiles), compiles OUT/src with scalac
-2.12, 2.13 and 3 via scala-cli, reads the classfiles, and diffs them against the model. Writes
+Runs `lake exe scalaprobe OUT` (sources and the model's classfiles), compiles each program of OUT/src
+with scalac 2.12, 2.13 and 3 in a compile server (packages/harness/scripts/compiler.py), reads the
+classfiles, and diffs them against the model. Writes
 OUT/report-<dialect>.txt with every divergence grouped by shape, and prints the agreement counts.
 
 The comparison: class header (interface/abstract/final, superclass, interfaces), fields and
@@ -13,11 +14,14 @@ ACC_BRIDGE, and, for methods whose body the model synthesizes, the invoke/getsta
 on classes outside java/ and scala/ (for a constructor or static initialiser, only `$init$` calls). Package prefixes
 are stripped.
 """
-import os, re, struct, subprocess, sys
+import importlib.util, os, re, struct, subprocess, sys
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LEAN = os.path.normpath(os.path.join(HERE, '..', '..', '..'))  # the repository root
+_spec = importlib.util.spec_from_file_location('compiler', os.path.join(LEAN, 'packages', 'harness', 'scripts', 'compiler.py'))
+compiler = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compiler)
 
 # --- classfile reading ----------------------------------------------------------------------
 
@@ -173,31 +177,36 @@ def read_expected(path):
 
 # --- driver -----------------------------------------------------------------------------------
 
-def scalac(version, inputs, dest, cp=None):
-    if os.path.isdir(dest) and os.listdir(dest):
-        return
-    os.makedirs(dest, exist_ok=True)
-    cmd = ['scala-cli', 'compile', '--server=false', '-S', version] + inputs + ['-d', dest]
-    if cp:
-        cmd += ['--extra-jars', cp]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.stderr.write(r.stdout + r.stderr)
-        raise SystemExit(f'scalac {version} failed')
+def scalac(server, path, dest, id, classpath=()):
+    """One program, in its own run; returns its output directory (holding pN/)."""
+    r = server.compile(files=[path], out=os.path.join(dest, id), id=id, classpath=classpath)
+    if not r['ok']:
+        for d in compiler.errors(r):
+            sys.stderr.write(f"{d['file']}:{d['line']}:{d['column']}: error: {d['message']}\n")
+        sys.stderr.write(r.get('crash', ''))
+        raise SystemExit(f'{server.name} failed on {path}')
+    return r['out']
+
+def programs(d):
+    return sorted(f for f in os.listdir(d) if f.endswith('.scala'))
 
 def compile_all(out, version, tag):
-    """One run over src (and src3 for Scala 3); for sep, a run over the libraries, then one over
-    the clients against them."""
+    """Each program of src (and src3 for Scala 3) in its own run; for sep, each library, then its client with
+    the library's classes on the classpath. Returns the output directories."""
     three = tag == '3'
-    srcs = [os.path.join(out, 'src')] + ([os.path.join(out, 'src3')] if three else [])
-    main = os.path.join(out, f'classes-{tag}')
-    scalac(version, srcs, main)
-    dests = [main]
-    for sep in ['sep'] + (['sep3'] if three else []):
-        lib, client = os.path.join(out, f'classes-{tag}-{sep}-lib'), os.path.join(out, f'classes-{tag}-{sep}-client')
-        scalac(version, [os.path.join(out, sep, 'lib')], lib)
-        scalac(version, [os.path.join(out, sep, 'client')], client, cp=lib)
-        dests += [lib, client]
+    dests = []
+    with compiler.scala(version, work=os.path.join(out, f'server-{tag}')) as server:
+        for src in ['src'] + (['src3'] if three else []):
+            for f in programs(os.path.join(out, src)):
+                dests.append(scalac(server, os.path.join(out, src, f), os.path.join(out, f'classes-{tag}'), f[:-6]))
+        for sep in ['sep'] + (['sep3'] if three else []):
+            for f in programs(os.path.join(out, sep, 'lib')):
+                pid = f[:-6]
+                lib = scalac(server, os.path.join(out, sep, 'lib', f), os.path.join(out, f'classes-{tag}-{sep}-lib'),
+                             f'{sep}-lib-{pid}')
+                dests += [lib, scalac(server, os.path.join(out, sep, 'client', f),
+                                      os.path.join(out, f'classes-{tag}-{sep}-client'), f'{sep}-client-{pid}',
+                                      classpath=[f'{sep}-lib-{pid}'])]
     return dests
 
 def actual(dests):

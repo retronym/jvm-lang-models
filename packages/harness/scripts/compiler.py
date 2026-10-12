@@ -72,21 +72,22 @@ def java_classes(java_home):
 
 
 def scala_classes(version, java_home):
-    """The scalac 2 or dotc backend, compiled by that compiler against the server's Java part."""
+    """The backend for `version`: ScalacBackend.scala compiled by that scalac 2, or DotcBackend.java (which needs
+    only the compiler's entry point and its `interfaces`) compiled against that dotc. Returns (backend classes,
+    compiler classpath, the server's Java part)."""
     jcls = java_classes(java_home)
     if version.startswith('3'):
-        srcs = [os.path.join(SERVER, 'DotcBackend.scala')]
+        srcs = [os.path.join(SERVER, 'DotcBackend.java')]
         cp = coursier_cp(f'org.scala-lang:scala3-compiler_3:{version}')
-        main = 'dotty.tools.dotc.Main'
+        cmd = lambda d: [os.path.join(java_home, 'bin', 'javac'), '--release', '17', '-nowarn',
+                         '-cp', os.pathsep.join(cp + [jcls]), '-d', d] + srcs
     else:
         srcs = [os.path.join(SERVER, 'ScalacBackend.scala')]
         cp = coursier_cp(f'org.scala-lang:scala-compiler:{version}')
-        main = 'scala.tools.nsc.Main'
-    def build(d):
-        subprocess.run([os.path.join(java_home, 'bin', 'java'), '-cp', os.pathsep.join(cp), main,
-                        '-classpath', os.pathsep.join(cp + [jcls]), '-d', d] + srcs, check=True)
-    return _build(f'scala-{version}', _digest(srcs + [os.path.join(SERVER, f) for f in JAVA_SOURCES], version, java_home),
-                  build), cp, jcls
+        cmd = lambda d: [os.path.join(java_home, 'bin', 'java'), '-cp', os.pathsep.join(cp), 'scala.tools.nsc.Main',
+                         '-classpath', os.pathsep.join(cp + [jcls]), '-d', d] + srcs
+    key = _digest(srcs + [os.path.join(SERVER, f) for f in JAVA_SOURCES], version, java_home)
+    return _build(f'scala-{version}', key, lambda d: subprocess.run(cmd(d), check=True)), cp, jcls
 
 
 def library(version):
@@ -180,9 +181,10 @@ def javac(java_home, work=None, recycle=1000):
     return Server(cmd, f'javac {java_home}', work)
 
 
-def scala(version, work=None, recycle=1000, java_home=None):
+def scala(version, work=None, recycle=1000, java_home=None, dotc_base='cached'):
     """A scalac 2 (2.12.x, 2.13.x) or dotc (3.x) server for `version`, running on `java_home` (default: the
-    `java` on PATH)."""
+    `java` on PATH). For dotc, `dotc_base` is 'cached' (one ContextBase, a fresh run per program) or 'fresh'
+    (the driver's entry point per program)."""
     java_home = java_home or default_java_home()
     work = _work(work, f'scala-{version}')
     backend, cp, jcls = scala_classes(version, java_home)
@@ -190,6 +192,8 @@ def scala(version, work=None, recycle=1000, java_home=None):
     cmd = [os.path.join(java_home, 'bin', 'java')] + JVM_OPTS + ['-cp', os.pathsep.join([jcls, backend] + cp),
            'compileserver.Server', '--backend', f'compileserver.{kind}', '--work', work, '--recycle', str(recycle),
            '--', '--library', os.pathsep.join(library(version))]
+    if version.startswith('3'):
+        cmd += ['--base', dotc_base]
     return Server(cmd, f'scala {version}', work)
 
 
