@@ -67,6 +67,8 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Why.** Findings help no one until filed.
 
+**Pace.** The fixes in forks (retronym/zinc, retronym/scala, retronym/scala3) stay as drafts for now, so as not to overwhelm the maintainers; they move upstream a few at a time.
+
 **Done looks like.** Four MiMa issues are filed ([scala-garden/mima#993](https://github.com/scala-garden/mima/issues/993)–#996; MiMa-D1 is out of MiMa's scope, see [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md)). The scalac 2 trait-setter `AbstractMethodError` is filed as [scala/bug#13199](https://github.com/scala/bug/issues/13199), with the draft fix [retronym/scala#136](https://github.com/retronym/scala/issues/136) to open as a PR once the direction is agreed.
 
 ### Contributors
