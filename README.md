@@ -104,7 +104,7 @@ The local [`IncComp.Compiler`](packages/inc-comp/IncComp/Model.lean#L28) has the
 | T5 | [`XCompiler.downstream_sound`](packages/inc-comp/IncComp/General.lean#L317) | A downstream subproject's loop, seeded from changed sources and external invalidations, ends sound against the new classpath | fresh snapshots; T5a `inv_external` (`:281`) needs only abstraction |
 | | [`Stale.stale_unsound`](packages/inc-comp/IncComp/Stale.lean#L132), [`stale_affected`](packages/inc-comp/IncComp/Stale.lean#L137) | T2-stale: a non-local hash diffed over the recompiled set alone undercompiles; over `affected` it does not | kernel `decide` |
 | | [`Cycles.zinc_ne_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L191), [`annotated_eq_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L220) | T3a without T3 for inferred types in a cycle; T3 when every member is annotated | |
-| B4 | [`XCompiler.untouched_eq_clean`](packages/links/Links/ZincBridge.lean#L132) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through [`XCompiler.fixpoint_unique_of_explicit`](packages/links/Links/ZincBridge.lean#L101) (`:100`) |
+| B4 | [`XCompiler.untouched_eq_clean`](packages/links/Links/ZincBridge.lean#L133) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through [`XCompiler.fixpoint_unique_of_explicit`](packages/links/Links/ZincBridge.lean#L102) (`:100`) |
 | | [`zinc_sound_charged`](packages/zinc/Zinc/Loop/Files.lean#L176) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
 
 **Where the hypotheses bite.**

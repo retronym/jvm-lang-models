@@ -83,6 +83,8 @@ def runOn (src : Cls → Src) {α : Type} (m : Scala.M α) : Except String α :=
   let env : (q : Scala.Q) → Scala.Ans q := fun
     | .decl n _ => (p.find? (·.name = n)).bind fun s =>
         ((s.cls.or s.obj).map fun d => { decl := d })
+    | .header n => (p.find? (·.name = n)).bind fun s => (s.cls.or s.obj).map Scala.Decl.header
+    | .member n m => (p.find? (·.name = n)).bind fun s => (s.cls.or s.obj).bind (·.member m)
   m.run.run env
 
 /-- The shared linearization of `c`, without `c`, as `(class, type argument)`. -/

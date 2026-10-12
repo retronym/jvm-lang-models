@@ -16,13 +16,13 @@ So the walk must be expressible over *fine* queries, and the coarse form must be
 
 ## Key decisions
 
-1. **Fine queries in the shared layer.** [`Scala.Q`](../../scala-types/ScalaTypes/Resolve.lean#L18) gains `header n` (type-parameter count, kind, parents, the facts `lin` reads) and `member n m` (the definition's own non-`fieldOnly` member named `m`). `decl` stays for consumers that read everything (`Lower`, `Members`, `Links`). [`Program.envIn`](../../scala-types/ScalaTypes/Resolve.lean#L33) answers all three from the same `Decl`, so a fine answer is by construction a projection of the coarse one.
+1. **Fine queries in the shared layer.** [`Scala.Q`](../../scala-types/ScalaTypes/Resolve.lean#L41) gains `header n` (type-parameter count, kind, parents, the facts `lin` reads) and `member n m` (the definition's own non-`fieldOnly` member named `m`). `decl` stays for consumers that read everything (`Lower`, `Members`, `Links`). [`Program.envIn`](../../scala-types/ScalaTypes/Resolve.lean#L61) answers all three from the same `Decl`, so a fine answer is by construction a projection of the coarse one.
 
 2. **One walk, generic in how it reads.** `lin` and first-member lookup are written once, parametric in a reader (`header`, `member` as `M` actions). The coarse instance reads through `need` and is today's `lin`/`hits` (same results; the trace is the same set of `decl` queries); the fine instance asks `header`/`member`. Written by structural recursion rather than `for … in`, so trace lemmas are provable. One theorem in `ScalaTypes`: under `Program.env p`, the fine and coarse walks give the same result for every program. That replaces `HierShared`'s exhaustive agreement check for the parts that become shared code.
 
 3. **Trace lemmas once.** "The walk asks only `header` and `member` queries" and its congruence corollary (two environments agreeing on those answers give the same walk) are proved in `ScalaTypes`. `HierSound`'s `trace_linT`/[`trace_firstDecl`](../Zinc/Bridges/HierSound.lean#L55)/[`trace_mergeWith`](../Zinc/Bridges/HierSound.lean#L25)/[`resolveFrom_congr`](../Zinc/Bridges/HierSound.lean#L151) become uses of them, and Flat and Erasure reuse them.
 
-4. **Query translation in `query`.** A generic fold of a task through a query interpretation, `Task.interp : ((q : Q) → Task Q' A' (A q)) → Task Q A α → Task Q' A' α`, with `run`/`trace` lemmas. Each Zinc file maps shared queries into its framework shape `(Cls × Q)` with it (a `Cls`-less name is answered `none` without a query). [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L173)/`back`/`fq` become an instance.
+4. **Query translation in `query`.** A generic fold of a task through a query interpretation, `Task.interp : ((q : Q) → Task Q' A' (A q)) → Task Q A α → Task Q' A' α`, with `run`/`trace` lemmas. Each Zinc file maps shared queries into its framework shape `(Cls × Q)` with it (a `Cls`-less name is answered `none` without a query). [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L187)/`back`/`fq` become an instance.
 
 5. **Toys as front ends.** `Cls`, `Name` and a small `Ty` stay, as the syntax the scenarios and spaces are written in; `toScala` (today in `HierShared`) becomes the front end, and interfaces store [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L97). [`Hier.Ty.subst`](../Zinc/Bridges/Hier.lean#L49), `mergeWith`, `linT`, `firstDecl` are deleted. Materialised members (`W`) store `Option Scala.Ty`.
 
@@ -34,8 +34,8 @@ Rejected: keeping the coarse query and keying `D` on whole declarations (loses t
 
 | step | file | needs from the shared layer | status |
 |---|---|---|---|
-| 1 | `query`: [`Task.interp`](../../query/Query/Interp.lean#L20) | — | TODO |
-| 2 | `ScalaTypes.Resolve`: fine queries, generic walk, fine = coarse, trace lemmas | — | TODO |
+| 1 | `query`: [`Task.interp`](../../query/Query/Interp.lean#L20) | — | DONE; [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L187) is now [`Task.rename`](../../query/Query/Interp.lean#L59) |
+| 2 | `ScalaTypes.Resolve`: fine queries, generic walk, fine = coarse, trace lemmas | — | DONE: `Q.header`, `Q.member`, `linWith` over a `Node`, `lookupH`; `ScalaTypes.Fine` proves [`lookupH_eq`](../../scala-types/ScalaTypes/Fine.lean#L240) (with [`lin_fine`](../../scala-types/ScalaTypes/Fine.lean#L167), [`firstHit_fine`](../../scala-types/ScalaTypes/Fine.lean#L202)) and [`asks_lookupH`](../../scala-types/ScalaTypes/Fine.lean#L349); lowering, refchecks and every calibrated result unchanged |
 | 3 | `Hier`, `HierSound`, `HierShared` (template) | steps 1–2 | TODO |
 | 4 | `Flat`, `FlatShared` | stored linearization over `header`; refchecks prelude against `Members` (its gaps: `var`, the 2.13 re-check, Scala 3's direct-parent rule are already characterised in `FlatShared`) | TODO |
 | 5 | `Erasure` | `Lower.erase`; additions: `Long`, intersection types (`W with Z`, erasing by trait-or-class), so `header` must carry the kind | TODO |
