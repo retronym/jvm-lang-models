@@ -48,7 +48,7 @@ The model started from the textbook rules. The probe corrected it here, each now
 Consumers:
 - **Lowering.** `lin` computes each base type's arguments as `asSeenFrom(C.this, P)` (scalac's `baseType`), replacing an ad hoc substitution; members are grouped by `memberType` (`sigGroups`), and bridges and forwarders work per group. The new `asf` probe family found two corrections: a bridge to an override at a value class unboxes and boxes, and an overload next to an inherited generic method is not an override (name-only lookup had dropped a mixin forwarder).
 - **The TCK.** On retronym/scala-type-system-tck branch `claude/shared-asf`, `lean/AsSeenFrom/Shared.lean` is a vendored copy, and [`Port.lean`](../../intellij/IntelliJ/Port.lean) makes the TCK's `Ty` an instance and proves its [`Scalac.asf`](../../intellij/IntelliJ/Scalac.lean#L34) *is* the shared map ([`asf_eq`](../../intellij/IntelliJ/Port.lean#L85) in that file). [`Chain.compose`](../../intellij/IntelliJ/Chain.lean#L82) now follows from the shared `compose`; the other TCK results build unchanged.
-- **`Zinc/Hier`, `Zinc/Erasure`:** not yet; see [`docs/roadmap.md`](../../../docs/roadmap.md).
+- **`Zinc/Hier`:** its member lookup is [`Scala.lookupH`](../../scala-types/ScalaTypes/Resolve.lean#L216), the shared walk over `header` and `member` queries, proved equal to lookup over declarations ([`Scala.lookupH_eq`](../../scala-types/ScalaTypes/Fine.lean#L240)); `HierShared.toy_eq_shared` for every `Hier` program. **`Zinc/Erasure`, `Flat`, `ImplicitScope`:** not yet; see [`packages/zinc/docs/29-shared-scala.md`](../../zinc/docs/29-shared-scala.md).
 
 ### Membership and overriding (Track S5)
 

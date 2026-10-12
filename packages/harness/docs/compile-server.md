@@ -46,7 +46,7 @@ Prior art: Zinc's `CachedCompiler` keeps one `nsc.Global` and does `new Run` per
 2. **scalac 2 server** with a cached `Global`. Differential check against the batch results on the membership space (4,704 programs, both 2.12.21 and 2.13.18), then switch `members.py` (dropping the rounds) and `probe.py`.
 3. **dotc server.** Same check on 3.9.0.
 4. **`run` in-process.** Switch the runtime check in `members.py` and the per-case compile in `scala.sh`.
-5. **Scale.** `Members` against scalac and dotc on the `FlatRules` 216,000 programs and `HierShared`'s space: the calibration this exists to enable, with the findings in [`packages/scala/docs/track-s.md`](../../scala/docs/track-s.md).
+5. **Scale.** `Members` against scalac and dotc on the `FlatRules` 216,000 programs and `HierShared.space`: the calibration this exists to enable, with the findings in [`packages/scala/docs/track-s.md`](../../scala/docs/track-s.md).
 
 ## Timings
 

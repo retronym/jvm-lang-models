@@ -1,33 +1,26 @@
-import Zinc.Bridges.Hier
-import ScalaTypes.Resolve
+import Zinc.Bridges.HierSound
 /-!
-# `Hier`'s toy Scala, embedded in the shared Scala semantics
+# `Hier`'s lookup is the shared semantics
 
-`Hier` has its own small Scala: eight class names, two member names, a four-case `Ty`, one type
-parameter per class, and member lookup as a walk over the parents, the last parent first. That
-language is kept small on purpose, so that its programs can be enumerated. This file says what it
-means in the shared semantics (`ScalaTypes`):
+`Hier`'s programs are written in a small syntax (eight class names, two member names, a four-case
+`Ty`) and lowered to the shared one (`Decl.toScala`); its member lookup is the shared walk over
+headers (`Scala.lookupH`), its queries mapped to `Hier`'s by `toQ`. This file proves that what a
+client of `Hier` resolves is what the shared semantics resolves over whole declarations:
 
-* `Ty.toScala`, `Decl.toScala`, `program`: a `Hier` program as a `Scala.Program`. The class's
-  parameter becomes `Scala.Ty.tp [C] 0`, a parent's type argument is written in the child's scope;
-* `shared`: member lookup there, scalac's way: the linearization (`Scala.lin`), the first member
-  named `n` along it (`Scala.hits`), viewed from the class (`Scala.seenFrom`);
-* `agrees`: `Hier.resolve` and `shared` give the same type for every class and member.
+* `program`: a `Hier` program as a `Scala.Program`;
+* `shared`: member lookup there, scalac's way (`Scala.lookup`): the linearization (`Scala.lin`), the
+  first member named `n` along it (`Scala.hits`), viewed from the class (`Scala.seenFrom`);
+* `toy_eq_shared`: for **every** `Hier` program, class and member name, `Hier.resolve` gives what
+  `shared` gives (a failed lookup selecting nothing). From `Scala.lookupH_eq`, and from `toQ`
+  answering the walk's queries as the program's environment does (`through_agrees`).
 
-The five scenarios of `Hier` agree (kernel `decide`, below).
-
-`space` enumerates hierarchies over `A`, `B`, `M`, `C`: each class's parents drawn from the classes
-before it, at most two, each parent's type argument and each declaration of `m` one of `Int`,
-`String` or the class's parameter; 1,638,400 hierarchies. `lake exe exhaustive hiershared`
-compares the two semantics on every one, and they agree on all of them: tree-shaped or not, up to
-depth 3, and also where scalac would reject the program for inconsistent type arguments (both
-keep the first, as `lin` does).
-
-History: `Hier` first walked the parents depth first, the last parent first, and agreed only on
-tree-shaped hierarchies up to depth 2 (290,560 of them). With a shared ancestor it differed: in
-`class C extends M with A`, with `M extends A`, it reached `A` directly, where Scala's
-linearization is `C, M, A` and `M.m` overrides `A.m`. `Hier.resolve` now follows the
-linearization; the scenarios and the designs' obligations (`HierSound`) are unchanged.
+History: before Phase 29 (`packages/zinc/docs/29-shared-scala.md`), `Hier` had its own walk and
+`asSeenFrom`, and this file checked agreement on a space of 1,638,400 hierarchies over `A`, `B`,
+`M`, `C` (`lake exe exhaustive hiershared`, every 64th in the build). That check found that
+`Hier`'s first walk (depth first, the last parent first) agreed only on tree-shaped hierarchies up
+to depth 2 (290,560 of them): in `class C extends M with A`, with `M extends A`, it reached `A`
+directly, where Scala's linearization is `C, M, A` and `M.m` overrides `A.m`. `Hier` then followed
+the linearization, and now uses the shared walk itself, so the check is this theorem.
 -/
 
 open Query
@@ -36,60 +29,72 @@ namespace Zinc.Hier.Shared
 
 open Hier
 
-def clsName : Cls → String
-  | .A => "A" | .B => "B" | .M => "M" | .C => "C" | .X => "X" | .Y => "Y" | .Z => "Z" | .V => "V"
-
-def nameStr : Name → String
-  | .m => "m" | .g => "g"
-
-/-- A type of `Hier`, written in class `self`. -/
-def Ty.toScala (self : Cls) : Hier.Ty → Scala.Ty
-  | .int => .int
-  | .string => .str
-  | .param => .tp [clsName self] 0
-  | .v => .ref "V"
-
-def Decl.toScala (c : Cls) (d : Hier.Decl) : Scala.Decl :=
-  let parent : Cls × Hier.Ty → Scala.Parent := fun (p, a) => (clsName p, [Ty.toScala c a])
-  { name := clsName c
-    tparams := 1
-    super := d.parents.head?.map parent
-    traits := d.parents.tail.map parent
-    members := d.decls.map fun (n, t) => { name := nameStr n, res := Ty.toScala c t } }
-
 def program (decls : Cls → Hier.Decl) : Scala.Program :=
-  [Cls.A, .B, .M, .C, .X, .Y, .Z, .V].map fun c =>
-    { name := clsName c, cls := some (Decl.toScala c (decls c)) }
+  Cls.all.map fun c => { name := c.name, cls := some (Decl.toScala c (decls c)) }
 
-/-- The toy: `Hier.resolve` from `c`, as a client of `c` asks it (the result in `c`'s scope). -/
-def toy (decls : Cls → Hier.Decl) (c : Cls) (n : Name) : Option Hier.Ty :=
-  (resolve 3 c n .param).run (envOfI fun d => ⟨decls d, []⟩)
+/-- The toy: `Hier.resolve` from `c`, as a client of `c` asks it. -/
+def toy (decls : Cls → Hier.Decl) (c : Cls) (n : Name) : Option Scala.Ty :=
+  (resolve c n).run (envOfI fun d => ⟨Decl.toScala d (decls d), []⟩)
 
-/-- The shared semantics: the first member named `n` along `c`'s linearization, seen from `c`. -/
+/-- The shared semantics over whole declarations. -/
 def shared (decls : Cls → Hier.Decl) (c : Cls) (n : Name) : Except String (Option Scala.Ty) :=
-  let m : Scala.M (Option Scala.Ty) := do
-    let d ← Scala.need (clsName c)
-    let l ← Scala.lin Scala.fuel d
-    pure (((Scala.hits l (nameStr n)).head?).map fun ((o, _), mem) =>
-      Scala.seenFrom (clsName c) l o.name mem.res)
-  m.run.run (Scala.Program.env (program decls))
+  Scala.ex (Scala.Program.env (program decls)) (Scala.lookup fuel c.name n.str)
 
-/-- The toy and the shared semantics agree on member `n` of `c`. -/
-def agreesOn (decls : Cls → Hier.Decl) (c : Cls) (n : Name) : Bool :=
-  shared decls c n == .ok ((toy decls c n).map (Ty.toScala c))
+theorem find?_program (decls : Cls → Hier.Decl) (s : String) :
+    (program decls).find? (·.name = s) =
+      (Cls.ofName? s).map fun c => { name := c.name, cls := some (Decl.toScala c (decls c)) } := by
+  simp only [program, Cls.ofName?, List.find?_map]
+  rfl
+
+/-- `toQ` answers the walk's queries as the program's environment does. -/
+theorem through_agrees (decls : Cls → Hier.Decl) :
+    ∀ q, Scala.Walky q →
+      Query.Task.Env.through toQ (envOfI fun d => ⟨Decl.toScala d (decls d), []⟩) q =
+        Scala.Program.env (program decls) q
+  | .decl .., h => h.elim
+  | .header s, _ => by
+    simp only [Query.Task.Env.through, toQ, Scala.Program.env, Scala.Program.envIn, find?_program]
+    cases Cls.ofName? s <;> rfl
+  | .member s m, _ => by
+    simp only [Query.Task.Env.through, toQ, Scala.Program.env, Scala.Program.envIn, find?_program]
+    cases Cls.ofName? s <;> rfl
+
+/-- **`Hier`'s lookup is the shared semantics**, for every program, class and name. -/
+theorem toy_eq_shared (decls : Cls → Hier.Decl) (c : Cls) (n : Name) :
+    toy decls c n = ofExcept (shared decls c n) := by
+  let e := envOfI fun d => ⟨Decl.toScala d (decls d), []⟩
+  let x := Scala.lookupH fuel c.name n.str
+  have hrun : (resolve c n).run e = ofExcept (Scala.ex (Query.Task.Env.through toQ e) x) := by
+    simp only [resolve, Task.bind_eq, Task.run_bind, Task.pure_eq, Task.run_pure,
+      Query.Task.run_interp]
+    rfl
+  have hcongr : Scala.ex (Query.Task.Env.through toQ e) x =
+      Scala.ex (Scala.Program.env (program decls)) x :=
+    Task.run_congr _ _ _ fun q hq =>
+      through_agrees decls q (Scala.asks_lookupH _ fuel c.name n.str q hq)
+  show (resolve c n).run e = _
+  rw [hrun, hcongr]
+  exact congrArg ofExcept
+    (Scala.lookupH_eq (program decls).env (Scala.Program.envIn_consistent _ _) _ _ _)
+
+/-! ## The scenarios of `Hier`, by evaluation -/
 
 def agrees (decls : Cls → Hier.Decl) : Bool :=
-  [Cls.A, .B, .M, .C].all fun c => [Name.m, .g].all fun n => agreesOn decls c n
-
-/-! ## The scenarios of `Hier` -/
+  [Cls.A, .B, .M, .C].all fun c => [Name.m, .g].all fun n =>
+    shared decls c n == .ok (toy decls c n)
 
 example : agrees fun c => (base c).decl := by decide
 example : agrees fun c => (edit1 c).decl := by decide
-example : agrees fun c => (base2 c).decl := by decide
 example : agrees fun c => (edit2 c).decl := by decide
 example : agrees fun c => (edit3 c).decl := by decide
 
-/-! ## A bounded space of hierarchies -/
+/-! ## A bounded space of hierarchies
+
+Every hierarchy over `A`, `B`, `M`, `C`: each class's parents drawn from the classes before it, at
+most two, each parent's type argument and each declaration of `m` one of `Int`, `String` or the
+class's parameter; 1,638,400 hierarchies. Agreement with the shared semantics no longer needs
+checking on it (`toy_eq_shared`); it is the space on which the shared semantics is to be
+calibrated against scalac and dotc (`packages/harness/docs/compile-server.md`). -/
 
 def tys : List Hier.Ty := [.int, .string, .param]
 
@@ -103,7 +108,6 @@ def withArgs : List Cls → List (List (Cls × Hier.Ty))
 
 def declsOf : List (List (Name × Hier.Ty)) := [] :: tys.map fun t => [(.m, t)]
 
-/-- Every hierarchy over `A`, `B`, `M`, `C` (each class's parents among the classes before it). -/
 def space : List (Cls → Hier.Decl) :=
   (parentLists [.A]).flatMap fun pB => (withArgs pB).flatMap fun aB =>
   (parentLists [.A, .B]).flatMap fun pM => (withArgs pM).flatMap fun aM =>
@@ -131,24 +135,21 @@ def depth (decls : Cls → Hier.Decl) : Nat :=
     | k + 1, c => ((decls c).parents.map fun (p, _) => go k p + 1).foldl max 0
   [Cls.A, .B, .M, .C].foldl (fun m c => max m (go 4 c)) 0
 
+/-- `asSeenFrom` on `Hier`'s toy types: instantiate the parameter. -/
+def substTy (arg : Hier.Ty) : Hier.Ty → Hier.Ty
+  | .param => arg
+  | t => t
+
 /-- Every base class of `c` along every path, with its type argument as seen from `c`. -/
 def bases (decls : Cls → Hier.Decl) : Nat → Cls → Hier.Ty → List (Cls × Hier.Ty)
   | 0, _, _ => []
   | k + 1, c, arg => (decls c).parents.flatMap fun (p, a) =>
-    (p, Hier.Ty.subst arg a) :: bases decls k p (Hier.Ty.subst arg a)
+    (p, substTy arg a) :: bases decls k p (substTy arg a)
 
 /-- No class has a base class with two different type arguments (scalac rejects that). -/
 def consistent (decls : Cls → Hier.Decl) : Bool :=
   [Cls.A, .B, .M, .C].all fun c =>
     let bs := bases decls 4 c .param
     bs.all fun (p, a) => bs.all fun (q, b) => p != q || a == b
-
-/-- Every 64th hierarchy of `space`, so that the build checks agreement (about 25,600; the whole
-space is `lake exe exhaustive hiershared`). A change to `Hier` or to the shared semantics that
-breaks agreement fails here. -/
-def sample : List (Cls → Hier.Decl) :=
-  (space.zipIdx.filter fun (_, i) => i % 64 == 0).map (·.1)
-
-example : sample.all agrees = true := by native_decide
 
 end Zinc.Hier.Shared

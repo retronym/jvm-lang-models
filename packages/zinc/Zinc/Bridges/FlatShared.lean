@@ -50,20 +50,19 @@ open Query
 namespace Zinc.Flat.Shared
 
 open Zinc.Hier (Cls Name Ty)
-open Zinc.Hier.Shared (clsName nameStr)
 
-def tyToScala (self : Cls) : Ty → Scala.Ty := Zinc.Hier.Shared.Ty.toScala self
+def tyToScala (self : Cls) : Ty → Scala.Ty := Zinc.Hier.Ty.toScala self
 
 def memToScala (self : Cls) (n : Name) (mm : Mem) : Scala.Mem :=
-  { name := nameStr n, res := tyToScala self mm.ty, abs := mm.deferred, priv := mm.priv,
+  { name := n.str, res := tyToScala self mm.ty, abs := mm.deferred, priv := mm.priv,
     isVal := mm.mod == .val || mm.mod == .lzy, lzy := mm.mod == .lzy, nullary := true }
 
 def kindToScala : CKind → Scala.Kind
   | .cls => .cls | .trt => .trt | .obj => .obj
 
 def declToScala (c : Cls) (d : Decl) : Scala.Decl :=
-  let parent : Cls × Ty → Scala.Parent := fun (p, a) => (clsName p, [tyToScala c a])
-  { name := clsName c, kind := kindToScala d.kind, abs := d.abstract, final := d.final,
+  let parent : Cls × Ty → Scala.Parent := fun (p, a) => (p.name, [tyToScala c a])
+  { name := c.name, kind := kindToScala d.kind, abs := d.abstract, final := d.final,
     tparams := if d.kind == .obj then 0 else 1
     super := d.parents.head?.map parent, traits := d.parents.tail.map parent
     members := d.decls.map fun (n, mm) => memToScala c n mm }
@@ -73,8 +72,8 @@ def classes : List Cls := [.A, .B, .M, .C, .X, .Y, .Z]
 def program (src : Cls → Src) : Scala.Program :=
   classes.map fun c =>
     let d := declToScala c (src c).decl
-    if (src c).decl.kind == .obj then { name := clsName c, obj := some d }
-    else { name := clsName c, cls := some d }
+    if (src c).decl.kind == .obj then { name := c.name, obj := some d }
+    else { name := c.name, cls := some d }
 
 /-- Run a shared-semantics computation over the program, reading objects as well as classes. -/
 def runOn (src : Cls → Src) {α : Type} (m : Scala.M α) : Except String α :=
@@ -90,21 +89,21 @@ def runOn (src : Cls → Src) {α : Type} (m : Scala.M α) : Except String α :=
 /-- The shared linearization of `c`, without `c`, as `(class, type argument)`. -/
 def sharedLin (src : Cls → Src) (c : Cls) : Except String (List (String × List Scala.Ty)) :=
   runOn src do
-    let d ← Scala.need (clsName c)
+    let d ← Scala.need (c.name)
     let l ← Scala.lin Scala.fuel d
     pure ((l.drop 1).map fun (a, ts) => (a.name, ts))
 
 def toyLin (src : Cls → Src) (c : Cls) : List (String × List Scala.Ty) :=
-  ((clean src c).iface.lin).map fun (p, a) => (clsName p, [tyToScala c a])
+  ((clean src c).iface.lin).map fun (p, a) => (p.name, [tyToScala c a])
 
 /-- The type a selection `c.n` has: the first member named `n` along `c`'s linearization, seen
 from `c`. -/
 def sharedSel (src : Cls → Src) (c : Cls) (n : Name) : Except String (Option Scala.Ty) :=
   runOn src do
-    let d ← Scala.need (clsName c)
+    let d ← Scala.need (c.name)
     let l ← Scala.lin Scala.fuel d
-    pure (((Scala.hits l (nameStr n)).head?).map fun ((o, _), mem) =>
-      Scala.seenFrom (clsName c) l o.name mem.res)
+    pure (((Scala.hits l (n.str)).head?).map fun ((o, _), mem) =>
+      Scala.seenFrom (c.name) l o.name mem.res)
 
 /-- The selections of `d`'s body, the toy's resolved types against the shared ones. -/
 def selAgrees (src : Cls → Src) (d : Cls) : Bool :=
@@ -133,7 +132,7 @@ def sameSet (a b : List EK) : Bool := a.all b.contains && b.all a.contains
 def errsAgree (src : Cls → Src) (dl : Scala.Dialect := .s213) : Bool :=
   match sharedKinds src dl with
   | .ok es => classes.all fun c =>
-      sameSet (toyKinds src c) ((es.filter (·.1 == clsName c)).map (·.2))
+      sameSet (toyKinds src c) ((es.filter (·.1 == c.name)).map (·.2))
   | .error _ => false
 
 def linAgrees (src : Cls → Src) : Bool :=
@@ -151,12 +150,12 @@ def verdictAgrees (src : Cls → Src) (dl : Scala.Dialect := .s213) : Bool :=
   match sharedKinds src dl with
   | .ok es => classes.all fun c =>
       ((clean src c).errs.filter (fun | .final _ => false | _ => true)).isEmpty ==
-        (es.filter (·.1 == clsName c)).isEmpty
+        (es.filter (·.1 == c.name)).isEmpty
   | .error _ => false
 
 /-- Where refchecks disagree: the classes and kinds each side reports, the toy's first. -/
 def errPattern (k : Cfg) (dl : Scala.Dialect) : String :=
-  let toy := classes.flatMap fun c => (toyKinds k.src c).map fun e => (clsName c, e)
+  let toy := classes.flatMap fun c => (toyKinds k.src c).map fun e => (c.name, e)
   match sharedKinds k.src dl with
   | .ok sh => s!"{repr toy} vs {repr sh}"
   | .error e => s!"error {e}"

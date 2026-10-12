@@ -94,3 +94,8 @@ import Links.ZincBridgeLibs
 -- SAM conversion and local classes
 #print axioms Zinc.Sam.fix_sound
 #print axioms Zinc.Sam.today_sound_argFree
+-- The shared walk (Phase 29): over headers it is the walk over declarations, and Hier's lookup is it
+#print axioms Query.Task.trace_interp
+#print axioms Scala.lookupH_eq
+#print axioms Scala.asks_lookupH
+#print axioms Zinc.Hier.Shared.toy_eq_shared
