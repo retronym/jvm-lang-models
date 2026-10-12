@@ -8,6 +8,8 @@ Scala's types as scalac computes them: `asSeenFrom` once for any type language w
 
 **Gaps.** Type members, `var`, `protected` and qualified access, `abstract override` ([`docs/roadmap.md`](../../docs/roadmap.md) at the repository root).
 
+**Track T** (type soundness by oracle): the compilers' acceptance of programs over type members, stable paths and `null`, against what runs. Design: [`docs/track-t.md`](docs/track-t.md).
+
 ## Files
 
 | File | Contents |
