@@ -105,3 +105,8 @@ import Links.ZincBridgeLibs
 #print axioms Scala.asks_linWith_chain
 #print axioms Scala.linWith_chain
 #print axioms Zinc.Erasure.Er_obligations
+-- Track T: the model of the compilers' checks, and what the accepted programs do when run
+#print axioms Scala.Paths.calibrated
+#print axioms Scala.Paths.accepted_sound_except
+#print axioms Scala.Paths.nulls_no_cce
+#print axioms Scala.Paths.unsound_counts

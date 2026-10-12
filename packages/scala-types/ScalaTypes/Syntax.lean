@@ -18,10 +18,13 @@ inductive Dialect | s212 | s213 | s3
 parameter of a definition `D`. Classes are owner paths, innermost first, as in `AsSeenFrom`; a
 top-level definition `D` is `[D]`. -/
 inductive Ty
-  | int | bool | unit | str | obj | any | long
+  | int | bool | unit | str | obj | any | long | nothing
   | ref (d : String)
   /-- An intersection `a with b` (Scala 3 `a & b`) of two definitions by name. -/
   | inter (a b : String)
+  /-- A path-dependent type `p.n`: type member `n` of the stable path `p` (its names, outermost
+  first, as written: `h.f.L` is `sel ["h", "f"] "L"`). -/
+  | sel (p : List String) (n : String)
   /-- `Array[d]`, of a definition. -/
   | arr (d : String)
   /-- A Scala 3 opaque type alias `n` of `rep`, as seen outside its defining scope. -/
@@ -96,6 +99,13 @@ structure EnumCase where
   args : List String := []
   deriving DecidableEq, Repr
 
+/-- An abstract type member `type n >: lo <: hi` (Track T). -/
+structure TMem where
+  name : String
+  lo : Ty := .nothing
+  hi : Ty := .any
+  deriving DecidableEq, Repr
+
 structure Decl where
   name : String
   kind : Kind := .cls
@@ -118,6 +128,8 @@ structure Decl where
   sealed : Bool := false
   /-- Scala 3 opaque type aliases declared here: name and representation. -/
   opaques : List (String × Ty) := []
+  /-- Abstract type members with bounds (Track T). -/
+  tmems : List TMem := []
   deriving DecidableEq, Repr
 
 def Decl.parents (d : Decl) : List Parent := d.super.toList ++ d.traits
@@ -154,6 +166,8 @@ def Ty.show : Ty → String
   | .obj => "Object"
   | .any => "Any"
   | .long => "Long"
+  | .nothing => "Nothing"
+  | .sel p n => ".".intercalate (p ++ [n])
   | .inter a b => s!"{a} with {b}"
   | .tp _ 0 => "X"
   | .tp _ i => s!"X{i}"
@@ -174,6 +188,7 @@ def body : Ty → String
   | .obj => "null"
   | .any => "null"
   | .long => "0L"
+  | .nothing | .sel .. => "???"
   | .inter .. => "null"
   | .tp _ _ => "null.asInstanceOf[X]"
   | .this _ => "this"

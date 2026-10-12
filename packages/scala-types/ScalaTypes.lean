@@ -5,3 +5,5 @@ import ScalaTypes.Resolve
 import ScalaTypes.Members
 import ScalaTypes.Fine
 import ScalaTypes.Spec
+import ScalaTypes.Paths
+import ScalaTypes.PathsOracle

@@ -109,7 +109,7 @@ Expected, from the catalogue (to be confirmed in step 2, not assumed):
 
 1. This design. **(DONE)**
 2. **(DONE, below)** **The catalogue**, before any Lean. The Amin–Tate programs (`unsound.scala`, `legacy.scala`), [scala/bug#9633](https://github.com/scala/bug/issues/9633)'s programs, [scala/scala3#50](https://github.com/scala/scala3/issues/50) and #1050 with their Scala 3 forms, and the dotc test cases of the realizability fixes, as Scala sources in [`packages/scala/probes/soundness/`](../../scala/probes/soundness). Each is compiled with 2.12.21, 2.13.18 and 3.9.0 (plus `-source future` and `-Yexplicit-nulls`) through the server and run where accepted. The result is a table per compiler: rejected (which error), accepted and runs, accepted and throws. That table is a finding on its own, and the first entry of a ledger like the JVM probe's.
-3. **The space.** Extend `ScalaTypes` as above; encode dotc's realizability and bounds checks and scalac's volatility as `Task`s; generate the first space (a `lake exe` in the harness, the only harness change), calibrate the model's verdicts against the compilers, run the accepted programs, and state the per-compiler theorems. Every accepted program that throws a cast-free `ClassCastException` is reported with its source.
+3. **(DONE, below)** **The space.** Extend `ScalaTypes` as above; encode dotc's realizability and bounds checks and scalac's volatility as `Task`s; generate the first space (a `lake exe` in the harness, the only harness change), calibrate the model's verdicts against the compilers, run the accepted programs, and state the per-compiler theorems. Every accepted program that throws a cast-free `ClassCastException` is reported with its source.
 
 ## Step 2: the catalogue
 
@@ -159,3 +159,90 @@ Against the predictions of the first space:
 - **"`-Yexplicit-nulls` rejects the `null` paths."** This holds: every program that throws under another setting is rejected ("Found: Null, Required: A & B"), and so is every control that uses `null`.
 
 The first space (step 3) therefore takes the two-views shape as its core, since it is the one all three compilers can express. It keeps the intersection view for Scala 3.
+
+## Step 3: the first space
+
+**The extension.** `ScalaTypes` gains what the space needs and nothing more:
+
+- abstract type members with bounds ([`TMem`](../ScalaTypes/Syntax.lean#L103), `Decl.tmems`);
+- `Ty.nothing`;
+- path-dependent types `Ty.sel p n` (lowered as `Object`).
+
+[`ScalaTypes.Paths`](../ScalaTypes/Paths.lean) models the checks as a `Task` over `decl` queries (`check`, `boundsOf`):
+
+- **How a type sees `L`.**
+  - Through one trait: that trait's bounds.
+  - Through `A & B` in Scala 3: the union of the lower bounds and the intersection of the upper bounds.
+  - Through `A with B` in Scala 2: the last parent's member.
+- **Bounds well formed at the declaration:** scalac only.
+- **The path's definition:** `null` is not an `A & B` under explicit nulls; dotc's `checkRealizableBounds` at `new`.
+- **The bodies' conformance.**
+- **dotc's `checkRealizable`:** a type selection written on a `lazy val` whose type has conflicting bounds.
+- **scalac's override check on `new A with B {}`.**
+
+**The space.** [`Paths.space`](../ScalaTypes/Paths.lean#L117) has 2,430 programs:
+
+- `A`'s and `B`'s `L` bounded below by `Nothing`, `Int` or `String`, and above by `Any`, `Int` or `String`;
+- five paths: a `null` val, a `lazy val` of `???`, a parameter passed `null`, a `null` field, and `new`;
+- three views: `up` through `A` and `down` through `B`, the reverse, or both through `p.L`;
+- `down` returning `String` or `Any`.
+
+`lake exe soundspace OUT` writes them as sources with the model's verdicts. `soundness.py --json LEDGER OUT` compiles and runs them, 12,150 compiles in 90 seconds. `soundness_lean.py` turns the ledger into [`PathsData`](../ScalaTypes/PathsData.lean).
+
+**Calibration.** [`calibrated`](../ScalaTypes/PathsOracle.lean): on every program and every setting, the model's verdict is the compiler's, accepted or rejected with the same first error by kind. One rule came from the calibration rather than the catalogue: **dotc does not check a type member's bounds at its declaration.** `trait B { type L >: Int <: String }` compiles, and is rejected only where the type is realized (`new`, a `lazy val` path). scalac rejects it at the declaration ("lower bound Int does not conform to upper bound String"). The first model had scalac's rule for both and disagreed with dotc on 702 programs.
+
+**Accepted programs that throw.** [`accepted_sound_except`](../ScalaTypes/PathsOracle.lean#L68): on every setting, an accepted program throws a cast-free `ClassCastException` exactly when it is in the named class `Unsound`, and a rejected program was not run. A program is in `Unsound` when three things hold:
+
+- it is accepted;
+- its path is `null` at run time;
+- its types claim the `Int` it pushes into `L` is a `String` at a position erasure checks.
+
+dotc erases `Int & String` to `Int`, which is why an intersection with both upper bounds does not throw. [`unsound_counts`](../ScalaTypes/PathsOracle.lean#L78) gives the size of `Unsound`:
+
+| setting | accepted | throw a `ClassCastException` | throw as expected (`???`) |
+|---|---|---|---|
+| 2.12.21 | 215 | 48 | 36 |
+| 2.13.18 | 215 | 48 | 36 |
+| 3.9.0 | 544 | 264 | 72 |
+| 3.9.0 `-source future` | 544 | 264 | 72 |
+| 3.9.0 `-Yexplicit-nulls` | 118 | 0 ([`nulls_no_cce`](../ScalaTypes/PathsOracle.lean#L74)) | 72 |
+
+No program threw anything other than a `ClassCastException` or the expected `NotImplementedError`. A forced `lazy val` throws `NotImplementedError` before any cast, so no `lazy val` path is unsound in this space: dotc's realizability check rejects the unforced ones whose bounds conflict, and scalac's member semantics never lets an unforced one see both bounds.
+
+**The counterexamples, with their sources.** All 264 are reproducible from their index: `lake exe soundspace` writes `pNNNN.scala`, and `Unsound` lists them. They fall into two families.
+
+`p0870` is accepted by all four settings without explicit nulls and throws under each. It is the Amin–Tate shape with concrete bounds, each trait consistent on its own:
+
+```scala
+object Main {
+  trait A { type L >: Int }
+  trait B { type L <: String }
+  val p: A AND B = null
+  def up(a: A)(x: Int): a.L = x
+  def down(b: B)(l: b.L): String = l
+  def main(args: Array[String]): Unit = {
+    val s: String = down(p)(up(p)(1))
+    println(s.length)
+  }
+}
+```
+
+`p0153` and `p0154` are accepted by dotc only. scalac rejects them at the declaration of `B`. No intersection of two traits is needed: one trait's member carries the conflicting bounds itself, and a `null` path of that trait's type turns an `Int` into a `String`:
+
+```scala
+object Main {
+  trait A { type L }
+  trait B { type L >: Int <: String }
+  val p: A AND B = null
+  def up(x: Int): p.L = x
+  def down(l: p.L): String = l
+  def main(args: Array[String]): Unit = {
+    val s: String = down(up(1))
+    println(s.length)
+  }
+}
+```
+
+The second family is a smaller form of [scala/bug#9633](https://github.com/scala/bug/issues/9633) than the bug's own, which needs two traits. It rests on dotc's design: bounds are checked where a type is realized, and `null` is not a realization. These are reported as found, not explained away. Whether they are already known as such is to be checked against the scala/scala3 tracker before anything is filed.
+
+**What the theorems do not say.** They are about this space and these compiler versions. They say nothing about programs outside it, and nothing about soundness in general. The remaining shapes are in the table of what the type language needs: projections, class parameters in bounds, fields as paths with overriding, and pattern matching ([scala/scala3#16728](https://github.com/scala/scala3/issues/16728)). Each is a second space.

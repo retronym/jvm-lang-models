@@ -475,7 +475,7 @@ theorem linWith_chain (e : Env) (hs : SingleParent e) : ∀ k (n : String) (h : 
           intro hl; cases hl
           intro x hx
           rw [hchain]
-          simp only [List.filter_nil, List.append_nil, List.mem_cons] at hx
+          simp only [List.append_nil, List.mem_cons] at hx
           rcases hx with rfl | hx
           · exact List.mem_cons_self
           · have hx' := (List.mem_filter.1 hx).1

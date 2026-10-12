@@ -61,3 +61,7 @@ root = "Harness.JavaProbe"
 name = "bincompat"
 root = "Harness.MimaMain"
 
+
+[[lean_exe]]
+name = "soundspace"
+root = "Harness.SoundSpace"

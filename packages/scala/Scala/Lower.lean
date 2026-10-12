@@ -44,6 +44,9 @@ its declaration. -/
 def erase : Ty → M String
   | .int => pure "I"
   | .long => pure "J"
+  | .nothing => pure "Lscala/runtime/Nothing$;"
+  -- a type member erases to its upper bound's erasure; the shapes lowered so far bound by `Any`
+  | .sel .. => pure "Ljava/lang/Object;"
   | .inter a b => eraseInter a b
   | .bool => pure "Z"
   | .unit => pure "V"

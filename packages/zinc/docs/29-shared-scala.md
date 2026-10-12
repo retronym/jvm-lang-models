@@ -4,7 +4,7 @@
 
 Four `Zinc/` files each define their own toy Scala: class and type enums, a parent walk, a type-argument substitution standing in for `asSeenFrom`, and a query type for the walk. `HierShared` and `FlatShared` embed two of them into `ScalaTypes` and check agreement on bounded spaces, which found real gaps (Hier's depth-first walk on diamonds; two `Members` gaps from `Flat`). But agreement on a space is evidence, not sharing: the next edit to either side can drift, and the Zinc bridge instances, Track B4 (`Links`) and MiMa still do not reason about one Scala semantics. As the shared layer grows (membership, lowering, erasure), every toy is one more copy to keep in step.
 
-Goal: each of the four files *uses* the shared walk, `asSeenFrom`, and (where relevant) refchecks and erasure, so that its theorems are about the same semantics `Scala.Lower` and `Scala.Members` compute. The toys survive only as front ends: small enumerable syntaxes that build [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L99)s, so the exhaustive spaces stay enumerable.
+Goal: each of the four files *uses* the shared walk, `asSeenFrom`, and (where relevant) refchecks and erasure, so that its theorems are about the same semantics `Scala.Lower` and `Scala.Members` compute. The toys survive only as front ends: small enumerable syntaxes that build [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L109)s, so the exhaustive spaces stay enumerable.
 
 ## The crux: query granularity
 
@@ -24,7 +24,7 @@ So the walk must be expressible over *fine* queries, and the coarse form must be
 
 4. **Query translation in `query`.** A generic fold of a task through a query interpretation, `Task.interp : ((q : Q) → Task Q' A' (A q)) → Task Q A α → Task Q' A' α`, with `run`/`trace` lemmas. Each Zinc file maps shared queries into its framework shape `(Cls × Q)` with it (a `Cls`-less name is answered `none` without a query). [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L67)/`back`/`fq` become an instance.
 
-5. **Toys as front ends.** `Cls`, `Name` and a small `Ty` stay, as the syntax the scenarios and spaces are written in; `toScala` (today in `HierShared`) becomes the front end, and interfaces store [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L99). `Hier.Ty.subst`, `mergeWith`, `linT`, `firstDecl` are deleted. Materialised members (`W`) store `Option Scala.Ty`.
+5. **Toys as front ends.** `Cls`, `Name` and a small `Ty` stay, as the syntax the scenarios and spaces are written in; `toScala` (today in `HierShared`) becomes the front end, and interfaces store [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L109). `Hier.Ty.subst`, `mergeWith`, `linT`, `firstDecl` are deleted. Materialised members (`W`) store `Option Scala.Ty`.
 
 6. **Results kept, or the change explained.** Every `D`/`W`/`Mk` obligation theorem and every scenario `Report` should be unchanged. If a report moves (for instance because the shared lookup reads a different set of classes than Hier's early-stopping `firstDecl`), that is a finding about Hier, written down here, not a reason to keep a private walk.
 
@@ -53,7 +53,7 @@ Each step builds, keeps its theorems, and is one commit.
 
 What the port of a toy file looks like:
 
-- **The toy's syntax stays as a front end.** `Cls`, `Name`, `Ty`, `Decl`, `Src` are unchanged, so the scenarios and `HierShared.space` are written as before; [`Src.lower`](../Zinc/Bridges/Hier.lean#L101) gives the shared syntax ([`USrc`](../Zinc/Bridges/Hier.lean#L96), a [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L99) and the selections), and interfaces hold the [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L99).
+- **The toy's syntax stays as a front end.** `Cls`, `Name`, `Ty`, `Decl`, `Src` are unchanged, so the scenarios and `HierShared.space` are written as before; [`Src.lower`](../Zinc/Bridges/Hier.lean#L101) gives the shared syntax ([`USrc`](../Zinc/Bridges/Hier.lean#L96), a [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L109) and the selections), and interfaces hold the [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L109).
 - **The file's queries are the shared ones, addressed to a unit.** [`Hier.Q`](../Zinc/Bridges/Hier.lean#L120) is `header`, `member m` (the shared queries, asked of the class they name), plus what is the file's own: `members n` (`W`'s materialised members) and the `select n` marker. `toQ` maps [`Scala.Q`](../../scala-types/ScalaTypes/Resolve.lean#L41) into them; [`Task.interp`](../../query/Query/Interp.lean#L20) runs [`Scala.lookupH`](../../scala-types/ScalaTypes/Resolve.lean#L216) through it. `toQFrom d` answers a class's own queries from its source, which is how `W` materialises.
 - **The trace lemmas come from the shared layer.** `HierSound`'s walk lemmas are [`Scala.asks_lookupH`](../../scala-types/ScalaTypes/Fine.lean#L502) composed with `toQ` ([`trace_interp_lookupH`](../Zinc/Bridges/HierSound.lean#L63)); the private [`trace_linT`](../Zinc/Features/Erasure.lean#L687), `trace_firstDecl`, `trace_mergeWith` are gone.
 - **Keys and hashes follow the queries.** `K.name m` is keyed by the member's name as a string, the same key for the walk's `member m` and a client's `select n`; hashes are a small sum (`H`) instead of a projected interface.
