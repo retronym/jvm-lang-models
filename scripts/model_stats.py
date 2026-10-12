@@ -55,7 +55,7 @@ SPACE_FILES = {'space': 'packages/jvm/Jvm/Clients.lean', 'space3': 'packages/jvm
 
 def decl_link(name):
     """`name` linked to its `def` line, as `scripts/lint_links.py` requires of a declaration."""
-    path = SPACE_FILES[name]
+    path = SPACE_FILES.get(name, 'packages/jvm/Jvm/Clients.lean')
     short = name.rsplit('.', 1)[-1]
     lines = open(os.path.join(ROOT, path), encoding='utf-8').read().splitlines()
     n = next(i for i, l in enumerate(lines, 1) if re.match(rf'def {short}\b', l))

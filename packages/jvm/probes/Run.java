@@ -102,6 +102,8 @@ public class Run {
         for (int i = 0; i < sites.size(); i++) {
           ProbeLog.reset();
           call(l, "Site" + i);
+          // Only `Object`'s methods run without logging: an invoke that logged nothing ran one.
+          if (ProbeLog.entered.isEmpty() && invoke(sites.get(i))) ran.add("java.lang.Object");
           for (Object e : ProbeLog.entered) ran.add(e instanceof ProbeLog.Put p ? written(p, l, k) : (String) e);
         }
         return new String[] { "ok " + ran, "" };
@@ -109,6 +111,11 @@ public class Run {
         return new String[] { t.getClass().getName(), String.valueOf(t.getMessage()).lines().findFirst().orElse("") };
       }
     }
+  }
+
+  static boolean invoke(Map<String, Object> s) {
+    if (s.get("op").equals("at")) s = Json.obj(s.get("site"));
+    return ((String) s.get("op")).startsWith("invoke");
   }
 
   /** The class whose field a put wrote: the receiver's class or a superclass, or a loaded class's static field. */

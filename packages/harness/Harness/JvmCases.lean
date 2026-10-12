@@ -4,7 +4,7 @@ import MiMa.Edits
 /-! `lake exe jvmcases`: the catalogue (`packages/jvm/Jvm/Catalogue.lean`) as JSON lines for `packages/jvm/probes`.
 
 `lake exe jvmcases space`: every catalogue edit with every well-typed client of `packages/jvm/Jvm/Clients.lean`'s
-space (`space3` for the Track J3 cases, `space5` for Track J5), named `<case>/<n>`, so the probe checks the model's outcome for each client, not only the
+space (`space3` for the Track J3 and J8 cases, `space5` for Track J5), named `<case>/<n>`, so the probe checks the model's outcome for each client, not only the
 catalogue's own.
 
 `lake exe jvmcases chain`: the Track J6 space of overriding chains (`Jvm.Clients.chainSpace`), each a case with
@@ -18,6 +18,14 @@ with `v1 = v0`.
 `lake exe jvmcases count`: the catalogue's size and each client space's, as tab-separated lines (catalogue
 group or space, clients, programs) for `scripts/model_stats.py`. A space's programs are the well-typed
 (case, client) pairs that `space` dumps; `chainSpace`'s are its cases; MiMa's `spaceB` is counted in clients.
+
+`lake exe jvmcases defaults`: the Track J7 space of default methods along superinterface chains
+(`Jvm.Clients.defaultsSpace`).
+
+`lake exe jvmcases fields`: the Track J8 space of field resolution through superinterfaces
+(`Jvm.Clients.fieldsSpace`).
+
+`lake exe jvmcases object`: `Object`'s methods in interface resolution (`Jvm.Clients.objectSpace`).
 
 `lake exe jvmcases verdicts`: per edit, MiMa's problem, the Track J2 verdicts and the number of clients in
 the space that break or change, as a markdown table. -/
@@ -34,17 +42,35 @@ def main (args : List String) : IO Unit := do
     IO.println s!"catalogue\tJ1–J2\t{all.length}"
     IO.println s!"catalogue\tJ3\t{j3.length}"
     IO.println s!"catalogue\tJ5\t{j5.length}"
+    IO.println s!"catalogue\tJ7\t{j7.length}"
+    IO.println s!"catalogue\tJ8\t{j8.length}"
+    IO.println s!"catalogue\tObject\t{jObject.length}"
     IO.println s!"catalogue\tJ4\t{j4.length}"
     IO.println s!"space\tspace\t{space.length}\t{programs all space}"
     IO.println s!"space\tspace3\t{space3.length}\t{programs j3 space3}"
     IO.println s!"space\tspace5\t{space5.length}\t{programs j5 space5}"
     IO.println s!"space\tchainSpace\t{chainSpace.length}\t{chainSpace.length}"
+    IO.println s!"space\tdefaultsSpace\t{defaultsSpace.length}\t{defaultsSpace.length}"
+    IO.println s!"space\tfieldsSpace\t{fieldsSpace.length}\t{fieldsSpace.length}"
+    IO.println s!"space\tobjectSpace\t{objectSpace.length}\t{objectSpace.length}"
     IO.println s!"space\tbodySpace\t{bodySpace.length}\t{bodySpace.length}"
     IO.println s!"space\tnestSpace\t{nestSpace.length}\t{nestSpace.length}"
     IO.println s!"space\tMiMa.spaceB\t{MiMa.spaceB.length}\t"
     return
   if args.contains "chain" then
     for k in chainSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
+  if args.contains "defaults" then
+    for k in defaultsSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
+  if args.contains "fields" then
+    for k in fieldsSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
+  if args.contains "object" then
+    for k in objectSpace do
       IO.println (Jvm.Dump.caseJson k)
     return
   if args.contains "bodies" then
@@ -60,8 +86,8 @@ def main (args : List String) : IO Unit := do
       IO.println s!"{k.name}\t{repr k.before}\t{repr k.after}"
     return
   let cases := if args.contains "space" || args.contains "verdicts" then
-      all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5)
-    else (all ++ j3 ++ j5 ++ j4).map (·, space)
+      all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5) ++ j7.map (·, space) ++ j8.map (·, space3)
+    else (all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject ++ j4).map (·, space)
   for (k, space) in cases do
     if args.contains "verdicts" then
       let ok := space.filter fun cl => let k' := k.withClient cl; wellTyped k'.w0 cl.2 && links k'.w0 cl.2

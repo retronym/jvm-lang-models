@@ -4,13 +4,13 @@
 
 The Lean model was built to answer one question: is Zinc's invalidation sound, relative to obligations on the compiler bridge? To answer it, each feature file (`Erasure`, `Hier`, `Flat`, `Inline`, `Names`, …) has its own toy language, sized to what Zinc hashes. The toys found real bugs, but they are private to one consumer. Factored out, the same knowledge answers other questions:
 
-- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L705)).
+- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L714)).
 - **IDE type systems.** The TCK (`retronym/scala-type-system-tck`) checks IntelliJ against an `asSeenFrom` model that now shares its core with the Scala layer.
 - **Scala 2 → 3 migration.** The name-resolution calibration in [talks#21](https://github.com/retronym/talks/issues/21) is already a list of differences between the two compilers.
 
 ## Architecture
 
-The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L112), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L683) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L62) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
+The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L116), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L692) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L66) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
 
 ## Done
 
@@ -20,7 +20,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J6 | JVM linkage, overriding along library chains, method bodies and nestmates, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks J1–J8 | JVM linkage, overriding along library chains, method bodies and nestmates, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
@@ -37,9 +37,6 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 Each is one shape, one space and one probe run, as Track J6 was.
 
-- **Track J7: default methods along superinterface chains.** `I1 ← I2 ← I3` with `m` default, abstract, static, private or absent, a library class implementing some of them, `invokeinterface` and `invokevirtual` sites: maximally-specific selection (JVMS §5.4.3.3, §5.4.6) and the JDK-8356942 region.
-- **Track J8: field resolution through superinterfaces at depth.** Fields named `m` at several levels of classes and interfaces, any flags, all four field instructions: JVMS §5.4.3.2's order as a space, where it has one witness today ([scala-garden/mima#995](https://github.com/scala-garden/mima/issues/995)).
-- **`Object`'s methods in interface resolution.** JVMS §5.4.3.4 step 2: an interface method reference to `hashCode` or `toString` resolves to `Object`'s; needs `Object` in the class table, a few catalogue cases and a column in Track J7's space.
 - **`var` and constructor parameters in the source models.** Scala setters (where scalac 2's trait-setter `AbstractMethodError` lives) and constructor parameters, `var` in Java; they widen Track B3 directly (see the layer remainders below).
 
 ### Track B3: source-level spaces
@@ -47,6 +44,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 **Why.** MiMa's users edit source, not classfiles. The JVM edit space found MiMa's gaps; a source edit space would find which ones real Scala and Java edits reach, and where scalac's encoding (forwarders, `$init$`, value classes) makes a source-compatible-looking edit break.
 
 **Done looks like.** A space of source edits, Scala and Java, lowered, linked against a client space and checked against MiMa and HotSpot, as the JVM edit space was. Today only the Scala catalogue's first cases have been run through MiMa, and the Java catalogue not at all. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
+
+### A sixth MiMa gap: a package-private method above a default
+
+**Why.** Track J7's `pkgMethodAboveDefault`: a public class gains a package-private `m()`, and a client subclass in another package that inherits a default `m()` from an interface now fails `invokeinterface` with `IllegalAccessError` (JVMS §6.5). MiMa 1.2.1 and the corrected rules are both silent; no key covers a package-private member added to a public class.
+
+**Done looks like.** A corrected rule in [`packages/mima/MiMa/Fixed.lean`](../packages/mima/MiMa/Fixed.lean) that reports it (for example, a package-private method added to a public, non-final class whose name and descriptor some superinterface of a possible subclass could declare), an edit-space shape that reaches it, and `Sound` re-run; or a reasoned scope line. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
 
 ### A general proof for the corrected MiMa rules
 

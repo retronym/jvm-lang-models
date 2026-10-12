@@ -75,7 +75,7 @@ def main (args : List String) : IO Unit := do
     for e in edits do IO.println (Jvm.Dump.caseJson e.case)
   else if args.contains "mima" then
     for e in edits do IO.println (problemsJson e.name (mima e.v0 e.v1))
-    for k in all ++ j3 ++ j5 do IO.println (problemsJson k.name (mima k.v0 k.v1))
+    for k in all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject do IO.println (problemsJson k.name (mima k.v0 k.v1))
   else if args.contains "unreported" then
     for b in [1, 2] do
       for c in [C.A, C.B, C.I, C.J] do

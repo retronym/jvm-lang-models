@@ -1,11 +1,18 @@
 import IncComp.Termination
 import IncComp.NonLocal
+import ScalaTypes.Fine
+import Query.Interp
 /-!
 # Members vs decls vs Merkle, on a toy class hierarchy
 
 Classes with one type parameter, parents with a type argument (`asSeenFrom`), declared members,
-and clients that select members. Member lookup follows Scala's linearization (each class once, the
-last mixin first), with misses recorded; `HierShared` checks it against the shared semantics.
+and clients that select members. The programs are written in a small syntax (`Cls`, `Name`, `Ty`,
+`Decl`, `Src`) so that they can be enumerated, and lowered to the shared Scala syntax
+(`Scala.Decl`); interfaces hold the shared declaration. Member lookup *is* the shared one,
+`Scala.lookupH`: Scala's linearization (each class once, the last mixin first) and the first member
+named `n` along it, viewed from the class, asking one `header` query per class visited and one
+`member` query per class until the first hit. `toQ` maps those queries to `Hier`'s, asked of the
+class they name. `HierShared` proves this is the shared lookup over whole declarations.
 
 Three ways to hash an inherited member, as three `Compiler` instances over the same language:
 
@@ -45,11 +52,6 @@ inductive Name | m | g
 inductive Ty | int | string | param | v
   deriving DecidableEq, Repr
 
-/-- `asSeenFrom`: instantiate the parameter. -/
-def Ty.subst (arg : Ty) : Ty → Ty
-  | .param => arg
-  | t => t
-
 structure Decl where
   parents : List (Cls × Ty) := []
   decls : List (Name × Ty) := []
@@ -60,40 +62,84 @@ structure Src where
   body : List (Cls × Name) := []
   deriving DecidableEq, Repr
 
+/-! ## Lowering to the shared syntax -/
+
+def Cls.name : Cls → String
+  | .A => "A" | .B => "B" | .M => "M" | .C => "C" | .X => "X" | .Y => "Y" | .Z => "Z" | .V => "V"
+
+def Cls.all : List Cls := [.A, .B, .M, .C, .X, .Y, .Z, .V]
+
+/-- The class a name denotes, if any. -/
+def Cls.ofName? (s : String) : Option Cls := Cls.all.find? (·.name = s)
+
+def Name.str : Name → String
+  | .m => "m" | .g => "g"
+
+/-- A type of `Hier`, written in class `self`: the parameter is `self`'s first. -/
+def Ty.toScala (self : Cls) : Ty → Scala.Ty
+  | .int => .int
+  | .string => .str
+  | .param => .tp [self.name] 0
+  | .v => .ref "V"
+
+/-- A declaration of class `c`, in the shared syntax. A parent's type argument is written in the
+child's scope. -/
+def Decl.toScala (c : Cls) (d : Decl) : Scala.Decl :=
+  let parent : Cls × Ty → Scala.Parent := fun (p, a) => (p.name, [Ty.toScala c a])
+  { name := c.name
+    tparams := 1
+    super := d.parents.head?.map parent
+    traits := d.parents.tail.map parent
+    members := d.decls.map fun (n, t) => { name := n.str, res := Ty.toScala c t } }
+
+/-- A unit's source in the shared syntax: its declaration and the selections it makes. -/
+structure USrc where
+  decl : Scala.Decl
+  body : List (Cls × Name) := []
+  deriving DecidableEq, Repr
+
+def Src.lower (c : Cls) (s : Src) : USrc := ⟨Decl.toScala c s.decl, s.body⟩
+
+/-- A program's sources, lowered. -/
+def lowerAll (src : Cls → Src) : Cls → USrc := fun c => (src c).lower c
+
 /-- An interface: the declaration, plus (for `W`) the materialised members. -/
 @[ext] structure Iface where
-  decl : Decl
-  mems : List (Name × Option Ty) := []
+  decl : Scala.Decl
+  mems : List (Name × Option Scala.Ty) := []
   deriving DecidableEq, Repr
 
 structure Out where
   iface : Iface
   /-- The resolved type of each selected member: what the client's bytecode would link against. -/
-  descs : List (Option Ty)
+  descs : List (Option Scala.Ty)
   deriving DecidableEq, Repr
 
 /-! ## Queries -/
 
 inductive Q
-  | decl (n : Name)
-  | parents
+  /-- What linearization reads: type parameters, kind, parents (`Scala.Q.header`). -/
+  | header
+  /-- The class's own member named `m` (`Scala.Q.member`). -/
+  | member (m : String)
   | members (n : Name)
   /-- A marker: "resolution of `n` starts here". Trivial answer; it names the receiver. -/
   | select (n : Name)
   deriving DecidableEq, Repr
 
 inductive AnsV
-  | ty (t : Option Ty)
-  | ps (l : List (Cls × Ty))
+  | hdr (h : Option Scala.Header)
+  | mem (m : Option Scala.Mem)
+  | ty (t : Option Scala.Ty)
   | unit
   deriving DecidableEq, Repr
 
 abbrev Ans (_ : Q) : Type := AnsV
 
 def answer (i : Iface) : Q → AnsV
-  | .decl n => .ty (((i.decl.decls.filter (·.1 = n)).head?).map (·.2))
-  | .parents => .ps i.decl.parents
-  | .members n => .ty (((i.mems.filter (·.1 = n)).head?).bind (·.2))
+  | .header => .hdr (some i.decl.header)
+  | .member m => .mem (i.decl.member m)
+  | .members n => .ty (((i.mems.filter (·.1.str = n.str)).head?).bind (·.2))
   | .select _ => .unit
 
 abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
@@ -106,78 +152,73 @@ def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 @[simp] theorem run_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).run e = e (c, q) := rfl
 @[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).trace e = [(c, q)] := rfl
 
-/-! ## The linearization walk
+/-! ## The walk: the shared lookup
 
-Scala's linearization, as `Scala.lin` computes it: `L(C) = C, L(Pn) +⃗ … +⃗ L(P1)`, each class
-once, a parent's type argument instantiated on the way down (`asSeenFrom`). Lookup is the first
-class along it that declares the name, misses recorded. `HierShared` checks it against the shared
-semantics. -/
+`Scala.lookupH` asks `header` and `member` queries of classes by name (`Scala.asks_lookupH`).
+`toQ` asks each of the class it names; a name that is no class of the program is not found. -/
 
-/-- Merge the linearizations of `ps` (left to right) onto `acc`: a later parent's classes go first,
-and a class already in `acc` is not repeated. -/
-def mergeWith (lin : Cls → Ty → T (List (Cls × Ty))) (arg : Ty) :
-    List (Cls × Ty) → List (Cls × Ty) → T (List (Cls × Ty))
-  | acc, [] => pure acc
-  | acc, (p, parg) :: rest => do
-    let lp ← lin p (Ty.subst arg parg)
-    mergeWith lin arg (lp.filter (fun e => !acc.any (·.1 == e.1)) ++ acc) rest
+def AnsV.hdr? : AnsV → Option Scala.Header | .hdr h => h | _ => none
+def AnsV.mem? : AnsV → Option Scala.Mem | .mem m => m | _ => none
 
-/-- The linearization of `c` applied to `arg`, the class first, each with its type argument. -/
-def linT : ℕ → Cls → Ty → T (List (Cls × Ty))
-  | 0, c, arg => pure [(c, arg)]
-  | fuel + 1, c, arg => do
-    match ← askQ c .parents with
-    | .ps ps => do
-      let acc ← mergeWith (linT fuel) arg [] ps
-      pure ((c, arg) :: acc)
-    | _ => pure [(c, arg)]
+/-- The shared layer's queries as `Hier`'s. -/
+def toQ : (q : Scala.Q) → T (Scala.Ans q)
+  | .decl .. => pure none
+  | .header s => match Cls.ofName? s with
+    | some c => do pure (← askQ c .header).hdr?
+    | none => pure none
+  | .member s m => match Cls.ofName? s with
+    | some c => do pure (← askQ c (.member m)).mem?
+    | none => pure none
 
-/-- The first class of `l` that declares `n`, its declared type instantiated. -/
-def firstDecl (n : Name) : List (Cls × Ty) → T (Option Ty)
-  | [] => pure none
-  | (d, a) :: rest => do
-    match ← askQ d (.decl n) with
-    | .ty (some t) => pure (some (Ty.subst a t))
-    | _ => firstDecl n rest
+/-- A class's own compilation answers its own `header` and `member` queries from its source. -/
+def toQFrom (d : Scala.Decl) : (q : Scala.Q) → T (Scala.Ans q)
+  | .header s => if s = d.name then pure (some d.header) else toQ (.header s)
+  | .member s m => if s = d.name then pure (d.member m) else toQ (.member s m)
+  | .decl .. => pure none
 
-/-- Resolve member `n` of `c`, as seen with type argument `arg`. -/
-def resolve (fuel : ℕ) (c : Cls) (n : Name) (arg : Ty) : T (Option Ty) := do
-  let l ← linT fuel c arg
-  firstDecl n l
+/-- A failed lookup (a class not found, a linearization too deep) selects nothing. -/
+def ofExcept : Except String (Option Scala.Ty) → Option Scala.Ty
+  | .ok t => t
+  | .error _ => none
+
+def fuel : ℕ := Scala.fuel
+
+/-- Resolve member `n` of `c`, as seen from `c`: the shared lookup. -/
+def resolve (c : Cls) (n : Name) : T (Option Scala.Ty) := do
+  let r ← Query.Task.interp toQ (Scala.lookupH fuel c.name n.str).run
+  pure (ofExcept r)
 
 /-! ## Per-unit tasks -/
 
 /-- Walk-based client: marker, then the walk. -/
-def selects : List (Cls × Name) → T (List (Option Ty))
+def selects : List (Cls × Name) → T (List (Option Scala.Ty))
   | [] => pure []
   | (c, n) :: rest => do
     let _ ← askQ c (.select n)
-    let t ← resolve 3 c n .param
+    let t ← resolve c n
     let ts ← selects rest
     pure (t :: ts)
 
-def unitWalk (s : Src) : T Out := do
+def unitWalk (s : USrc) : T Out := do
   let ts ← selects s.body
   pure ⟨⟨s.decl, []⟩, ts⟩
 
-/-- Materialise one member of a class from its own decls, else along its parents' linearization. -/
-def resolveFrom (d : Decl) (n : Name) : T (Option Ty) :=
-  match (d.decls.filter (·.1 = n)).head? with
-  | some (_, t) => pure (some t)
-  | none => do
-    let l ← mergeWith (linT 3) .param [] d.parents
-    firstDecl n l
+/-- Materialise one member of a class: the shared lookup from the class, its own header and
+members read from its source. -/
+def resolveFrom (d : Scala.Decl) (n : Name) : T (Option Scala.Ty) := do
+  let r ← Query.Task.interp (toQFrom d) (Scala.lookupH fuel d.name n.str).run
+  pure (ofExcept r)
 
-def selectsMat : List (Cls × Name) → T (List (Option Ty))
+def selectsMat : List (Cls × Name) → T (List (Option Scala.Ty))
   | [] => pure []
   | (c, n) :: rest => do
     let r ← askQ c (.members n)
     let ts ← selectsMat rest
     pure ((match r with | .ty t => t | _ => none) :: ts)
 
-/-- Materialised: a class computes its members' resolved types (querying its ancestors' decls)
-and stores them; clients ask `members`. -/
-def unitMat (s : Src) : T Out := do
+/-- Materialised: a class computes its members' resolved types (querying its ancestors' headers
+and members) and stores them; clients ask `members`. -/
+def unitMat (s : USrc) : T Out := do
   let mm ← resolveFrom s.decl .m
   let mg ← resolveFrom s.decl .g
   let ts ← selectsMat s.body
@@ -186,70 +227,80 @@ def unitMat (s : Src) : T Out := do
 /-! ## Keys -/
 
 inductive K
-  | name (n : Name)
+  /-- Everything about the name `m` a class declares or materialises. -/
+  | name (m : String)
   | parents
   /-- The whole interface: the inheritance edge. -/
   | top
   deriving DecidableEq, Repr
 
+/-- The local key a query is covered by, for `D`. -/
+def Q.keyD : Q → K
+  | .header => .parents
+  | .member m => .name m
+  | .members n => .name n.str
+  | .select n => .name n.str
+
 /-- Decls + walk: one local key per query. -/
 def keysD (tr : List (Cls × Q)) : Finset (Cls × K) :=
-  (tr.map fun p => (p.1, match p.2 with
-    | .decl n => K.name n
-    | .select n => K.name n
-    | .members n => K.name n
-    | .parents => K.parents)).toFinset
+  (tr.map fun p => (p.1, p.2.keyD)).toFinset
 
 /-- Materialised: `members` by name, everything else is an inheritance edge. -/
 def keysW (tr : List (Cls × Q)) : Finset (Cls × K) :=
   (tr.map fun p => (p.1, match p.2 with
-    | .members n => K.name n
+    | .members n => K.name n.str
     | _ => K.top)).toFinset
 
 /-- Merkle: one key per receiver and name. -/
 def keysM (tr : List (Cls × Q)) : Finset (Cls × K) :=
   (tr.filterMap fun p => match p.2 with
-    | .select n => some (p.1, K.name n)
+    | .select n => some (p.1, K.name n.str)
     | _ => none).toFinset
 
 /-! ## Hashes (perfect: the projected data itself) -/
 
-def πD (i : Iface) : K → Iface
-  | .name n => ⟨⟨[], i.decl.decls.filter (·.1 = n)⟩, i.mems.filter (·.1 = n)⟩
-  | .parents => ⟨⟨i.decl.parents, []⟩, []⟩
-  | .top => i
+inductive H
+  | name (mem : Option Scala.Mem) (mems : List (Name × Option Scala.Ty))
+  | header (h : Scala.Header)
+  | all (i : Iface)
+  deriving DecidableEq, Repr
 
-def πW (i : Iface) : K → Iface
-  | .name n => ⟨⟨[], []⟩, i.mems.filter (·.1 = n)⟩
-  | .parents => ⟨⟨i.decl.parents, []⟩, []⟩
-  | .top => i
+def πD (i : Iface) : K → H
+  | .name m => .name (i.decl.member m) (i.mems.filter (·.1.str = m))
+  | .parents => .header i.decl.header
+  | .top => .all i
+
+def πW (i : Iface) : K → H
+  | .name m => .name none (i.mems.filter (·.1.str = m))
+  | .parents => .header i.decl.header
+  | .top => .all i
 
 inductive CoversD : Q → K → Prop
-  | decl (n) : CoversD (.decl n) (.name n)
-  | select (n) : CoversD (.select n) (.name n)
-  | members (n) : CoversD (.members n) (.name n)
-  | parents : CoversD .parents .parents
+  | header : CoversD .header .parents
+  | member (m) : CoversD (.member m) (.name m)
+  | select (n) : CoversD (.select n) (.name n.str)
+  | members (n) : CoversD (.members n) (.name n.str)
 
 inductive CoversW : Q → K → Prop
-  | members (n) : CoversW (.members n) (.name n)
+  | members (n) : CoversW (.members n) (.name n.str)
   | top (q) : CoversW q .top
 
 /-- Joint compilation for source-determined interfaces (`D`, `Mk`). -/
-def groupSrc (unit : Src → T Out) (G : Finset Cls) (src : Cls → Src) (e : Env) : Cls → Out :=
+def groupSrc (unit : USrc → T Out) (G : Finset Cls) (src : Cls → USrc) (e : Env) : Cls → Out :=
   fun u => (unit (src u)).run fun p => if p.1 ∈ G then answer ⟨(src p.1).decl, []⟩ p.2 else e p
 
 /-- Joint compilation for materialised interfaces: members are first materialised against the
 group's source declarations, then clients are compiled against the materialised interfaces. -/
-def matEnv (G : Finset Cls) (src : Cls → Src) (e : Env) : Env :=
+def matEnv (G : Finset Cls) (src : Cls → USrc) (e : Env) : Env :=
   fun p => if p.1 ∈ G then answer ⟨(src p.1).decl, []⟩ p.2 else e p
 
-def matIface (G : Finset Cls) (src : Cls → Src) (e : Env) (p : Cls) : Iface :=
+def matIface (G : Finset Cls) (src : Cls → USrc) (e : Env) (p : Cls) : Iface :=
   ((unitMat (src p)).run (matEnv G src e)).iface
 
-def groupMat (G : Finset Cls) (src : Cls → Src) (e : Env) : Cls → Out :=
+def groupMat (G : Finset Cls) (src : Cls → USrc) (e : Env) : Cls → Out :=
   fun u => (unitMat (src u)).run fun p => if p.1 ∈ G then answer (matIface G src e p.1) p.2 else e p
 
-def D : Compiler Cls Src Out Iface K Iface Q Ans where
+def D : Compiler Cls USrc Out Iface K H Q Ans where
   unit := unitWalk
   group := groupSrc unitWalk
   iface := Out.iface
@@ -258,7 +309,7 @@ def D : Compiler Cls Src Out Iface K Iface Q Ans where
   keys := keysD
   covers := CoversD
 
-def W : Compiler Cls Src Out Iface K Iface Q Ans where
+def W : Compiler Cls USrc Out Iface K H Q Ans where
   unit := unitMat
   group := groupMat
   iface := Out.iface
@@ -267,17 +318,26 @@ def W : Compiler Cls Src Out Iface K Iface Q Ans where
   keys := keysW
   covers := CoversW
 
+def Name.ofStr? : String → Option Name
+  | "m" => some .m
+  | "g" => some .g
+  | _ => none
+
+@[simp] theorem Name.ofStr?_str (n : Name) : Name.ofStr? n.str = some n := by cases n <;> rfl
+
 /-- The Merkle hash of `(c, m)`: the verifying trace of the walk, computed from the interfaces. -/
 abbrev HashM := List ((Cls × Q) × AnsV)
 
 def πM (I : Cls → Iface) (c : Cls) : K → HashM
-  | .name n => ((resolve 3 c n .param).trace (envOfI I)).map fun q => (q, envOfI I q)
+  | .name s => match Name.ofStr? s with
+    | some n => ((resolve c n).trace (envOfI I)).map fun q => (q, envOfI I q)
+    | none => []
   | _ => []
 
 def CoversM (I : Cls → Iface) (q : Cls × Q) (k : Cls × K) : Prop :=
-  ∃ n, k.2 = K.name n ∧ (q = (k.1, .select n) ∨ q ∈ (resolve 3 k.1 n .param).trace (envOfI I))
+  ∃ n, k.2 = K.name n.str ∧ (q = (k.1, .select n) ∨ q ∈ (resolve k.1 n).trace (envOfI I))
 
-def Mk : GCompiler Cls Src Out Iface K HashM Q Ans where
+def Mk : GCompiler Cls USrc Out Iface K HashM Q Ans where
   unit := unitWalk
   group := groupSrc unitWalk
   iface := Out.iface
@@ -376,10 +436,12 @@ def edit3 : Cls → Src
   | M => { decl := { decls := [(m, .string)] } }
   | c => base c
 
-def dummy : Compiler.State Cls Out K := { out := fun _ => ⟨⟨{}, []⟩, []⟩, U := fun _ => ∅ }
+def dummy : Compiler.State Cls Out K :=
+  { out := fun _ => ⟨⟨{ name := "" }, []⟩, []⟩, U := fun _ => ∅ }
 
-def initL (C : Compiler Cls Src Out Iface K Iface Q Ans) (src : Cls → Src) := C.round src allCls dummy
-def initG (src : Cls → Src) := Mk.round src allCls dummy
+def initL (C : Compiler Cls USrc Out Iface K H Q Ans) (src : Cls → Src) :=
+  C.round (lowerAll src) allCls dummy
+def initG (src : Cls → Src) := Mk.round (lowerAll src) allCls dummy
 
 /-- Everything we want to know about a run: the invalidated clients (units recompiled after
 round 0), the number of rounds, and whether the result is the clean build. -/
@@ -391,20 +453,21 @@ structure Report where
 
 def all : List Cls := [A, B, M, C, X, Y, Z]
 
-def reportL (Cp : Compiler Cls Src Out Iface K Iface Q Ans) (P : Compiler.Policy Cls Out K)
+def reportL (Cp : Compiler Cls USrc Out Iface K H Q Ans) (P : Compiler.Policy Cls Out K)
     (src₀ src₁ : Cls → Src) (R₀ : Finset Cls) : Option Report :=
   let s₀ := initL Cp src₀
-  (runL Cp allCls src₁ P 9 0 ∅ R₀ s₀).map fun r =>
+  (runL Cp allCls (lowerAll src₁) P 9 0 ∅ R₀ s₀).map fun r =>
     { recompiled := all.filter fun c => c ∈ r.compiled ∧ c ∉ R₀
       rounds := r.rounds
-      clean := all.all fun c => r.state.out c == (Cp.cleanFrom allCls src₁ s₀) c }
+      clean := all.all fun c => r.state.out c == (Cp.cleanFrom allCls (lowerAll src₁) s₀) c }
 
 def reportG (stale : Bool) (src₀ src₁ : Cls → Src) (R₀ : Finset Cls) : Option Report :=
   let s₀ := initG src₀
-  (runG Mk allCls src₁ stale 9 0 ∅ R₀ s₀).map fun r =>
+  (runG Mk allCls (lowerAll src₁) stale 9 0 ∅ R₀ s₀).map fun r =>
     { recompiled := all.filter fun c => c ∈ r.compiled ∧ c ∉ R₀
       rounds := r.rounds
-      clean := all.all fun c => r.state.out c == (groupSrc unitWalk allCls src₁ (Mk.env s₀)) c }
+      clean := all.all fun c =>
+        r.state.out c == (groupSrc unitWalk allCls (lowerAll src₁) (Mk.env s₀)) c }
 
 
 /-! ### Scenario 1: `A.m : Int → String`; clients `X (B.m)`, `Y (C.m)`, `Z (B.g)`
