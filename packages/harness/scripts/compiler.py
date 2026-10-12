@@ -79,8 +79,7 @@ def scala_classes(version, java_home):
         cp = coursier_cp(f'org.scala-lang:scala3-compiler_3:{version}')
         main = 'dotty.tools.dotc.Main'
     else:
-        binary = '.'.join(version.split('.')[:2])
-        srcs = [os.path.join(SERVER, 'ScalacBackend.scala'), os.path.join(SERVER, f'Compat_{binary}.scala')]
+        srcs = [os.path.join(SERVER, 'ScalacBackend.scala')]
         cp = coursier_cp(f'org.scala-lang:scala-compiler:{version}')
         main = 'scala.tools.nsc.Main'
     def build(d):
