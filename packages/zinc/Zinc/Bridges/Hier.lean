@@ -4,8 +4,8 @@ import IncComp.NonLocal
 # Members vs decls vs Merkle, on a toy class hierarchy
 
 Classes with one type parameter, parents with a type argument (`asSeenFrom`), declared members,
-and clients that select members. Member lookup is a linearization walk (right-to-left over the
-parents, Scala-style: the last mixin wins), with misses recorded.
+and clients that select members. Member lookup follows Scala's linearization (each class once, the
+last mixin first), with misses recorded; `HierShared` checks it against the shared semantics.
 
 Three ways to hash an inherited member, as three `Compiler` instances over the same language:
 
@@ -106,25 +106,44 @@ def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 @[simp] theorem run_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).run e = e (c, q) := rfl
 @[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).trace e = [(c, q)] := rfl
 
-/-! ## The linearization walk -/
+/-! ## The linearization walk
 
-def walkWith (r : Cls → Ty → T (Option Ty)) : List (Cls × Ty) → T (Option Ty)
+Scala's linearization, as `Scala.lin` computes it: `L(C) = C, L(Pn) +⃗ … +⃗ L(P1)`, each class
+once, a parent's type argument instantiated on the way down (`asSeenFrom`). Lookup is the first
+class along it that declares the name, misses recorded. `HierShared` checks it against the shared
+semantics. -/
+
+/-- Merge the linearizations of `ps` (left to right) onto `acc`: a later parent's classes go first,
+and a class already in `acc` is not repeated. -/
+def mergeWith (lin : Cls → Ty → T (List (Cls × Ty))) (arg : Ty) :
+    List (Cls × Ty) → List (Cls × Ty) → T (List (Cls × Ty))
+  | acc, [] => pure acc
+  | acc, (p, parg) :: rest => do
+    let lp ← lin p (Ty.subst arg parg)
+    mergeWith lin arg (lp.filter (fun e => !acc.any (·.1 == e.1)) ++ acc) rest
+
+/-- The linearization of `c` applied to `arg`, the class first, each with its type argument. -/
+def linT : ℕ → Cls → Ty → T (List (Cls × Ty))
+  | 0, c, arg => pure [(c, arg)]
+  | fuel + 1, c, arg => do
+    match ← askQ c .parents with
+    | .ps ps => do
+      let acc ← mergeWith (linT fuel) arg [] ps
+      pure ((c, arg) :: acc)
+    | _ => pure [(c, arg)]
+
+/-- The first class of `l` that declares `n`, its declared type instantiated. -/
+def firstDecl (n : Name) : List (Cls × Ty) → T (Option Ty)
   | [] => pure none
-  | (p, parg) :: rest => do
-    match ← r p parg with
-    | some t => pure (some t)
-    | none => walkWith r rest
+  | (d, a) :: rest => do
+    match ← askQ d (.decl n) with
+    | .ty (some t) => pure (some (Ty.subst a t))
+    | _ => firstDecl n rest
 
 /-- Resolve member `n` of `c`, as seen with type argument `arg`. -/
-def resolve : ℕ → Cls → Name → Ty → T (Option Ty)
-  | 0, _, _, _ => pure none
-  | fuel + 1, c, n, arg => do
-    match ← askQ c (.decl n) with
-    | .ty (some t) => pure (some (Ty.subst arg t))
-    | _ =>
-      match ← askQ c .parents with
-      | .ps ps => walkWith (fun p parg => resolve fuel p n (Ty.subst arg parg)) ps.reverse
-      | _ => pure none
+def resolve (fuel : ℕ) (c : Cls) (n : Name) (arg : Ty) : T (Option Ty) := do
+  let l ← linT fuel c arg
+  firstDecl n l
 
 /-! ## Per-unit tasks -/
 
@@ -141,11 +160,13 @@ def unitWalk (s : Src) : T Out := do
   let ts ← selects s.body
   pure ⟨⟨s.decl, []⟩, ts⟩
 
-/-- Materialise one member of a class from its own decls, else by walking its parents. -/
+/-- Materialise one member of a class from its own decls, else along its parents' linearization. -/
 def resolveFrom (d : Decl) (n : Name) : T (Option Ty) :=
   match (d.decls.filter (·.1 = n)).head? with
   | some (_, t) => pure (some t)
-  | none => walkWith (fun p parg => resolve 3 p n parg) d.parents.reverse
+  | none => do
+    let l ← mergeWith (linT 3) .param [] d.parents
+    firstDecl n l
 
 def selectsMat : List (Cls × Name) → T (List (Option Ty))
   | [] => pure []

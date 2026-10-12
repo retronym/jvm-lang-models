@@ -20,48 +20,71 @@ open Query.Task
 /-! ## Traces of the walk -/
 
 /-- The walk only asks `decl` and `parents`. -/
-theorem trace_walkWith (r : Cls → Ty → T (Option Ty)) (e : Env)
-    (hr : ∀ p parg q, q ∈ (r p parg).trace e → (∃ n, q.2 = .decl n) ∨ q.2 = .parents) :
-    ∀ ps q, q ∈ (walkWith r ps).trace e → (∃ n, q.2 = .decl n) ∨ q.2 = .parents := by
+def Walky (q : Cls × Q) : Prop := (∃ n, q.2 = .decl n) ∨ q.2 = .parents
+
+theorem trace_mergeWith (lin : Cls → Ty → T (List (Cls × Ty))) (arg : Ty) (e : Env)
+    (hlin : ∀ p parg q, q ∈ (lin p parg).trace e → Walky q) :
+    ∀ ps acc q, q ∈ (mergeWith lin arg acc ps).trace e → Walky q := by
   intro ps
   induction ps with
-  | nil => intro q hq; simp [walkWith] at hq
+  | nil => intro acc q hq; simp [mergeWith] at hq
   | cons p rest ih =>
-    intro q hq
+    intro acc q hq
     obtain ⟨c, parg⟩ := p
-    simp only [walkWith, bind_eq, trace_bind, List.mem_append] at hq
+    simp only [mergeWith, bind_eq, trace_bind, List.mem_append] at hq
     rcases hq with hq | hq
-    · exact hr c parg q hq
-    · split at hq
-      · simp at hq
-      · exact ih q hq
+    · exact hlin c _ q hq
+    · exact ih _ q hq
 
-theorem trace_resolve (e : Env) : ∀ fuel c n arg q, q ∈ (resolve fuel c n arg).trace e →
-    (∃ n, q.2 = .decl n) ∨ q.2 = .parents := by
+theorem trace_linT (e : Env) : ∀ fuel c arg q, q ∈ (linT fuel c arg).trace e → Walky q := by
   intro fuel
   induction fuel with
-  | zero => intro c n arg q hq; simp [resolve] at hq
+  | zero => intro c arg q hq; simp [linT] at hq
   | succ fuel ih =>
-    intro c n arg q hq
-    simp only [resolve, bind_eq, trace_bind, trace_askQ, List.singleton_append, List.mem_cons] at hq
+    intro c arg q hq
+    simp only [linT, bind_eq, trace_bind, trace_askQ, List.singleton_append, List.mem_cons] at hq
+    rcases hq with rfl | hq
+    · exact Or.inr rfl
+    · split at hq
+      · simp only [trace_bind, List.mem_append] at hq
+        rcases hq with hq | hq
+        · exact trace_mergeWith _ arg e (fun p parg q hq => ih p parg q hq) _ _ q hq
+        · simp at hq
+      · simp at hq
+
+theorem trace_firstDecl (e : Env) (n : Name) : ∀ l q, q ∈ (firstDecl n l).trace e → Walky q := by
+  intro l
+  induction l with
+  | nil => intro q hq; simp [firstDecl] at hq
+  | cons p rest ih =>
+    intro q hq
+    obtain ⟨d, a⟩ := p
+    simp only [firstDecl, bind_eq, trace_bind, trace_askQ, List.singleton_append,
+      List.mem_cons] at hq
     rcases hq with rfl | hq
     · exact Or.inl ⟨n, rfl⟩
     · split at hq
       · simp at hq
-      · simp only [bind_eq, trace_bind, trace_askQ, List.singleton_append, List.mem_cons] at hq
-        rcases hq with rfl | hq
-        · exact Or.inr rfl
-        · split at hq
-          · exact trace_walkWith _ e (fun p parg q hq => ih p n _ q hq) _ q hq
-          · simp at hq
+      · exact ih q hq
+
+theorem trace_resolve (e : Env) (fuel : ℕ) (c : Cls) (n : Name) (arg : Ty) :
+    ∀ q, q ∈ (resolve fuel c n arg).trace e → Walky q := by
+  intro q hq
+  simp only [resolve, bind_eq, trace_bind, List.mem_append] at hq
+  rcases hq with hq | hq
+  · exact trace_linT e fuel c arg q hq
+  · exact trace_firstDecl e n _ q hq
 
 theorem trace_resolveFrom (e : Env) (d : Decl) (n : Name) :
-    ∀ q ∈ (resolveFrom d n).trace e, (∃ n, q.2 = .decl n) ∨ q.2 = .parents := by
+    ∀ q ∈ (resolveFrom d n).trace e, Walky q := by
   intro q hq
   simp only [resolveFrom] at hq
   split at hq
   · simp at hq
-  · exact trace_walkWith _ e (fun p parg q hq => trace_resolve e 3 p n parg q hq) _ q hq
+  · simp only [bind_eq, trace_bind, List.mem_append] at hq
+    rcases hq with hq | hq
+    · exact trace_mergeWith _ _ e (fun p parg q hq => trace_linT e 3 p parg q hq) _ _ q hq
+    · exact trace_firstDecl e n _ q hq
 
 theorem trace_selectsMat (e : Env) : ∀ body q, q ∈ (selectsMat body).trace e →
     ∃ n, q.2 = .members n := by
