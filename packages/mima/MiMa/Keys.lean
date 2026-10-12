@@ -2,7 +2,7 @@ import MiMa.Edits
 /-!
 # MiMa as a bridge design: keys, covering, and its gaps
 
-In `DESIGN-spec.md`'s terms, MiMa is a bridge between two versions of a library. Its *keys* are
+In `docs/DESIGN-spec.md`'s terms, MiMa is a bridge between two versions of a library. Its *keys* are
 what it compares (`Key`, per class public in the old library); a key's comparison is `check`,
 which reports problems; and `mima` reports every key's problems. A client's linkage *queries* are
 `Jvm.Q`: a class's header, whether it declares a method or a field, its declared methods. A key
@@ -18,8 +18,8 @@ has a footprint query whose answer changed (`miss_changes_footprint`); so every 
 
 MiMa compares by a relation, not by equality (an added method is a changed answer, and fine), so
 abstraction is "the comparison is strong enough for linking", not "equal facts". The witnesses
-below are confirmed on HotSpot 21, 25 and 27 by `probes/jvm`, and MiMa 1.2.1 reports nothing for
-each (`probes/mima`).
+below are confirmed on HotSpot 21, 25 and 27 by `packages/jvm/probes`, and MiMa 1.2.1 reports nothing for
+each (`packages/mima/probes`).
 -/
 
 namespace BinCompat
@@ -161,7 +161,7 @@ example : protectedRemoved.missed = true ∧ protectedRemoved.uncovered (.method
   decide +kernel
 
 /-- The `mima` field of each `Jvm` catalogue case is the first problem the model of MiMa reports
-(which MiMa itself reports too: `probes/mima`). -/
+(which MiMa itself reports too: `packages/mima/probes`). -/
 example : (all ++ j3).all (fun k => k.mima == ((mima k.v0 k.v1).head?.map Problem.name)) = true := by
   decide +kernel
 

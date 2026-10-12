@@ -1,5 +1,5 @@
 """Fails if a `theorem` or `lemma` is proved by `native_decide`: those are checks (`example`,
-`check_`), not theorems (DESIGN-spec.md)."""
+`check_`), not theorems (docs/DESIGN-spec.md)."""
 import glob, re, sys
 
 DECL = re.compile(

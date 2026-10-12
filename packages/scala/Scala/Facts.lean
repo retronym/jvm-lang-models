@@ -7,7 +7,7 @@ same compiler run (`View.inRun`), not only on their interfaces. Under Scala 3 a 
 trait whose only initialisers are a `lazy val` or an extension method calls the trait's `$init$`
 when compiled with it and not when compiled apart from it; the trait's classfile has the `$init$`
 either way. So the per-unit result is not a function of the interfaces read, which is the
-`comp` obligation (`REVIEW-2026-10-11.md`, finding 3), and no key on the trait's API repairs it.
+`comp` obligation (`docs/REVIEW-2026-10-11.md`, finding 3), and no key on the trait's API repairs it.
 Scala 2 calls `$init$` either way.
 -/
 

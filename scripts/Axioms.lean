@@ -68,7 +68,7 @@ import Links.ZincBridgeLibs
 #print axioms Zinc.SplitProof.Spec.g_narrowed_obligations
 #print axioms Zinc.SplitProof.Spec.g12_today
 #print axioms Zinc.TCompiler.downstream_sound
--- the shared asSeenFrom (Scala/AsSeenFrom.lean) and T1 for lowering
+-- the shared asSeenFrom (packages/scala-types/ScalaTypes/AsSeenFrom.lean) and T1 for lowering
 #print axioms AsSeenFrom.compose
 #print axioms AsSeenFrom.chain_is_single
 #print axioms Scala.lower_congr

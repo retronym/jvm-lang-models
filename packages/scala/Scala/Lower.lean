@@ -13,7 +13,7 @@ says an environment that agrees on it gives the same classfiles.
 The output is a `Jvm.Classfile` (`ClassOut.toJvm`) plus what `Jvm` does not model yet: fields,
 access, `ACC_BRIDGE`, and the invoke instructions of synthesized bodies (forwarders, bridges,
 `$init$` calls). Those are compared with scalac's classfiles by the calibration probe
-(`probes/scala`).
+(`packages/scala/probes`).
 
 The rules are scalac 2.13's; where 2.12 or Scala 3 differs, the code branches on `Dialect` and says so.
 -/
@@ -126,7 +126,7 @@ def setterName (t : String) (v : String) : String := s!"{t}$_setter_${v}_$eq"
 to initialise; here, a concrete `val`. Also, *when the trait is compiled in the same run*, if it has
 a `lazy val` or an extension method (even an abstract one). Read from TASTy, such a trait has
 `NoInits`, so a subclass compiled apart from it does not call the `$init$` the trait has (F6 in
-`PLAN.md`; the extension case is new). -/
+`docs/PLAN.md`; the extension case is new). -/
 def hasInit (dl : Dialect) (inRun : Bool) (t : Decl) : Bool :=
   match dl with
   | .s212 | .s213 => t.members.any (!·.abs)

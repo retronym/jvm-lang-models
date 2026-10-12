@@ -1,10 +1,10 @@
 # A repository for the models: JVM, Java, Scala, incremental compilation, Zinc, MiMa, IntelliJ
 
-Status: accepted 2026-10-12 (name `jvm-lang-models`, public, one toolchain for the workspace). Step 1 done; the rest is TODO.
+Status: accepted 2026-10-12 (name `jvm-lang-models`, public, one toolchain for the workspace). Steps 1–7 done; step 8, in retronym/talks, is a later pass.
 
 ## Problem
 
-The Lean model started on 8 October as a check of one Zinc design and lives in `talks/zinc-incrementality/lean/`. Four days later it is about 27,000 lines, with layers for the JVM, Java, Scala and MiMa beside the Zinc work. A second, smaller model of `asSeenFrom` for IntelliJ lives in `retronym/scala-type-system-tck/lean/` and shares a vendored copy of `Scala/AsSeenFrom.lean`. Keeping all of this inside a talks repository causes four problems:
+The Lean model started on 8 October as a check of one Zinc design and lives in `talks/zinc-incrementality/lean/`. Four days later it is about 27,000 lines, with layers for the JVM, Java, Scala and MiMa beside the Zinc work. A second, smaller model of `asSeenFrom` for IntelliJ lives in `retronym/scala-type-system-tck/lean/` and shares a vendored copy of `packages/scala-types/ScalaTypes/AsSeenFrom.lean`. Keeping all of this inside a talks repository causes four problems:
 
 - **No home for the general parts.** `Jvm`, `Java` and `Scala` are not about Zinc, but they import `Zinc.Task` because that is where the query-tree core happens to live. A reader looking for "a model of JVM linkage" will not look in a talk directory.
 - **No reuse without copying.** The TCK vendors `AsSeenFrom.lean` and can drift from it. Any other consumer (a compiler's test suite, another IDE) would have to do the same, and would pull in Mathlib to get a file that does not need it.
@@ -48,7 +48,7 @@ flowchart BT
 
 | package | what it answers | from today | lines today | Mathlib |
 |---|---|---|---|---|
-| `Query` | what a computation that asks questions is, and why recording its trace is enough (T1) | `Zinc/Task.lean`, the dump helpers | ~90 | no |
+| `Query` | what a computation that asks questions is, and why recording its trace is enough (T1) | `packages/query/Query/Task.lean`, the dump helpers | ~90 | no |
 | `Jvm` | when a classfile links against a library, and to which method | `Jvm/` | 1,370 | today `List.dedup` only; aim for no |
 | `Java` | what javac emits for a Java subset; JLS chapter 13 | `Java/` | 1,147 | no |
 | `ScalaTypes` | types, `asSeenFrom`, and later linearization and membership, as scalac computes them | `Scala/AsSeenFrom`, `Syntax`; `Members` once it no longer imports `Lower` | ~430 | no |
@@ -62,7 +62,7 @@ flowchart BT
 
 Inside `Zinc`, the instances group by what the reader is looking for, not by phase number: `Zinc.Loop` (the policies, `transitiveStep`, subprojects, classpath, pipelining), `Zinc.Bridges` (Scala 2 as seen from, Scala 3 as declared, Merkle, bridge-side hashing), and `Zinc.Features` (names, implicits and givens, erasure, inline and opaque types, macros, annotations, SAM, Java, sealed, companions). The phase numbers stay in the documents as history.
 
-Each package carries the same files: a `README.md` (the question it answers, its key definitions and theorems, its calibration, its gaps), the Lean, its probes if it has a real tool, and a `docs/` folder for its PLAN and track notes. The cross-cutting documents (`BUG-MAP.md`, the catalogues, `DESIGN-spec.md`, the reviews) go to the root `docs/`.
+Each package carries the same files: a `README.md` (the question it answers, its key definitions and theorems, its calibration, its gaps), the Lean, its probes if it has a real tool, and a `docs/` folder for its PLAN and track notes. The cross-cutting documents (`docs/BUG-MAP.md`, the catalogues, `docs/DESIGN-spec.md`, the reviews) go to the root `docs/`.
 
 **Repository name.** Something that does not say Zinc or Scala alone. Candidates: `retronym/jvm-lang-models`, `retronym/build-semantics`, `retronym/models`. My recommendation is `jvm-lang-models`: it names the platform that ties the layers together and leaves room for Kotlin or Bazel later.
 
@@ -84,7 +84,7 @@ Each step builds and keeps the talks' links working.
 - DONE 4. Split `IncComp` from `Zinc`. `packages/inc-comp/` holds the framework (`Model`, `General`, `Soundness`, `Tree`, `Uniqueness`, `Termination`, `NonLocal`, `NonLocalAns`, `Stale`, `Classpath`); `packages/zinc/` holds Zinc as instances, grouped as `Zinc.Loop` (`PingPong`, `Cycles`, `Snapshot`, `PipelineLifecycle`, `Files`), `Zinc.Bridges` (`Hier`, `HierSound`, `Flat`, `FlatRules`, `HashForms`, `Naming`, `ExtraHash`, `Companions`) and `Zinc.Features` (the rest), plus `ZincNames`. The per-variant loops are retired: `TCompiler`'s `round`, `invalidated` and `zinc`, `GCompiler`'s `round`, and `NCompiler`'s `round` and `zinc` are now the general form's on the lift `toX`, so `zinc_toX` and `invalidated_toX` are `rfl` where they were inductions; `round_out` replaces unfolding a round. Kept on purpose: `Compiler`'s loop, which `XCompiler` is defined over (`State`, `Policy`) and which the talks present as the readable definition; and the `invalidated` of `GCompiler` and `NCompiler`, which take the domain `Δ` is diffed over as a parameter, because comparing domains is what T2-stale is about. Checked: `lake exe exhaustive erasure`, `pingpong` and `implicit` reproduce the published numbers exactly.
 - DONE 5. Split `MiMa` and `Links` out of `BinCompat`. `packages/mima/` (`Mima`, `Edits`, `Keys`, `Fixed`, and `Sound` outside the default target) needs only `jvm` and Mathlib; `packages/links/` (`ZincBridge`, `ZincBridgeKeys`, `ZincBridgeLibs`, `ZincBridgeScala3`) needs `inc-comp` and `scala`, not Zinc's instances or MiMa. The Lean namespace stays `BinCompat` for now.
 - DONE 6. Bring in the TCK's `lean/` with its history as `IntelliJ`. `git filter-repo` moved the TCK's `lean/` (its `main` plus the `claude/shared-asf` commit) to `packages/intellij/`, merged here unrelated-history. The library is `IntelliJ` (`AsSeenFrom/IntelliJ.lean` became `IntelliJ/Plugin.lean`); the vendored `Shared.lean` is gone and `IntelliJ.Port` imports `ScalaTypes.AsSeenFrom`. The TCK's `lean/` now pins and builds this package by `git … subDir` (retronym/scala-type-system-tck#9); Lake resolves `intellij`'s path dependencies (`scala-types`, `query`) inside the checkout. When `split-packages` merges, bump that pin to the merge commit.
-- TODO 7. Move `probes/` and `scripts/` into `Harness` and the per-package folders; move documents to `docs/`.
+- DONE 7. Move `probes/` and `scripts/` into `Harness` and the per-package folders; move documents to `docs/`. Each layer's probes are in `packages/<layer>/probes/` (the Python probes find the repository root as `../../..`); the executables are in `packages/harness/Harness/` (`BinCompatMain` is now `MimaMain`; executable names are unchanged, and `lake exe <name>` at the root finds them) with the analysis scripts in `packages/harness/scripts/`; the trust scripts stay in `scripts/`. Cross-cutting documents are in `docs/`, per-layer plans in each package's `docs/`, and every mention of a moved document or Lean file now carries its new path. Each package has a README card (question, start here, calibration, gaps, files); the root README is the map. CI builds the workspace, each Mathlib-free package on its own, and `MiMa.Sound` on `main`.
 - TODO 8. In the talks repo: replace `zinc-incrementality/lean/` with a README that points to the new repository, pin a commit in each talk, add the name check.
 
 `zinc-lean/lean/` (the primer, and the V1 and V2 snapshots) stays in the talks repo: it is slide material, frozen on purpose.
@@ -97,7 +97,7 @@ Full verification of javac, scalac or HotSpot is out of reach and is not the use
 
 1. **Translation validation at scale.** The probes already check that the model's lowering agrees with scalac on about 1,350 programs per version, and its linkage with HotSpot on 58,400. The next step is to run the same comparison on real code: lower each class of a real build in the model, compare with the classfiles the compiler produced, and treat every disagreement as either a model bug or a compiler bug. That is what `IncBench --verify` did for Zinc on Spark's catalyst, one layer down.
 2. **Check the bridge, not the compiler.** The obligations are about what the compiler *records*, so the compiler need not be verified to check them. Log the queries a real compiler run makes (lookups, misses included), and check the bridge's recorded keys against the log with `coverage` as the oracle. This finds a missing key before anyone writes a test, and it is the one check the model cannot do on its own. retronym/zinc#54 does a version of it against keys the model predicts.
-3. **Specify the parts compilers share.** JLS chapter 13 (binary compatibility) is already stated in `Java/Jls13.lean`. The same can be done for the parts of SLS that the TCK's `SPEC-GAPS.md` finds underspecified (`asSeenFrom`, base type sequences), with scalac as the reference. These become tests that both scalac and dotc, and IntelliJ, must pass.
+3. **Specify the parts compilers share.** JLS chapter 13 (binary compatibility) is already stated in `packages/java/Java/Jls13.lean`. The same can be done for the parts of SLS that the TCK's `SPEC-GAPS.md` finds underspecified (`asSeenFrom`, base type sequences), with scalac as the reference. These become tests that both scalac and dotc, and IntelliJ, must pass.
 
 ### A model of bytecode
 
@@ -106,7 +106,7 @@ Today `Jvm` models linkage (resolution, selection, access) but runs no code (ROA
 - **Method bodies as call sites.** A method is a list of the sites it invokes and the fields it reads. That is enough to judge MiMa's 17 unjudged `ReversedMissingMethodProblem` reports and nestmate changes, and it needs no operand stack.
 - **Constants and inlining.** Folded constants and inlined bodies at the client: what scalac's `@inline` and dotc's `inline` put into a client's bytecode, which Zinc must treat as API.
 - **The verifier.** Type-checking bytecode against its `StackMapTable`: the step where a stale classfile becomes a `VerifyError` rather than a `NoSuchMethodError`. Existing formalisations to borrow from: Jinja and JinjaThreads (Isabelle), Bicolano (Coq), the ACL2 JVM models (M1–M6). None is in Lean.
-- **An importer, not a parser.** Read real classfiles with the JDK's Classfile API (`java.lang.classfile`) in a probe and emit the model's JSON, as `probes/jvm` already does for its cases. A classfile parser in Lean is not needed for any of the questions above.
+- **An importer, not a parser.** Read real classfiles with the JDK's Classfile API (`java.lang.classfile`) in a probe and emit the model's JSON, as `packages/jvm/probes` already does for its cases. A classfile parser in Lean is not needed for any of the questions above.
 
 ### Other directions
 
@@ -122,7 +122,7 @@ A 27,000-line model is read by people who arrive with a question: a bug they hit
 
 - **Start from the reader's question.** The root README has a "start here, by goal" section (understand the theory, add a feature, test Zinc, binary compatibility). Keep it, and add one entry per package: "I maintain javac / scalac / MiMa / the IntelliJ plugin".
 - **One card per package.** Each package README has the same five parts: the question it answers; at most five definitions and five theorems, each with a one-line statement in prose and its hypotheses; what it is calibrated against and how many programs agree; known gaps; where to start reading.
-- **Enter from a known bug.** `BUG-MAP.md` already maps 145 real bugs to the part of the model that expresses them. Make it the index: a reader who knows sbt/zinc#1796 finds `ExtraHash.lean` and the theorem stating its fix.
+- **Enter from a known bug.** `docs/BUG-MAP.md` already maps 145 real bugs to the part of the model that expresses them. Make it the index: a reader who knows sbt/zinc#1796 finds `ExtraHash.lean` and the theorem stating its fix.
 - **One template for every instance.** Every feature instance has the same shape: the compiler's algorithm as a task, today's bridge as keys, the bug as a witness, the fix as keys with the obligations proved. Document the shape once, with `Sam.lean` as the worked example, and a reader who has read one instance can read all of them.
 - **Statements before proofs.** Put each file's definitions and theorem statements first and the proofs after, or in a separate `Proofs` module, so the statements read as a specification. Lean has no signature files; a `Spec` module per package that re-states the key theorems with `#check` and a doc comment does the same job.
 - **Generated, not hand-maintained, numbers.** Sizes, theorem and example counts per facet, calibration counts, the axioms report and the `native_decide` lint run in CI and write one status page. Hand-written numbers went stale within days twice this week.
@@ -138,3 +138,13 @@ A 27,000-line model is read by people who arrive with a question: a bug they hit
 3. Lean and Mathlib versions: pin per package, or one toolchain for the workspace? One toolchain is simpler; per-package pins only matter once outsiders depend on a package.
 4. Should `Query` be proposed somewhere more general, for example as a small library alongside other build-system formalisations, or stay internal?
 5. Keep the phase numbers in file names and docs, or retire them now that features are grouped by topic?
+
+## As built
+
+The layout differs from the proposal above in small ways, each forced by the code:
+
+- Packages live under `packages/`, not at the root: on a case-insensitive file system `jvm/` and the module directory `Jvm/` are the same directory.
+- `scala-types` holds more than `asSeenFrom`: `Members` needs desugaring and the resolution half of the old `Lower`, so `Syntax`, `Desugar` and a new `Resolve` moved with it. It still needs no Mathlib.
+- `mima` needs only `jvm`, and `links` needs `inc-comp` and `scala`, not Zinc's instances or MiMa.
+- Lean namespaces are unchanged (`Zinc`, `BinCompat`, `Scala`): only module paths moved. Renaming namespaces to match the packages is a separate, mechanical change.
+- `Compiler`'s own loop stays, as the readable definition `XCompiler` is built over; the domain-parameterised `invalidated` of `GCompiler` and `NCompiler` stays, because comparing domains is what T2-stale is about.

@@ -2,7 +2,7 @@ import MiMa.Keys
 /-!
 # A corrected rule set
 
-MiMa's keys plus four, one per gap in `BinCompat/Keys.lean`:
+MiMa's keys plus four, one per gap in `packages/mima/MiMa/Keys.lean`:
 
 * `resolveMethod c n d`, `resolveField c n d`: for a public class `c` of the old library and every
   name and descriptor, the member a client's reference *through `c`* resolves to (JVMS §5.4.3.2–4,
@@ -16,7 +16,7 @@ MiMa's keys plus four, one per gap in `BinCompat/Keys.lean`:
   new default can conflict; in the model's client space, clients implement only library interfaces.
 
 Soundness on the space: every edit in `BinCompat.edits` that breaks a client of `spaceB` is
-reported. Checked by kernel `decide` (enumeration as testing, per `DESIGN-spec.md`; not a proof for
+reported. Checked by kernel `decide` (enumeration as testing, per `docs/DESIGN-spec.md`; not a proof for
 all libraries).
 -/
 
@@ -125,7 +125,7 @@ example : [finalField, shadowStatic, shadowField, overridePrivate, ifaceField, d
     protectedRemoved].all
     (fun x => fixedReports x.o x.n) = true := by decide +kernel
 
-/-! ## The edit space, indexed for `BinCompat/Sound.lean` -/
+/-! ## The edit space, indexed for `packages/mima/MiMa/Sound.lean` -/
 
 
 def baseOf : ℕ → Lib | 1 => base1 | _ => base2

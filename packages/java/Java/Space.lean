@@ -2,8 +2,8 @@ import Java.Lower
 /-!
 # Bounded program spaces for calibrating lowering against javac
 
-Enumeration here is testing (`DESIGN-spec.md`): `JavaProbe` prints each program as Java source
-and its lowered classfiles, and `probes/java/probe.py` diffs those against javac's.
+Enumeration here is testing (`docs/DESIGN-spec.md`): `JavaProbe` prints each program as Java source
+and its lowered classfiles, and `packages/java/probes/probe.py` diffs those against javac's.
 
 * `ifaceSpace`: an interface with abstract, default, static and private methods and a constant,
   implemented by a class or an abstract class.

@@ -43,37 +43,13 @@ name = "intellij"
 path = "packages/intellij"
 
 [[require]]
+name = "harness"
+path = "packages/harness"
+
+[[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.1"
-
-[[lean_exe]]
-name = "exhaustive"
-root = "Exhaustive"
-
-[[lean_exe]]
-name = "conformance"
-root = "Conformance"
-
-[[lean_exe]]
-name = "jconformance"
-root = "JConformance"
-
-[[lean_exe]]
-name = "jvmcases"
-root = "JvmCases"
-
-[[lean_exe]]
-name = "scalaprobe"
-root = "ScalaProbe"
-
-[[lean_exe]]
-name = "javaprobe"
-root = "JavaProbe"
-
-[[lean_exe]]
-name = "bincompat"
-root = "BinCompatMain"
 
 [[lean_lib]]
 name = "All"

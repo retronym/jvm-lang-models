@@ -3,7 +3,7 @@ import Jvm.Catalogue
 # JSON dump of catalogue cases, for the HotSpot probe
 
 One JSON object per line: the case's class tables, the client program, and the model's outcome
-before and after. `probes/jvm` renders the classfiles and checks the outcomes on a JVM.
+before and after. `packages/jvm/probes` renders the classfiles and checks the outcomes on a JVM.
 -/
 
 namespace Jvm.Dump

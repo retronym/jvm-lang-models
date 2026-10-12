@@ -5,7 +5,7 @@ import Jvm.Link
 Each case is a library edit (`v0` → `v1`) and a client compiled against `v0`. The client's
 classes and sites are fixed; only the library's classfiles change. Each case states the outcome
 before and after, by kernel `decide` (no `native_decide`), and names the MiMa problem that reports it where there is one.
-`lake exe jvmcases` dumps the cases; `probes/jvm` renders them to classfiles and checks the outcomes on
+`lake exe jvmcases` dumps the cases; `packages/jvm/probes` renders them to classfiles and checks the outcomes on
 HotSpot.
 
 Classes: `A`, `B` (library classes), `I`, `J` (library interfaces), `X` (the client's class).
@@ -363,7 +363,7 @@ def j3 : List Case :=
 
 /-! ## Track J5: sealed classes and constructors
 
-Every class here declares its constructors, so `probes/jvm` renders exactly those (and no default
+Every class here declares its constructors, so `packages/jvm/probes` renders exactly those (and no default
 `()V`); each keeps a public `()V`, which `new` and subclasses' constructors call. -/
 
 def ctor0 : N × D × MethodInfo := (.init, .v, inst)

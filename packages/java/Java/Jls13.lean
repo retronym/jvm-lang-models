@@ -3,8 +3,8 @@ import Java.Catalogue
 # JLS chapter 13, checked against `Jvm` linkage
 
 Each example takes a rule of JLS chapter 13 (binary compatibility) and checks it on a case of
-`Java/Catalogue.lean`: the library and client are lowered with `Java.lower` (calibrated against
-javac by `probes/java`), then linked with `Jvm.outcome`. Where the client's linkage footprint is
+`packages/java/Java/Catalogue.lean`: the library and client are lowered with `Java.lower` (calibrated against
+javac by `packages/java/probes`), then linked with `Jvm.outcome`. Where the client's linkage footprint is
 unchanged by the edit, compatibility is `Jvm.compatible_of_footprint` rather than a run.
 All by kernel `decide`.
 

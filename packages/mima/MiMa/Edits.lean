@@ -11,7 +11,7 @@ non-constant interface field, an abstract static method, …) or a cyclic hierar
 
 Clients are `Jvm.Clients.space3` with `X` also implementing `J` and `I, J`, and the `m()I` call
 sites of `Jvm.Clients.space`. This is the space MiMa's verdicts are compared on; enumeration
-here is testing, per `DESIGN-spec.md`.
+here is testing, per `docs/DESIGN-spec.md`.
 -/
 
 namespace BinCompat

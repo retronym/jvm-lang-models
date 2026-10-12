@@ -21,7 +21,7 @@ and an abstract member left in a concrete class.
 The member a selection runs is the group's first concrete member along the linearization
 (`Lower.winner`): a concrete member is never overridden by an abstract one.
 
-`membersSpace` is the calibration space; `probes/scala/members.py` compares its verdicts with
+`membersSpace` is the calibration space; `packages/scala/probes/members.py` compares its verdicts with
 scalac 2.12, 2.13 and dotc 3, including the programs they reject.
 -/
 

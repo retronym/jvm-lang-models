@@ -6,7 +6,7 @@ import Mathlib.Data.Finset.Basic
 A model of `mima-core` 1.2.1's `Analyzer` for the classfiles the `Jvm` catalogue universe can
 express (Java classfiles: no pickles, TASTy, generic signatures or mixin forwarders). It reads the
 old and new library tables only, never a client, and reports problems by MiMa's class names.
-Calibrated against MiMa itself by `probes/mima` (the tables in `PLAN-track-b.md`).
+Calibrated against MiMa itself by `packages/mima/probes` (the tables in `packages/mima/docs/PLAN-track-b.md`).
 
 What MiMa reads, per class `c` that is public in the old library:
 

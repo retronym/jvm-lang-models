@@ -8,7 +8,7 @@ the classpath (TASTy). The faithful joint compilation of a group `G` (`group3`) 
 
 **The obligation that fails is `comp`.** Under Scala 3, lowering a class that mixes in a trait
 whose only initialisers are a `lazy val` or an extension method calls the trait's `$init$` when the
-trait is in the same run and not when it is read from TASTy (F6, `Scala/Facts.lean`). So the output
+trait is in the same run and not when it is read from TASTy (F6, `packages/scala/Scala/Facts.lean`). So the output
 of a unit is not a function of the interfaces it reads: `group3 {T, C}` and `group3 {C}` give `C`
 different classfiles over the same interfaces (`f6_witness`). No per-unit task and no answer
 function can make `comp` hold for `group3` (`not_comp`), whatever the keys.

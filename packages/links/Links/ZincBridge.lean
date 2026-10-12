@@ -3,7 +3,7 @@ import Scala.Catalogue
 /-!
 # Track B4: Zinc-clean implies binary compatible
 
-**The front end.** Scala lowering (`Scala/Lower.lean`) as an `XCompiler` (`General.lean`):
+**The front end.** Scala lowering (`packages/scala/Scala/Lower.lean`) as an `XCompiler` (`General.lean`):
 
 * a unit is a source unit, named;
 * its task is `Scala.lowerSrc`, its queries renamed into the framework's shape (`decl n isObj` asks
@@ -16,7 +16,7 @@ The interface is the declaration, so it is source-determined: the explicit-inter
 Every query is answered as if the definition were in the same compiler run (`View.inRun = true`).
 That is faithful for Scala 2.12 and 2.13, whose lowering ignores `inRun`. For Scala 3, separate
 compilation differs (F6: a trait's `$init$`), which is a failure of compositionality
-(`Scala/Facts.lean`), not something a key repairs.
+(`packages/scala/Scala/Facts.lean`), not something a key repairs.
 
 **A sound bridge** (`searched`): a key per traced query, its hash the declaration it read. It meets
 the obligations (`searched_obligations`), so the hypothesis of the theorem below is satisfiable.

@@ -4,7 +4,7 @@ import Mathlib.Data.Fintype.Basic
 # Scala 3 macro dependencies as a specification
 
 A `TCompiler` instance (`Tree.lean`) on the shape of `InlineOpaqueSpec.lean`, for what a macro
-expansion reads and when dotc records it (`PLAN-macros.md`).
+expansion reads and when dotc records it (`packages/zinc/docs/PLAN-macros.md`).
 
 **The language.** Units (with a static project assignment `proj`) declare public members (a
 signature), macro defs (`macroDef impl f`: an inline def whose body splices `impl.f`),

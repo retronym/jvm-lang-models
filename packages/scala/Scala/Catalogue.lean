@@ -2,7 +2,7 @@ import Scala.Lower
 /-!
 # A catalogue of Scala library edits, lowered and linked
 
-The source-level counterpart of `Jvm/Catalogue.lean`, and the input Track B needs for source-level
+The source-level counterpart of `packages/jvm/Jvm/Catalogue.lean`, and the input Track B needs for source-level
 spaces (Track B3). Each case is a library edit (`v0` → `v1`, Scala sources), client units compiled
 against `v0`, and a JVM program (the classes the client loads and the call sites it executes).
 Library and client are lowered with `Scala.lower`, then linked with `Jvm.outcome`:

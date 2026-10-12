@@ -17,7 +17,7 @@ compatibility asks whether its old classfile still *links* (and selects the same
 the new library. Both are questions about a task's trace against an edited environment.
 
 The model is generic in class, method-name and descriptor types. Calibrated against HotSpot 21, 25
-and 27 by `probes/jvm`. Not modelled: nestmates (private access is same-class only), method bodies
+and 27 by `packages/jvm/probes`. Not modelled: nestmates (private access is same-class only), method bodies
 (a library method's own calls), signature-polymorphic methods, `Object`'s methods in interface
 resolution, loader constraints, class initialisation, protected constructors, modules (all classes are in one), and transitive overriding through an
 intermediate package-private method (§5.4.5's second case). Linking is lazy, as on the JVM: an error is raised by
@@ -105,7 +105,7 @@ theorem agrees_iff (w w' : World C N D) (q : Q C N D) :
     agrees w w' q = true ↔ answer w q = answer w' q := by
   cases q <;> simp only [agrees, answer, decide_eq_true_eq] <;> exact Iff.rfl
 
-/-- The `LinkageError`s the model raises. `probes/jvm/Run.java` maps each to the JVM's class, calibrated on
+/-- The `LinkageError`s the model raises. `packages/jvm/probes/Run.java` maps each to the JVM's class, calibrated on
 HotSpot 21, 25 and 27: `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`s. -/
 inductive LinkError
   | noClassDef

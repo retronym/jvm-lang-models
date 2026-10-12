@@ -2,7 +2,7 @@ import Java.Lower
 /-!
 # A catalogue of Java library edits, lowered and linked
 
-The Java counterpart of `Scala/Catalogue.lean`, and input for Track B's source-level spaces. Each
+The Java counterpart of `packages/scala/Scala/Catalogue.lean`, and input for Track B's source-level spaces. Each
 case is a library edit (`v0` → `v1`, Java declarations), client units compiled against `v0`, and
 a JVM program: the classes the client loads, the sites it executes directly, and client methods
 whose bodies it runs (their `getstatic`s and invokes, read off the client's lowered classfile).
@@ -16,7 +16,7 @@ call sites in both, so `fresh` is meaningful only for cases whose client calls a
 `recompiles` says whether a clean build changes the client's classfiles at all: a constant edit
 changes them although every outcome is the same (JLS §13.4.9).
 
-`Java/Jls13.lean` checks the cases against JLS chapter 13.
+`packages/java/Java/Jls13.lean` checks the cases against JLS chapter 13.
 -/
 
 namespace Java.Catalogue

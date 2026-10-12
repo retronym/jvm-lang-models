@@ -1,7 +1,7 @@
 import IncComp.General
 import Zinc.Features.SplitProof
 /-!
-# Files as a layer (`PLAN-files.md`)
+# Files as a layer (`packages/zinc/docs/PLAN-files.md`)
 
 Zinc recompiles source files and records keys per class. This file adds files to the general form
 `XCompiler` without changing it.
