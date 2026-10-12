@@ -9,6 +9,12 @@ defaultTargets = ["Zinc"]
 name = "inc-comp"
 path = "../inc-comp"
 
+# The shared Scala semantics, which the toy languages of `Zinc.Bridges` and `Zinc.Features` are
+# embedded into and checked against (`HierShared`).
+[[require]]
+name = "scala-types"
+path = "../scala-types"
+
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"

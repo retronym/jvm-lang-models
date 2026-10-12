@@ -2,12 +2,15 @@ import Zinc.Bridges.FlatRules
 import Zinc.Features.Erasure
 import Zinc.Features.ImplicitScope
 import Zinc.Loop.PingPong
+import Zinc.Bridges.HierShared
 /-! Runs the bounded exhaustive checks as native code.
 
 * `exhaustive [N]`: `packages/zinc/Zinc/Bridges/FlatRules.lean`, for every rule set the number of unclean (base, edit)
   pairs and the smallest one. `N` checks the first `N` bases only. Chunks of bases are checked in
   parallel.
 * `exhaustive v`: the value-class space of `packages/zinc/Zinc/Bridges/FlatRules.lean`.
+* `exhaustive hiershared`: `packages/zinc/Zinc/Bridges/HierShared.lean`, where `Hier`'s toy member
+  lookup agrees with the shared Scala semantics, by the shape and depth of the hierarchy.
 * `exhaustive erasure [N]`: `packages/zinc/Zinc/Features/Erasure.lean`, for every rendering the unclean runs and the
   wasted recompiles, per class.
 * `exhaustive implicit`: `packages/zinc/Zinc/Features/ImplicitScope.lean`, for every variant the unclean runs, the
@@ -421,11 +424,39 @@ end PP
 
 end pingpong
 
+open Zinc.Hier.Shared in
+/-- `Hier`'s lookup against the shared semantics, over `HierShared.space`, in parallel chunks: per
+class of hierarchy, how many agree. -/
+def mainHierShared : IO Unit := do
+  let sp := space
+  let chunk := 20000
+  let parts := (List.range ((sp.length + chunk - 1) / chunk)).map fun i => (sp.drop (i * chunk)).take chunk
+  let cat (d : Zinc.Hier.Cls → Zinc.Hier.Decl) : Nat :=
+    if !consistent d then 3 else if !treeShaped d then 2 else if depth d ≤ 2 then 0 else 1
+  let tasks := parts.map fun part => Task.spawn fun _ =>
+    part.foldl (init := (List.replicate 4 (0, 0))) fun acc d =>
+      let i := cat d
+      acc.modify i fun (ok, all) => (ok + (if agrees d then 1 else 0), all + 1)
+  let rs := tasks.map Task.get
+  let sum := rs.foldl (fun a r => (a.zip r).map fun ((x, y), (x', y')) => (x + x', y + y'))
+    (List.replicate 4 (0, 0))
+  let names := ["tree-shaped, depth ≤ 2", "tree-shaped, depth 3",
+    "a shared ancestor, consistent type arguments", "inconsistent type arguments (scalac rejects)"]
+  IO.println s!"hierarchies: {sp.length}"
+  for (nm, (ok, all)) in names.zip sum do
+    IO.println s!"{nm}: {ok} of {all} agree"
+  let render (d : Zinc.Hier.Cls → Zinc.Hier.Decl) := repr ([Zinc.Hier.Cls.A, .B, .M, .C].map d)
+  for i in [1, 2] do
+    match sp.find? fun d => !agrees d && cat d == i with
+    | some d => IO.println s!"first disagreement, {names[i]!}: {render d}"
+    | none => pure ()
+
 def main (args : List String) : IO Unit :=
   match args with
   | "erasure" :: rest => mainErasure rest
   | "implicit" :: _ => mainImplicit
   | "composed" :: _ => mainComposed
   | "pingpong" :: _ => PP.mainPingPong
+  | "hiershared" :: _ => mainHierShared
   | "v" :: _ => mainV
   | _ => mainRules args

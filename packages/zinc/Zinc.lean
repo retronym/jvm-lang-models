@@ -9,6 +9,7 @@ import IncComp.NonLocal
 import IncComp.Stale
 import Zinc.Bridges.Hier
 import Zinc.Bridges.HierSound
+import Zinc.Bridges.HierShared
 import IncComp.NonLocalAns
 import Zinc.Bridges.Flat
 import Zinc.Bridges.FlatRules
