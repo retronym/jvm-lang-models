@@ -6,7 +6,7 @@ Four kinds of document, by what they are for. Per-package notes are in each pack
 
 | document | read it to … |
 |---|---|
-| [`status.md`](status.md) | see what is proved for every program and what is only checked on a bounded space, per phase, with the bug-map counts and the trust checks |
+| [`status.md`](status.md) | see, per package, what is proved for every program and what is checked on a space or calibrated against the real tool, with the bug-map counts and the trust checks |
 | [`specification.md`](specification.md) | understand why the model is a specification of the compiler bridge, and the rules that follow (theorems vs `example`s, witnesses, calibration) |
 | [`roadmap.md`](roadmap.md) | find open work on the JVM, Java, Scala and binary-compatibility layers |
 | [the root README](../README.md#the-theorems) | read the obligations and T1–T5, stated once |
@@ -25,7 +25,7 @@ Start from a bug you know: find it in `bug-map.md`, which names the Lean file an
 
 | package | notes |
 |---|---|
-| `zinc` | [one record per phase](../packages/zinc/docs/README.md), 10 to 28: the question, the design, the results |
+| `zinc` | [one record per phase](../packages/zinc/docs/README.md), 10 to 28: the question, the design, the results; the index says what each phase proved and checked |
 | `inc-comp` | [`framework-merge.md`](../packages/inc-comp/docs/framework-merge.md): how the four compiler variants became one `XCompiler` |
 | `jvm`, `java`, `scala`, `mima` | the calibration tracks: [`track-j.md`](../packages/jvm/docs/track-j.md), [`track-java.md`](../packages/java/docs/track-java.md), [`track-s.md`](../packages/scala/docs/track-s.md), [`track-b.md`](../packages/mima/docs/track-b.md) |
 

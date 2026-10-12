@@ -2,26 +2,33 @@
 
 One record per phase of the Zinc model from phase 10 on: the question, what the compiler reads, the design, and the results. Phases 1 to 9 are in `docs/history/phases.md` at the repository root; what each phase proved and checked is in `docs/status.md`.
 
-`28-sam.md` is the template for a new feature.
+`28-sam.md` is the template for a new feature. The table says, per phase, what is proved for every program and what is only checked on a bounded space or by the conformance harness; phases 1 to 9 are written up in `docs/history/phases.md`, phases 4 and 5 were design notes whose results are in 6 to 8.
 
-| phase | topic |
-|---|---|
-| 10 | [name resolution, mechanically](10-names.md) |
-| 11 | [Scala 3 `inline` and opaque types](11-inline.md) |
-| 12 | [Java in mixed builds: name resolution and sealed hierarchies](12-java.md) |
-| 13 | [name resolution across subprojects](13-split.md) |
-| 14 | [compile order and pipelining: a Java unit's two interfaces](14-order.md) |
-| 15 | [inferred types in a cycle: T3a holds, T3 fails](15-cycles.md) |
-| 16 | [class-name agreement between the bridge and Zinc](16-naming.md) |
-| 17 | [hash stability across forms: source, pickle, classfile](17-hash.md) |
-| 18 | [annotations as API and as dependencies](18-annotations.md) |
-| 19 | [pipelining's early-output lifecycle](19-pipelining.md) |
-| 20 | [constructors and synthetic case-class members](20-synthetic.md) |
-| 21 | [derived API: export forwarders and used types' supertypes](21-derived.md) |
-| 22 | [Scala 3 macro dependencies: what an expansion reads, when it is recorded](22-macros.md) |
-| 23 | [the extraHash lineage and the companion namespace](23-extrahash.md) |
-| 24 | [member selection through extensions](24-extensions.md) |
-| 25 | [companion pairs in a hierarchy space](25-companions.md) |
-| 26 | [Files as a layer](26-files.md) |
-| 27 | [import selectors and Scala 3.7's given prioritisation](27-imports.md) |
-| 28 | [SAM conversion and local classes](28-sam.md) |
+| phase | topic | Proved, for every program | Checked on a space, or by the harness |
+|---|---|---|---|
+| 1 | The framework | T1 `Task.run_eq_of_trace`; T2, T3a, T4 (monotone) and T5 once for the general form `XCompiler` (`General.lean`), every variant's as corollaries through its lift (`../../inc-comp/docs/framework-merge.md`); T2 and T3a (`Soundness`); T3b, incremental equals clean under acyclic dependencies or source-determined interfaces (`Uniqueness`); T4, termination per regime (`Termination`); the toy's obligations (`Toy`) | §15a/§15b counterexamples (`Examples`) |
+| 2 | Members, declarations, Merkle | `NonLocal` (T2′, non-local hash); `Stale`: `obligations`, and T2-stale by kernel `decide` (`stale_unsound`, `stale_none_invalidated`, `stale_affected`, `stale_repaired`); `HierSound`: `D_obligations`, `W_obligations`, `Mk_obligations` | scenarios 1–3 (`Hier`) |
+| 3 | The Merkle PoC's design | `NonLocalAns` (T2″, T3a″); `Flat`: `Fl_obligations`, `flat_sound` | the rule table over 7,500 programs (`FlatRules`, `lake exe exhaustive`); the conformance harness |
+| 6 | Erasure through inheritance | `Erasure`: `asf_of_decl`, `Er_obligations`, `dep_obligations`, `dep_sound` | `lake exe exhaustive erasure`; the scripted cases |
+| 7 | Implicit scope across projects (sbt/zinc#1845) | `ImplicitScope`: `is_obligations`, `is_sound`, `stored_eq_recomputed` | `lake exe exhaustive implicit` |
+| 8 | Classpath, pipelining, keys from the tree | T5 `Classpath.downstream_sound`; `Tree` (T2, T3a for keys from the output); `Snapshot.obligations`; `Inline.obligations_withBodies`, `not_obligations_today`; failed upstream: proved in Phase 19 (`PipelineLifecycle`) | refresh after revert (`Snapshot`), `pipelined_ne_final` (`Inline`) |
+| 9 | Termination, additions, sealed | `PingPong.zinc_diverges` (no `transitiveStep`: Zinc's loop need not terminate); `Added.obligations_fixed`, `not_obligations_today`; `Sealed.obligations_withChildren`, `not_obligations_noChildren` | `transitiveStep_stops` and the run (`PingPong`); `Added`, `Sealed` scenarios |
+| 10 | [Name resolution and implicits](10-names.md) | `SplitProof.Spec`: `rules_obligations`, `global_obligations`, `narrowed_obligations` (given recorded package imports); witnesses F2, F3, narrowed without imports; precision (`necessary_invalidated`, `searched_exact`, `narrowed_le_global`, `rules_over`); F4/F5 as `joint_not_comp`. `SpecGivens`: the G rule's obligations, witnesses G1/G2 (`g12_today`), `g_narrowed_without_imports`, `g_decls_not_abstraction` | resolution per version, F6, F7, recompiled sets, cost (`Names`, `Givens`, `NamesRules`); the harness on develop and #34 |
+| 11 | [Scala 3 `inline` and opaque types](11-inline.md) | `InlineOpaqueSpec` (a `TCompiler`): `faithful`, `obligations_fix`, `fix_sound`, `obligations_refine`, `refine_sound`, witnesses I1–I3, O1 (coverage); precision `keys_traced`, `name_exact`, `cls_coarse`. `InlineOpaqueSound` (`NCompiler`): `obligations_denot`, `denot_sound` (fresh denotation hash), `recompiles_or_unchanged`, `I1_abstraction` | counts and recompiled sets (`InlineOpaque.check_*`); which reads dotc folds (probes); the harness, both layouts |
+| 12 | [Java in mixed builds](12-java.md) | `JavaSpec`: `obligations_fix`, `fix_sound`, witnesses J1–J4; `JavaSealedSpec` | `JavaNames`, `JavaSealed`; the harness |
+| 13 | [The split layout](13-split.md) | `SplitProof`: `proposed_sound`, `cheap_sound_of_local`; `Spec`: `today_not_obligations`, `cheap_not_obligations`, `cross_obligations`, `cross_downstream_sound` (T5) | `Split.check_*` (the slot language matches the concrete model on the bases); the harness |
+| 14 | [Compile order and pipelining](14-order.md) | `JavaOrder`: `obligations_mixed`, `mixed_sound`, `exclusion_exact`, `flip_spurious`; witnesses JO-V1, JO-V2, JO-O1, JO-O2 | none needed so far |
+| 15 | [Inferred types in a cycle](15-cycles.md) (talks#31) | `Cycles`: `obligations`; `zinc_ne_clean` (Zinc stops at a per-unit fixed point that is not the clean build, C1, C2), `two_fixpoints`; `annotated_eq_clean` (T3 with every member annotated) | sbt/zinc#1284's and #1780's rules on Zinc's real loop; the harness (36 edits) |
+| 16 | [Class-name agreement between the bridge and Zinc](16-naming.md) | `Naming`: `run_rename`, `trace_rename`, `coverage_named`, `not_coverage_named`, `collision` (#1553); witnesses `spelling_bugs` (#1812, #127, #1351, #9694, #716/#1233) and `default_package_1812` on `JavaSpec`, by kernel `decide` | the cluster's scripted tests mapped, all passing on develop |
+| 17 | [Hash stability across source, pickle and classfile forms](17-hash.md) | `HashForms`: `abstraction_formed_iff`, `stable_precise`, `stable_not_spurious`, `unstable_spurious`, `canonical_stable`, `canonical_noMasking`, `skip_unsound`, `conservative_sound`, `conservative_spurious`; witnesses `artefact_bugs` (#1782, #88, scala3#18080, #9133, #9730), `masking_237` | the cluster's scripted tests mapped |
+| 18 | [Annotations as API and as dependencies](18-annotations.md) | `Annotations`: `obligations_comp`, `obligations_fix`, `fix_sound` (sbt/zinc#1842's keys, a macro annotation's body hashed); witnesses `today_not_coverage` (#1842), `noBody_not_abstraction` (scala3#22999) | the cluster's scripted tests mapped |
+| 19 | [Pipelining's early-output lifecycle](19-pipelining.md) | `PipelineLifecycle`: `rollback_preserves`, `noRollback_breaks`, `stale_after_revert`, `rollback_detects` (sbt/zinc#1843), `downstream_reads_built`, `partial_write` (scala3#27139) | the cluster's scripted tests mapped |
+| 20 | [Constructors and synthetic case-class members](20-synthetic.md) | `Synthetic`: `sound_of_agree`; witnesses `under_of_disagree` (#19910), `under_12401`, `over_plain` (#97), `over_default` (#1324), `unapply_26231`, `apply_572` | the cluster's scripted tests mapped |
+| 21 | [Derived API: export forwarders and used types' supertypes](21-derived.md) | `DerivedApi`: `obligations_comp`, `obligations_fix`, `fix_sound` (#10182's and #87's edges); witnesses `export_not_coverage`, `usedType_not_coverage` | the clusters' scripted tests mapped; #18216 across subprojects stated, not proved |
+| 22 | [Scala 3 macro dependencies](22-macros.md) | `MacroDeps` (a `TCompiler`): `faithful`, `obligations_fix`, `fix_sound`; witnesses `gen_pre24969` (#23852), `targ_pre23900`, `private_today` (abstraction), `annot_today` (#22999), `crossProject_today` (sbt/zinc#1478), `early_violates` (#27125); cost `bytecode_coarse`, `private_coarse` | the `today` rules against dotc 3.9 and Zinc `develop` (sources, not the harness) |
+| 23 | [The extraHash lineage and the companion namespace](23-extrahash.md) | `ExtraHash`: `merged_spurious`, `qualified_precise`, `qualified_sound`, `noFold_misses` (#542, #662), `coldWarm_spurious` (#1794) | #1793, #1795, #1796 as kernel-`decide` examples; the cluster's scripted tests mapped |
+| 24 | [Member selection through extensions](24-extensions.md) | `Extensions`: `ext_rule_obligations` (the G rule, every layout without an ancestor companion); witnesses `ext_today_pkgObject`, `ext_today_topLevel`, `ext_narrowed_without_imports`, `ext_rule_ancestorCompanion` | precedence probed on Scala 3.9.0 and 2.13.16; the four predicted tests fail on develop (retronym/zinc#53) |
+| 25 | [Companion pairs in a hierarchy space](25-companions.md) | none (a checked space) | `Companions.check_*` by kernel `decide`; the harness on develop and on the Merkle PoC before and after retronym/zinc#56 agrees with the model on all 135 edits |
+| 26 | [Files as a layer](26-files.md) | `Files`: charged coverage (`ChargedCoverage`, `charged_of_obligations`); T2 and T3a under charging for file-closed policies (`round_preserves_charged`, `zinc_sound_charged`); F3 on `Spec`'s lookup with a two-class client file: `today_not_charged`, the fix `every_obligations` and `every_sound`; T5 under charging: `inv_external_charged`, `downstream_sound_charged`; sbt/zinc#417: `fi_not_covered`, `fi_loop`, the fix for every program `kept_obligations`, `kept_sound` | none needed so far |
+| 27 | [Import selectors and Scala 3.7 given prioritisation](27-imports.md) | `Spec`: `sel_check_covered`, `sel_cross_obligations`, witness `hide_unrecorded_not_obligations`; `SpecGivens`: `gP_rule_obligations`, `gP_global_obligations`, `gP_searched_obligations` under both rules; `prio_differs`, `general_added_stale`, `type_widened_stale` | selectors add no family; the 3.7 rule changes selection, not the trace; one bounded example; precedence probed on Scala 3.9.0 and 2.13.16; the two predicted tests fail on develop (retronym/zinc#58) |
+| 28 | [SAM conversion and local classes](28-sam.md) | `Sam` (a `TCompiler`): `obligations_fix`, `fix_sound`; `obligations_today_argFree`, `today_sound_argFree`; cost `today_sub_fix`, `fix_eq_today`; witnesses `w830_pre` (#830), `w192_pre` (#192), predictions `p1_today`, `p2_today` | javac, scalac and dotc behind P1 and P2 (probes); the predicted tests fail on develop (retronym/zinc#58) |
