@@ -29,8 +29,8 @@ abbrev P := Program C N D
 
 def world (l : List (C × Classfile C N D)) : W := fun c => (l.find? (·.1 = c)).map (·.2)
 
-def inst : MethodInfo := {}
-def abs : MethodInfo := { isAbstract := true }
+def inst : MethodInfo C N D := {}
+def abs : MethodInfo C N D := { isAbstract := true }
 
 structure Case where
   name : String
@@ -398,8 +398,8 @@ def j3 : List Case :=
 Every class here declares its constructors, so `packages/jvm/probes` renders exactly those (and no default
 `()V`); each keeps a public `()V`, which `new` and subclasses' constructors call. -/
 
-def ctor0 : N × D × MethodInfo := (.init, .v, inst)
-def ctorI (acc : Access := .pub) : N × D × MethodInfo := (.init, .iv, { access := acc })
+def ctor0 : N × D × MethodInfo C N D := (.init, .v, inst)
+def ctorI (acc : Access := .pub) : N × D × MethodInfo C N D := (.init, .iv, { access := acc })
 
 /-- A class becomes sealed without permitting the client's subclass: loading the subclass fails
 (JVMS §5.3.5), with HotSpot's "cannot inherit from sealed class". -/
@@ -503,6 +503,28 @@ def j5 : List Case :=
    sealedPermitsNonPublicElsewhere, sealedPermitsPublicElsewhere, ctorRemoved, ctorBecomesPrivate,
    ctorBecomesPackagePrivate, ctorPulledUp, ctorPulledUpPrivate, ctorClassBecomesAbstract]
 
+/-! ## Track J4: method bodies
+
+A method's body is the sites it runs; a `this` site's receiver is the class the caller instantiated. -/
+
+/-- `A.m()V` calls `this.m()I`; the client's `X extends A` overrides `m()I`, and a call of `A.m()V`
+on an `X` enters `A.m()V` and then `X.m()I`. -/
+def thisCallOverridden : Case where
+  name := "thisCallOverridden"
+  mima := none
+  v0 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .i] }), (.m, .i, inst)] })]
+  v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .i] }), (.m, .i, inst)] })]
+  client := [(.X, { header := { super := some .A }, methods := [(.m, .i, inst)] })]
+  prog := { sites := [invokevirtual .A .m .v .X] }
+
+/-- A method that calls itself on `this` runs out of fuel: the model's bound, not a JVM error. -/
+def selfCall : Case where
+  name := "selfCall"
+  mima := none
+  v0 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
+  v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
+  prog := { sites := [invokevirtual .A .m .v .A] }
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,
@@ -568,5 +590,8 @@ example : ctorBecomesPrivate.before = .ok [.A] ∧ ctorBecomesPrivate.after = .e
 example : ctorBecomesPackagePrivate.before = .ok [.A] ∧ ctorBecomesPackagePrivate.after = .error .illegalAccess := by decide
 example : ctorPulledUp.before = .ok [.B] ∧ ctorPulledUp.after = .error .noSuchMethod := by decide
 example : ctorClassBecomesAbstract.before = .ok [.A] ∧ ctorClassBecomesAbstract.after = .error .instantiation := by decide
+
+example : thisCallOverridden.before = .ok [.A, .X] := by decide
+example : selfCall.before = .error .outOfFuel := by decide
 
 end Jvm.Catalogue

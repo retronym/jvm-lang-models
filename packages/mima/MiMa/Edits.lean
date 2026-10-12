@@ -40,7 +40,7 @@ def base2 : Lib :=
 def bools : List Bool := [false, true]
 def accesses : List Access := [.pub, .prot, .pkg, .priv]
 
-def methodInfos : List MethodInfo := do
+def methodInfos : List (MethodInfo C N D) := do
   let s ← bools; let a ← bools; let f ← bools; let acc ← accesses
   pure { isStatic := s, isAbstract := a, isFinal := f, access := acc }
 
@@ -48,7 +48,7 @@ def fieldInfos : List FieldInfo := do
   let s ← bools; let f ← bools; let acc ← accesses
   pure { isStatic := s, isFinal := f, access := acc }
 
-def wfMethod (itf : Bool) (m : MethodInfo) : Bool :=
+def wfMethod (itf : Bool) (m : MethodInfo C N D) : Bool :=
   !(m.isAbstract && (m.isStatic || m.isFinal || m.access == .priv)) &&
   (!itf || (!m.isFinal && (m.access == .pub || m.access == .priv) &&
             !(m.access == .priv && m.isAbstract)))
@@ -66,7 +66,7 @@ def wf (l : Lib) : Bool :=
     !(supers l fuel c).contains c && !(allIfaces l fuel c).contains c &&
     cf.methods.all (fun m => wfMethod itf m.2.2) && cf.fields.all (fun f => wfField itf f.2.2)
 
-def setMethod (cf : Classfile C N D) (d : D) (m : Option MethodInfo) : Classfile C N D :=
+def setMethod (cf : Classfile C N D) (d : D) (m : Option (MethodInfo C N D)) : Classfile C N D :=
   { cf with methods := (cf.methods.filter (·.2.1 != d)) ++ (m.map fun i => (N.m, d, i)).toList }
 
 def setField (cf : Classfile C N D) (f : Option FieldInfo) : Classfile C N D :=
@@ -112,7 +112,7 @@ def Edit.case (e : Edit) : Case := { name := e.name, mima := none, v0 := e.v0, v
 def xClassesB : List (Classfile C N D) := do
   let s ← [none, some C.A, some C.B]
   let is ← [[], [C.I], [C.J], [C.I, C.J]]
-  let ms ← [[], [(N.m, D.v, ({} : MethodInfo))]]
+  let ms ← [[], [(N.m, D.v, ({} : MethodInfo C N D))]]
   pure { header := { super := s, ifaces := is }, methods := ms }
 
 def sitesB : List (Site C N D) :=

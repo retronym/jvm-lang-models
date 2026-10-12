@@ -80,7 +80,7 @@ theorem miss_changes_footprint (x : Witness) (h0 : (outcome x.w0 x.prog).toBool 
 
 /-! ## The gaps, each with a witness -/
 
-def pubM : MethodInfo := {}
+def pubM : MethodInfo C N D := {}
 
 /-- **MiMa-F1, final fields.** A public field becomes `final`; a client's `putfield` now fails with
 `IllegalAccessError`. MiMa's field key covers the query and does not compare `final`. -/

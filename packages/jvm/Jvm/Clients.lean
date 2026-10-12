@@ -14,7 +14,7 @@ space of clients over the catalogue's universe:
 
 One site suffices: linking is lazy and per site, so a client fails on `v1` iff one of its sites
 (or its loads) does. `breaksSomeClient` is the model's verdict for a MiMa problem; `changesSomeClient`
-adds "links on both, and runs a different method" (the Track J4 verdict for `overrideAdded`, `pulledUp`).
+adds "links on both, and does not behave the same" (`Jvm.SameBehaviour`: the methods entered differ; the verdict for `overrideAdded`, `pulledUp`).
 Checked per catalogue case by kernel `decide`.
 
 Not in the space: clients with more than one class, fields, `invokespecial`; and the verifier's
@@ -120,11 +120,12 @@ def breaking (k : Case) (sp : List Client := space) : Option Client :=
 
 def breaksSomeClient (k : Case) (sp : List Client := space) : Bool := (breaking k sp).isSome
 
-/-- The first client that links on both and runs a different method. -/
+/-- The first client that links on both and does not behave the same (`Jvm.SameBehaviour`): it
+enters different methods, or the same in a different order. -/
 def changing (k : Case) (sp : List Client := space) : Option Client :=
   sp.find? fun (cl, p) =>
     let k' := k.withClient (cl, p)
-    wellTyped k'.w0 p && links k'.w0 p && links k'.w1 p && k'.before != k'.after
+    wellTyped k'.w0 p && links k'.w0 p && links k'.w1 p && !decide (SameBehaviour k'.w0 k'.w1 p)
 
 def changesSomeClient (k : Case) (sp : List Client := space) : Bool := (changing k sp).isSome
 
@@ -184,7 +185,7 @@ calibrates selection (§5.4.6) and the load-time check for final methods (§5.3.
 use transitive overriding (§5.4.5 (b)). -/
 def chainSpace : List Case :=
   let accs : List Access := [.pub, .prot, .pkg, .priv]
-  let opt : Option Access → List (N × D × MethodInfo)
+  let opt : Option Access → List (N × D × MethodInfo C N D)
     | none => []
     | some a => [(.m, .v, { access := a })]
   let tag : Option Access → String

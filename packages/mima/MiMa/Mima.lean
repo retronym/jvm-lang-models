@@ -100,28 +100,28 @@ def allIfaces : ℕ → C → List C
     up ++ is ++ is.flatMap (allIfaces k)
 
 /-- The methods MiMa sees in `c`: not private. -/
-def meths (c : C) : List (N × D × MethodInfo) :=
+def meths (c : C) : List (N × D × MethodInfo C N D) :=
   (((get l c).map (·.methods)).getD []).filter (·.2.2.access != .priv)
 
 def flds (c : C) : List (N × D × FieldInfo) :=
   (((get l c).map (·.fields)).getD []).filter (·.2.2.access != .priv)
 
-def named (c : C) (n : N) : List (C × D × MethodInfo) :=
+def named (c : C) (n : N) : List (C × D × MethodInfo C N D) :=
   ((meths l c).filter (·.1 = n)).map fun m => (c, m.2.1, m.2.2)
 
 /-- Constructors and static methods are not inherited (`ClassInfo.lookupClassMethods`), so neither is
 looked up in a superclass: `ctorPulledUp` is a `DirectMissingMethodProblem` though `A` now has `B`'s
 constructor. -/
-def lookupClassMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
+def lookupClassMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo C N D) :=
   if static || n = .init then named l c n else (c :: supers l fuel c).flatMap fun x => named l x n
 
-def lookupIfaceMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
+def lookupIfaceMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo C N D) :=
   if static then [] else (allIfaces l fuel c).flatMap fun x => named l x n
 
-def lookupMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
+def lookupMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo C N D) :=
   lookupClassMethods l c n static ++ lookupIfaceMethods l c n static
 
-def lookupConcreteIfaceMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
+def lookupConcreteIfaceMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo C N D) :=
   (lookupIfaceMethods l c n static).filter fun m => !m.2.2.isAbstract
 
 def lookupClassFields (c : C) (n : N) : List (C × D × FieldInfo) :=
@@ -176,9 +176,9 @@ def fieldCheck (n : Lib) (c : C) (fn : N) (fd : D) (fi : FieldInfo) : Option Pro
     else if !fi.isStatic && fi'.isStatic then some .virtualStaticMember
     else none
 
-def methodCheck (o n : Lib) (c : C) (ho hn : Header C) (mn : N) (md : D) (mi : MethodInfo) :
+def methodCheck (o n : Lib) (c : C) (ho hn : Header C) (mn : N) (md : D) (mi : MethodInfo C N D) :
     Option Problem :=
-  let lookup (l : Lib) : List (C × D × MethodInfo) :=
+  let lookup (l : Lib) : List (C × D × MethodInfo C N D) :=
     if !hn.isInterface then
       if mi.isAbstract then lookupMethods l c mn mi.isStatic
       else lookupClassMethods l c mn mi.isStatic ++ lookupConcreteIfaceMethods l c mn mi.isStatic
