@@ -12,7 +12,9 @@ import java.util.*;
  * verified just before it runs. Which method ran is read from `ProbeLog`.
  *
  * Usage: java -cp classes Run cases.jsonl out
- * Prints one TSV row per case and world: case, world, model, JVM, agree, JVM message.
+ * Prints one TSV row per case and world: case, world, model, JVM, verdict, JVM message; then a
+ * summary line `#json {...}` (JDK, cases, disagreements, known deviations by bug) for the ledger
+ * that `probe.sh` keeps with `RUNS=` (`runs/README.md`).
  */
 public class Run {
   /** The model's `LinkError` constructors, with the JVM class each maps to. */
@@ -31,11 +33,13 @@ public class Run {
 
   public static void main(String[] args) throws Exception {
     Path out = Path.of(args[1]);
-    int disagree = 0;
+    int disagree = 0, cases = 0;
+    Map<String, Integer> knownCount = new TreeMap<>();
     for (String line : Files.readAllLines(Path.of(args[0]))) {
       if (line.isBlank()) continue;
       Map<String, Object> k = Json.obj(Json.parse(line));
       String name = (String) k.get("name");
+      cases++;
       for (String w : List.of("v0", "v1")) {
         String model = expected(Json.obj(k.get(w.equals("v0") ? "before" : "after")));
         String[] jvm = run(out.resolve(name), w, k);
@@ -43,10 +47,15 @@ public class Run {
             : known(model, jvm) ? "known JDK-8356942"
             : knownSpecial(model, jvm, k) ? "known JDK-8350029" : "DISAGREE";
         if (verdict.equals("DISAGREE")) disagree++;
+        else if (verdict.startsWith("known ")) knownCount.merge(verdict.substring(6), 1, Integer::sum);
         System.out.println(name + "\t" + w + "\t" + model + "\t" + jvm[0] + "\t" + verdict + "\t" + jvm[1]);
       }
     }
     System.out.println("# " + System.getProperty("java.vm.version") + ": " + disagree + " disagreements");
+    StringBuilder known = new StringBuilder();
+    knownCount.forEach((b, n) -> known.append(known.length() == 0 ? "" : ",").append('"').append(b).append("\":").append(n));
+    System.out.println("#json {\"jdk\":\"" + System.getProperty("java.vm.version") + "\",\"cases\":" + cases
+        + ",\"disagreements\":" + disagree + ",\"known\":{" + known + "}}");
     if (disagree > 0) System.exit(1);
   }
 
