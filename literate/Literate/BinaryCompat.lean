@@ -1,5 +1,5 @@
 import VersoManual
-import Jvm.Catalogue
+import Literate.Cases
 
 open Verso.Genre Manual
 open Verso.Genre.Manual.InlineLean
@@ -100,28 +100,11 @@ through it.
 # The catalogue
 
 Every case of the first group, with what the client does before and after the edit and the problem
-MiMa reports for it, computed from the model:
-
-```lean
-/-- The last component of a constructor's name. -/
-def short {α} [Repr α] (a : α) : String :=
-  ((reprStr a).splitOn ".").getLast!
-
-def fmt : Except LinkError (List C) → String
-  | .ok [] => "loads"
-  | .ok cs =>
-    "runs " ++ ", ".intercalate (cs.map short)
-  | .error e => short e
-
-def caseRow (k : Case) : String :=
-  s!"{k.name}: {fmt k.before} → {fmt k.after}" ++
-    match k.mima with
-    | some p => s!" ({p})"
-    | none => " (MiMa: nothing)"
-```
+MiMa reports for it, computed from the model by {name}`Literate.caseRow`:
 
 ```lean (name := table)
-#eval for k in all do IO.println (caseRow k)
+#eval for k in all do
+  IO.println (Literate.caseRow k)
 ```
 ```leanOutput table
 methodRemoved: runs A → noSuchMethod (DirectMissingMethodProblem)

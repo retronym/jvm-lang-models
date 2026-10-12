@@ -3,6 +3,9 @@ import Literate.Linking
 import Literate.Overriding
 import Literate.BinaryCompat
 import Literate.Defaults
+import Literate.Access
+import Literate.Sealed
+import Literate.Linearization
 import Literate.ScalaOverriding
 
 open Verso.Genre Manual
@@ -25,5 +28,11 @@ The [API documentation](https://retronym.github.io/jvm-lang-models/api/) lists e
 {include 1 Literate.BinaryCompat}
 
 {include 1 Literate.Defaults}
+
+{include 1 Literate.Access}
+
+{include 1 Literate.Sealed}
+
+{include 1 Literate.Linearization}
 
 {include 1 Literate.ScalaOverriding}
