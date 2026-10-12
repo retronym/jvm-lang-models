@@ -200,3 +200,30 @@ def scala(version, work=None, recycle=1000, java_home=None, dotc_base='cached'):
 def errors(resp):
     """The error diagnostics of a compile response."""
     return [d for d in resp.get('diagnostics', []) if d['severity'] == 'ERROR']
+
+
+def main(argv):
+    """python3 -I compiler.py scala VERSION SRC OUT [SRC OUT ...]: compile each SRC into OUT in its own request on one server,
+    print the errors as `file:line:column: error: message`, list the sources that failed on stdout as
+    `failed SRC`, and exit 1 if any did."""
+    if len(argv) < 4 or argv[0] != 'scala' or len(argv[2:]) % 2:
+        raise SystemExit(main.__doc__)
+    import sys
+    pairs = list(zip(argv[2::2], argv[3::2]))
+    failed = []
+    with scala(argv[1]) as server:
+        for src, out in pairs:
+            r = server.compile(files=[os.path.abspath(src)], out=os.path.abspath(out))
+            for d in errors(r):
+                sys.stderr.write(f"{d['file']}:{d['line']}:{d['column']}: error: {d['message']}\n")
+            if not r['ok']:
+                sys.stderr.write(r.get('crash', ''))
+                failed.append(src)
+    for src in failed:
+        print(f'failed {src}')
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main(sys.argv[1:]))

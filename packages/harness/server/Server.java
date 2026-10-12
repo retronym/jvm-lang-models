@@ -21,7 +21,10 @@ import java.util.stream.Stream;
  *   Server --backend CLASS --work DIR [--recycle N] [-- BACKEND-ARGS...]
  * </pre>
  *
- * Request: {@code id}, {@code op} (compile, run, recycle), and for compile: {@code sources} (file name to text)
+ * <p>No sockets: the server talks only over the stdin and stdout pipes of the probe that started it, and exits
+ * when stdin closes (the client's close, or the client's death).
+ *
+ * <p>Request: {@code id}, {@code op} (compile, run, recycle), and for compile: {@code sources} (file name to text)
  * and/or {@code files} (paths read by the server), {@code options}, {@code classpath} (ids of earlier compiles or
  * directories), {@code out} (default WORK/id). For run: {@code classpath}, {@code main} (default Main),
  * {@code args}, {@code timeout} (ms, default 10000).
@@ -84,6 +87,9 @@ public final class Server {
     Backend backend = (Backend) Class.forName(backendClass).getConstructor(String[].class)
         .newInstance((Object) rest.toArray(new String[0]));
     new Server(backend, work, recycle, protocol, out, err).loop();
+    // stdin closed: the client is done (or gone). Exit even if a program run here left a non-daemon thread.
+    protocol.flush();
+    System.exit(0);
   }
 
   private void loop() throws IOException {

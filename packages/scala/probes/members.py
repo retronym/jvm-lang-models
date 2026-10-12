@@ -10,12 +10,12 @@ OUT/members-<dialect>.txt), then for each compiler:
    keeps one compiler warm, so an error in one program cannot stop another's refchecks;
 2. maps each error to its program (the file), its class (the definition enclosing the error's line)
    and its kind (by message);
-3. for the programs that compiled, runs a `Main` that prints, for each concrete class, which
-   owner's `m` ran.
+3. for the programs that compiled, runs a `Main` per program that prints, for each concrete class, which
+   owner's `m` ran, in the server's `run` op (a throwaway class loader), so one bad program breaks only itself.
 
 Writes OUT/members-report-<dialect>.txt with every divergence grouped by shape, and prints counts.
 """
-import importlib.util, os, re, shutil, subprocess, sys
+import importlib.util, json, os, re, subprocess, sys
 from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -82,32 +82,30 @@ def verdicts(out, tag, server, pids=None):
     return errs, accepted
 
 
-def run_main(out, tag, version, accepted, news):
-    """Compile the accepted programs with a Main and run it; {pid: {cls: owner}}."""
+def run_main(out, tag, server, accepted, news):
+    """For each accepted program, compile it with a `Main_qN` that prints which owner's `m` ran for each
+    concrete class, and run that in its own class loader; {pid: {cls: owner}}."""
     d = os.path.join(out, f'mrun-{tag}')
     os.makedirs(d, exist_ok=True)
-    calls = [f'    try println("{pid} {c} " + new {pid}.{c}().m) catch {{ case e: Throwable => println("{pid} {c} !" + e.getClass.getSimpleName) }}'
-             for pid in accepted for c in news.get(pid, [])]
-    # split into chunks to keep methods small
-    chunks = [calls[i:i + 200] for i in range(0, len(calls), 200)]
-    body = '\n'.join(f'  def run{i}(): Unit = {{\n' + '\n'.join(ch) + '\n  }' for i, ch in enumerate(chunks))
-    main = 'object Main {\n' + body + '\n  def main(args: Array[String]): Unit = {\n' + \
-        '\n'.join(f'    run{i}()' for i in range(len(chunks))) + '\n  }\n}\n'
-    with open(os.path.join(d, 'Main.scala'), 'w') as f:
-        f.write(main)
-    files = [os.path.join(out, 'srcm', p + '.scala') for p in accepted] + [os.path.join(d, 'Main.scala')]
-    opts = ['-O', '-Xmaxerrs', '-O', '1000000'] if not version.startswith('3') else []
-    cmd = ['scala-cli', 'run', '--server=false', '-S', version] + opts + files + ['--main-class', 'Main']
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    with open(os.path.join(d, 'log.txt'), 'w') as f:
-        f.write(r.stdout + r.stderr)
-    if r.returncode != 0:
-        raise SystemExit(f'{version}: Main failed, see {d}/log.txt')
+    server.recycle()  # the programs' packages again, in a fresh compiler
     ran = defaultdict(dict)
-    for line in r.stdout.splitlines():
-        parts = line.split()
-        if len(parts) == 3 and parts[0].startswith('q'):
-            ran[parts[0]][parts[1]] = parts[2]
+    with open(os.path.join(d, 'log.txt'), 'w') as log:
+        for pid in accepted:
+            calls = '\n'.join(f'    try println("{pid} {c} " + new {pid}.{c}().m) catch {{ case e: Throwable => println("{pid} {c} !" + e.getClass.getSimpleName) }}'
+                              for c in news.get(pid, []))
+            main = f'object Main_{pid} {{\n  def main(args: Array[String]): Unit = {{\n{calls}\n  }}\n}}\n'
+            r = server.compile(files=[os.path.join(out, 'srcm', pid + '.scala')], sources={f'Main_{pid}.scala': main},
+                               out=os.path.join(d, pid), id=f'run-{pid}')
+            if not r['ok']:
+                raise SystemExit(f'{server.name}: {pid} with its Main failed to compile: {r}')
+            x = server.run([r['id']], main=f'Main_{pid}', timeout=10)
+            log.write(f'{pid}\t{json.dumps(x)}\n')
+            if not x['ok']:
+                raise SystemExit(f'{server.name}: Main_{pid} failed, see {d}/log.txt')
+            for line in x['stdout'].splitlines():
+                parts = line.split()
+                if len(parts) == 3 and parts[0] == pid:
+                    ran[pid][parts[1]] = parts[2]
     return ran
 
 
@@ -144,8 +142,8 @@ def main():
         merrs, mruns = read_model(os.path.join(out, f'members-{tag}.txt'))
         with compiler.scala(version, work=os.path.join(out, f'server-{tag}')) as server:
             aerrs, accepted = verdicts(out, tag, server)
-        news = {pid: list(mruns.get(pid, {}).keys()) for pid in accepted if not merrs.get(pid)}
-        ran = run_main(out, tag, version, [p for p in accepted if p in news], news)
+            news = {pid: list(mruns.get(pid, {}).keys()) for pid in accepted if not merrs.get(pid)}
+            ran = run_main(out, tag, server, [p for p in accepted if p in news], news)
         groups = defaultdict(list)
         agree = 0
         for pid in desc:
