@@ -230,6 +230,12 @@ def build (space : String) (parts : List Part) : List Case :=
 /-- Breaks `invokeinterface I.m` on `X extends A implements I`: it selects the new package-private `A.m`. -/
 example : breaksSomeClient pkgMethodAboveDefault = true := by decide +kernel
 
+/-! ## Track J8 verdicts -/
+
+/-- Breaks `putstatic B.m` (the field it now resolves to is final) and changes `getstatic B.m`. -/
+example : breaksSomeClient fieldIfaceDepthBeforeSuper space3 = true ∧
+    changesSomeClient fieldIfaceDepthBeforeSuper space3 = true := by decide +kernel
+
 /-- The Track J6 space: overriding along a chain of library classes, the shape of JVMS §5.4.5's
 example. `A` (package 1), `B extends A` and `I extends B` (`I` is a class here; `B` and `I` each in
 package 1 or 2); `A` declares `m()V` with any access, final or not, and `B` and `I` each declare it
@@ -318,5 +324,33 @@ def defaultsSpace : List Case :=
   let sites := fromY ([C.I, .J, .K].map (Site.invokeinterface · .m .v .X) ++
     [C.A, .X].map (Site.invokevirtual · .m .v .X))
   build "defaults" (ifaces ⊗ a ⊗ xA ⊗ sites) ++ build "defaults" (ifaces ⊗ xI ⊗ sites)
+
+/-- The Track J8 space: field resolution through superinterfaces at depth (JVMS §5.4.3.2: the class,
+then its direct superinterfaces, each recursively, then its superclass). `A` (package 1) implements
+`I`; `B extends A` (package 2) implements `J`, and `J extends K` (interfaces in package 2). `A` and
+`B` each declare a field `m` of type `String`, public, protected, package-private or private, static
+or not, or public and final, or not at all; each interface declares a (public static final) `m` or
+not. The client's `X extends B`, in the unnamed package, declares none. One `getfield` or `putfield`
+of `A.m`, `B.m` or `X.m` on an `X`, or `getstatic` or `putstatic` of `A.m`, `B.m`, `X.m` or `J.m`,
+from a client class `Y` in package 0, 1 or 2. -/
+def fieldsSpace : List Case :=
+  let fields : List (String × Option FieldInfo) :=
+    ("-", none) :: (accs.map fun a => (accTag a, some { access := a })) ++
+    ([Access.pub, .pkg, .priv].map fun a => (s!"{accTag a}+static", some { access := a, isStatic := true })) ++
+    [("pub+final", some { isFinal := true }), ("pub+static+final", some { isStatic := true, isFinal := true })]
+  let declF : Option FieldInfo → List (N × D × FieldInfo)
+    | none => []
+    | some f => [(.m, .s, f)]
+  let cls (c : C) (pkg : Nat) (sup : Option C) (is : List C) : List Part := fields.map fun (t, f) =>
+    { label := s!"{cName c}={t}", lib := [(c, { header := { pkg, super := sup, ifaces := is }, fields := declF f })] }
+  let iface (c : C) (sup : List C) : List Part := [false, true].map fun has =>
+    { label := s!"{cName c}={if has then "static+final" else "-"}",
+      lib := [(c, { header := { isInterface := true, pkg := 2, ifaces := sup },
+                    fields := declF (if has then some { isStatic := true, isFinal := true } else none) })] }
+  let x : List Part := [{ label := "", client := [(.X, { header := { super := some .B } })] }]
+  let sites := fromY (([C.A, .B, .X].flatMap fun c => [Site.getfield c .m .s .X, .putfield c .m .s .X]) ++
+    ([C.A, .B, .X, .J].flatMap fun c => [Site.getstatic c .m .s, .putstatic c .m .s]))
+  build "fields" (iface .I [] ⊗ iface .K [] ⊗ iface .J [.K] ⊗ cls .A 1 none [.I] ⊗ cls .B 2 (some .A) [.J] ⊗
+    x ⊗ sites)
 
 end Jvm.Clients

@@ -522,6 +522,25 @@ def pkgMethodAboveDefault : Case where
 
 def j7 : List Case := [pkgMethodAboveDefault]
 
+/-! ## Track J8: field resolution through superinterfaces at depth -/
+
+/-- `fieldIfaceBeforeSuper` one level down: `B extends A implements J`, and `J extends K`. `K` gains a
+constant `m`; field resolution (§5.4.3.2) searches `B`'s superinterfaces recursively, so `J`'s
+superinterface `K` before `B`'s superclass `A`, and `B.m` now reads `K.m` (scala-garden/mima#995). -/
+def fieldIfaceDepthBeforeSuper : Case where
+  name := "fieldIfaceDepthBeforeSuper"
+  mima := none
+  v0 := [(.A, { fields := [(.m, .s, sfld)] }), (.K, { header := iface }),
+         (.J, { header := { iface with ifaces := [.K] } }),
+         (.B, { header := { super := some .A, ifaces := [.J] } })]
+  v1 := [(.A, { fields := [(.m, .s, sfld)] }),
+         (.K, { header := iface, fields := [(.m, .s, { isStatic := true, isFinal := true })] }),
+         (.J, { header := { iface with ifaces := [.K] } }),
+         (.B, { header := { super := some .A, ifaces := [.J] } })]
+  prog := { sites := [getstatic .B .m .s] }
+
+def j8 : List Case := [fieldIfaceDepthBeforeSuper]
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,
@@ -589,5 +608,6 @@ example : ctorPulledUp.before = .ok [.B] ∧ ctorPulledUp.after = .error .noSuch
 example : ctorClassBecomesAbstract.before = .ok [.A] ∧ ctorClassBecomesAbstract.after = .error .instantiation := by decide
 
 example : pkgMethodAboveDefault.before = .ok [.I] ∧ pkgMethodAboveDefault.after = .error .illegalAccess := by decide
+example : fieldIfaceDepthBeforeSuper.before = .ok [.A] ∧ fieldIfaceDepthBeforeSuper.after = .ok [.K] := by decide
 
 end Jvm.Catalogue
