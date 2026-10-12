@@ -22,7 +22,7 @@ So the walk must be expressible over *fine* queries, and the coarse form must be
 
 3. **Trace lemmas once.** "The walk asks only `header` and `member` queries" and its congruence corollary (two environments agreeing on those answers give the same walk) are proved in `ScalaTypes`. `HierSound`'s [`trace_linT`](../Zinc/Features/Erasure.lean#L687)/[`trace_firstDecl`](../Zinc/Bridges/HierSound.lean#L55)/[`trace_mergeWith`](../Zinc/Bridges/HierSound.lean#L25)/[`resolveFrom_congr`](../Zinc/Bridges/HierSound.lean#L144) become uses of them, and Flat and Erasure reuse them.
 
-4. **Query translation in `query`.** A generic fold of a task through a query interpretation, `Task.interp : ((q : Q) → Task Q' A' (A q)) → Task Q A α → Task Q' A' α`, with `run`/`trace` lemmas. Each Zinc file maps shared queries into its framework shape `(Cls × Q)` with it (a `Cls`-less name is answered `none` without a query). [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L187)/`back`/`fq` become an instance.
+4. **Query translation in `query`.** A generic fold of a task through a query interpretation, `Task.interp : ((q : Q) → Task Q' A' (A q)) → Task Q A α → Task Q' A' α`, with `run`/`trace` lemmas. Each Zinc file maps shared queries into its framework shape `(Cls × Q)` with it (a `Cls`-less name is answered `none` without a query). [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L67)/`back`/`fq` become an instance.
 
 5. **Toys as front ends.** `Cls`, `Name` and a small `Ty` stay, as the syntax the scenarios and spaces are written in; `toScala` (today in `HierShared`) becomes the front end, and interfaces store [`Scala.Decl`](../../scala-types/ScalaTypes/Syntax.lean#L99). `Hier.Ty.subst`, `mergeWith`, `linT`, `firstDecl` are deleted. Materialised members (`W`) store `Option Scala.Ty`.
 
@@ -34,13 +34,13 @@ Rejected: keeping the coarse query and keying `D` on whole declarations (loses t
 
 | step | file | needs from the shared layer | status |
 |---|---|---|---|
-| 1 | `query`: [`Task.interp`](../../query/Query/Interp.lean#L20) | — | DONE; [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L187) is now [`Task.rename`](../../query/Query/Interp.lean#L59) |
+| 1 | `query`: [`Task.interp`](../../query/Query/Interp.lean#L20) | — | DONE; [`Links.ZincBridge.tr`](../../links/Links/ZincBridge.lean#L67) is now [`Task.rename`](../../query/Query/Interp.lean#L59) |
 | 2 | `ScalaTypes.Resolve`: fine queries, generic walk, fine = coarse, trace lemmas | — | DONE: `Q.header`, `Q.member`, `linWith` over a `Node`, `lookupH`; `ScalaTypes.Fine` proves [`lookupH_eq`](../../scala-types/ScalaTypes/Fine.lean#L240) (with [`lin_fine`](../../scala-types/ScalaTypes/Fine.lean#L167), [`firstHit_fine`](../../scala-types/ScalaTypes/Fine.lean#L202)) and [`asks_lookupH`](../../scala-types/ScalaTypes/Fine.lean#L502); lowering, refchecks and every calibrated result unchanged |
 | 3 | `Hier`, `HierSound`, `HierShared` (template) | steps 1–2 | DONE: see below |
 | 4 | `Flat`, `FlatShared` | stored linearization over `header`; refchecks prelude against `Members` (its gaps: `var`, the 2.13 re-check, Scala 3's direct-parent rule are already characterised in `FlatShared`) | DONE: see below |
 | 5 | `Erasure` | `Lower.erase`; additions: `Long`, intersection types (`W with Z`, erasing by trait-or-class), so `header` must carry the kind | DONE: see below; its own two-parameter walk stays local |
 | 6 | `ImplicitScope` | base classes from the shared walk; implicit search over companions is not in the shared layer (decision below) | DONE: see below |
-| 7 | Track B4's explicit-interface T3 into [`General.lean`](../../inc-comp/IncComp/General.lean) (roadmap item) | — | TODO |
+| 7 | Track B4's explicit-interface T3 into [`General.lean`](../../inc-comp/IncComp/General.lean) (roadmap item) | — | DONE: `recompiled`, `Fixpoint`, `cleanFrom`, `fixpoint_unique_of_explicit`, [`inv_of_edit`](../../inc-comp/IncComp/General.lean#L492), [`untouched_eq_clean`](../../inc-comp/IncComp/General.lean#L506), [`must_recompile`](../../inc-comp/IncComp/General.lean#L523) moved unchanged from `Links.ZincBridge` |
 
 Each step builds, keeps its theorems, and is one commit.
 
