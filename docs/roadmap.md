@@ -51,6 +51,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Done looks like.** A space of source edits, Scala and Java, lowered, linked against a client space and checked against MiMa and HotSpot, as the JVM edit space was. Today only the Scala catalogue's first cases have been run through MiMa, and the Java catalogue not at all. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
 
+### A sixth MiMa gap: a package-private method above a default
+
+**Why.** Track J7's `pkgMethodAboveDefault`: a public class gains a package-private `m()`, and a client subclass in another package that inherits a default `m()` from an interface now fails `invokeinterface` with `IllegalAccessError` (JVMS §6.5). MiMa 1.2.1 and the corrected rules are both silent; no key covers a package-private member added to a public class.
+
+**Done looks like.** A corrected rule in [`packages/mima/MiMa/Fixed.lean`](../packages/mima/MiMa/Fixed.lean) that reports it (for example, a package-private method added to a public, non-final class whose name and descriptor some superinterface of a possible subclass could declare), an edit-space shape that reaches it, and `Sound` re-run; or a reasoned scope line. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
+
 ### A general proof for the corrected MiMa rules
 
 **Why.** [`packages/mima/MiMa/Sound.lean`](../packages/mima/MiMa/Sound.lean) checks the corrected rules on the edit space only. Upstreaming them to MiMa is stronger with a proof that they are sound for every library.

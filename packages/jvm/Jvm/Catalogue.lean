@@ -569,7 +569,7 @@ of §5.4.3.4 finds only public methods of `Object`, and `Object.finalize` is pro
 `i.finalize()` no longer resolves. -/
 def ifaceFinalizeRemoved : Case where
   name := "ifaceFinalizeRemoved"
-  mima := none
+  mima := some "InaccessibleMethodProblem"
   v0 := [object, (.I, { header := ifaceO, methods := [(.finalize, .v, abs)] })]
   v1 := [object, (.I, { header := ifaceO })]
   client := [(.X, { header := { super := some .O, ifaces := [.I] }, methods := [(.finalize, .v, inst)] })]
