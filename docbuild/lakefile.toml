@@ -1,0 +1,16 @@
+name = "docbuild"
+reservoir = false
+version = "0.1.0"
+packagesDir = "../.lake/packages"
+
+# API documentation for every library of the workspace, with doc-gen4:
+#   cd docbuild && lake build All:docs
+# The site is docbuild/.lake/build/doc; serve it (python3 -m http.server) rather than opening files.
+[[require]]
+scope = "leanprover"
+name = "doc-gen4"
+rev = "v4.34.1"
+
+[[require]]
+name = "jvm-lang-models"
+path = "../"

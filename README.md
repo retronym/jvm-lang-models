@@ -57,7 +57,7 @@ flowchart BT
 | [`links`](packages/links/README.md) | B4: Zinc-clean implies binary-compatible | yes |
 | [`harness`](packages/harness/README.md) | executables and scripts that drive the calibration | yes |
 
-Each package also has a `Spec` module (`Query.Spec`, `IncComp.Spec`, `Zinc.Spec`, …): its key definitions and theorems stated in prose, each name checked by the build. Sizes per package are in [`docs/stats.md`](docs/stats.md), generated.
+Each package also has a `Spec` module (`Query.Spec`, `IncComp.Spec`, `Zinc.Spec`, …): its key definitions and theorems stated in prose, each name checked by the build. Sizes per package are in [`docs/stats.md`](docs/stats.md), generated. API documentation for every library is built by doc-gen4 (`cd docbuild && lake build All:docs`) and published to [retronym.github.io/jvm-lang-models](https://retronym.github.io/jvm-lang-models/) by the on-demand `API docs` workflow.
 
 The Mathlib-free packages can be required on their own, for example [`packages/intellij`](packages/intellij) by `git … subDir`, as the TCK does.
 
