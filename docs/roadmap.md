@@ -23,7 +23,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 | Tracks J1–J8 | JVM linkage, overriding along library chains, method bodies and nestmates, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
-| Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
+| Tracks B1, B2, B4 | MiMa modelled, six gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1, MiMa-S1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
 
 ## Open
 
@@ -44,12 +44,6 @@ Each is one shape, one space and one probe run, as Track J6 was.
 **Why.** MiMa's users edit source, not classfiles. The JVM edit space found MiMa's gaps; a source edit space would find which ones real Scala and Java edits reach, and where scalac's encoding (forwarders, `$init$`, value classes) makes a source-compatible-looking edit break.
 
 **Done looks like.** A space of source edits, Scala and Java, lowered, linked against a client space and checked against MiMa and HotSpot, as the JVM edit space was. Today only the Scala catalogue's first cases have been run through MiMa, and the Java catalogue not at all. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
-
-### A sixth MiMa gap: a package-private method above a default
-
-**Why.** Track J7's `pkgMethodAboveDefault`: a public class gains a package-private `m()`, and a client subclass in another package that inherits a default `m()` from an interface now fails `invokeinterface` with `IllegalAccessError` (JVMS §6.5). MiMa 1.2.1 and the corrected rules are both silent; no key covers a package-private member added to a public class.
-
-**Done looks like.** A corrected rule in [`packages/mima/MiMa/Fixed.lean`](../packages/mima/MiMa/Fixed.lean) that reports it (for example, a package-private method added to a public, non-final class whose name and descriptor some superinterface of a possible subclass could declare), an edit-space shape that reaches it, and `Sound` re-run; or a reasoned scope line. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
 
 ### A general proof for the corrected MiMa rules
 
