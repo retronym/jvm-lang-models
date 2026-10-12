@@ -13,7 +13,9 @@ import Scala.Space
 * `mima`: the model's MiMa problems per edit and per `Jvm` catalogue case, as JSON lines;
 * `gaps`: the witnesses of `packages/mima/MiMa/Keys.lean`, as `Jvm` case JSON lines;
 * `scala OUT`: each `packages/scala/Scala/Catalogue.lean` case's library sources as `OUT/<case>/v0.scala` and
-  `v1.scala` (package `p`), and per case a TSV line: name, expected MiMa problem, the model's
+  `v1.scala` (package `p`), its client as `client.scala`, its sites and the model's outcomes as
+  `case.json` (in `packages/jvm/probes`' format, names unqualified, for `packages/scala/probes/run.py`),
+  and per case a TSV line: name, expected MiMa problem, the model's
   outcome before, after and fresh;
 * `reversed`: the 17 `ReversedMissingMethodProblem` edits with a hook (`MiMa.Reversed`), each with
   every well-typed client of its hook space, as `Jvm` case JSON lines for `packages/jvm/probes/probe.sh`;
@@ -25,6 +27,22 @@ open IncComp
 open MiMa Links Jvm.Catalogue Jvm.Clients
 
 def jstr (s : String) : String := "\"" ++ s ++ "\""
+
+/-- A `Jvm.Site` over names as strings, in `packages/jvm/probes`' JSON (names unqualified). -/
+def siteJsonS : Jvm.Site String String String → String
+  | .invokestatic c n d => s!"\{\"op\":\"invokestatic\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d}}"
+  | .invokestaticIface c n d => s!"\{\"op\":\"invokestaticIface\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d}}"
+  | .invokevirtual c n d r => s!"\{\"op\":\"invokevirtual\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d},\"recv\":{jstr r}}"
+  | .invokeinterface c n d r => s!"\{\"op\":\"invokeinterface\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d},\"recv\":{jstr r}}"
+  | .getstatic c n d => s!"\{\"op\":\"getstatic\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d}}"
+  | .new c => s!"\{\"op\":\"new\",\"owner\":{jstr c}}"
+  | .construct c n d => s!"\{\"op\":\"construct\",\"owner\":{jstr c},\"name\":{jstr n},\"desc\":{jstr d}}"
+  | _ => "{\"op\":\"unsupported\"}"
+
+def outcomeJsonS : Except String (Except Jvm.LinkError (List String)) → String
+  | .ok (.ok l) => "{\"ok\":[" ++ ",".intercalate (l.map jstr) ++ "]}"
+  | .ok (.error e) => "{\"error\":" ++ jstr (Jvm.Dump.errName e) ++ "}"
+  | .error m => "{\"lowering\":" ++ jstr m ++ "}"
 
 def problemsJson (name : String) (ps : List Problem) : String :=
   "{\"name\":" ++ jstr name ++ ",\"problems\":[" ++ ",".intercalate (ps.map (jstr ∘ Problem.name)) ++ "]}"
@@ -41,6 +59,12 @@ def main (args : List String) : IO Unit := do
       IO.FS.createDirAll s!"{out}/{k.name}"
       IO.FS.writeFile s!"{out}/{k.name}/v0.scala" (k.v0.show "p")
       IO.FS.writeFile s!"{out}/{k.name}/v1.scala" (k.v1.show "p")
+      IO.FS.writeFile s!"{out}/{k.name}/client.scala" (k.client.show "p")
+      IO.FS.writeFile s!"{out}/{k.name}/case.json" <|
+        "{\"name\":" ++ jstr k.name ++ ",\"mima\":null,\"v0\":[],\"v1\":[],\"client\":[]" ++
+        ",\"loads\":[" ++ ",".intercalate (k.loads.map jstr) ++ "],\"sites\":[" ++
+        ",".intercalate (k.sites.map siteJsonS) ++ "],\"before\":" ++ outcomeJsonS k.before ++
+        ",\"after\":" ++ outcomeJsonS k.after ++ "}"
       IO.println s!"{k.name}\t{k.mima.getD ""}\t{repr k.before}\t{repr k.after}\t{repr k.fresh}"
   else if args.contains "finalBehind" then
     let ks := finalBehindEdits

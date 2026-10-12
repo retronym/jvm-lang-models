@@ -501,37 +501,42 @@ def enter (run : Cur C → Option C → Site C N D → M C N D (List C)) (o : C)
   pure (o :: l.flatten)
 
 /-- Execute a site from `cur`, with `self` the class of `this` (`none` outside an instance method's
-body); a method the site selects is entered with `enter'`. The result is the sequence of methods
+body); a method the site selects is entered with `enter'`, and a new instance's constructor run with
+`init'`. A static method entered from a body keeps the caller's `this`: the static helpers that take
+the receiver as their first argument (Scala's `$init$` and `m$`) see it as `aload_0`. The result is the sequence of methods
 entered, or for a site that enters none, the class whose field is accessed or that is instantiated.
 The verifier checks the receiver's upcast before the site runs; then the receiver is instantiated,
 the member resolved and selected. -/
-def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur : Cur C) (self : Option C) :
-    Site C N D → M C N D (List C)
+def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (init' : C → M C N D Unit)
+    (cur : Cur C) (self : Option C) : Site C N D → M C N D (List C)
   | .invokestatic c n d => do
     let (o, i) ← resolveClass cur c n d
     if !i.isStatic then throw .incompatibleClassChange
-    enter' o n d none
+    enter' o n d self
   | .invokestaticIface c n d => do
     let (o, i) ← resolveIface cur c n d
     if !i.isStatic then throw .incompatibleClassChange
-    enter' o n d none
+    enter' o n d self
   | .invokevirtual c n d r => do
     assignable r c
     verifyProtected cur c r do
       pure ((← chain false n d depth c).map fun (a, i) => (a, i.access))
     instantiate cur r
+    init' r
     let (a, i) ← resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
     enter' (← select false r n d a i) n d (some r)
   | .invokeinterface c n d r => do
     assignable r c
     instantiate cur r
+    init' r
     let (a, i) ← resolveIface cur c n d
     if i.isStatic then throw .incompatibleClassChange
     if !(← ifacesOf depth r).contains c then throw .incompatibleClassChange
     enter' (← select true r n d a i) n d (some r)
   | .new c => do
     instantiate cur c
+    init' c
     pure [c]
   | .invokespecial c n d iface => do
     -- `this` is an instance of the site's class.
@@ -542,7 +547,7 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
     -- In an instance method's body the receiver is `this`; otherwise a new `x`.
     let t ← match self with
       | some t => pure t
-      | none => do instantiate cur x; pure x
+      | none => do instantiate cur x; init' x; pure x
     let (a, i) ← if iface then resolveIface cur c n d else resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
     let hc ← hdr c
@@ -565,6 +570,7 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
     verifyProtected cur c r do
       pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
     instantiate cur r
+    init' r
     let (a, f) ← resolveField cur c n d
     if f.isStatic then throw .incompatibleClassChange
     pure [a]
@@ -573,6 +579,7 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
     verifyProtected cur c r do
       pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
     instantiate cur r
+    init' r
     let (a, f) ← resolveField cur c n d
     if f.isStatic then throw .incompatibleClassChange
     if f.isFinal then throw .illegalAccess
@@ -588,7 +595,7 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
     pure [a]
   | .within x s => do
     discard <| resolveCls cur x
-    runSiteWith enter' (some x) none s
+    runSiteWith enter' init' (some x) none s
   | .construct c n d => do
     instantiate cur c
     -- Resolution walks the superclasses as for any method, with its access check; then the
@@ -634,23 +641,37 @@ def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (cur 
 The spaces' bodies are a site or two deep, so the bound only keeps the run total. -/
 def fuel : Nat := 8
 
+/-- Run the constructor `init` (a name and descriptor) of a new instance of `c`, if `c` declares it:
+its errors are the site's, the methods it enters are not part of the outcome (as `ProbeLog` mutes
+them). With `init = none`, constructors are not run. -/
+def initWith (run : Cur C → Option C → Site C N D → M C N D (List C)) (init : Option (N × D))
+    (c : C) : M C N D Unit :=
+  match init with
+  | none => pure ()
+  | some (n, d) => do
+    if (← askMethod c n d).isSome then discard <| enter run c n d (some c)
+
 /-- Run a site with `k` levels of method entry left; entering a method with a nonempty body at the
 end of the fuel is `outOfFuel`. -/
-def runK : Nat → Cur C → Option C → Site C N D → M C N D (List C)
-  | 0 => runSiteWith (enter fun _ _ _ => throw .outOfFuel)
-  | k + 1 => runSiteWith (enter (runK k))
+def runK (init : Option (N × D)) : Nat → Cur C → Option C → Site C N D → M C N D (List C)
+  | 0 => let stop := fun _ _ _ => throw .outOfFuel
+         runSiteWith (enter stop) (initWith stop init)
+  | k + 1 => runSiteWith (enter (runK init k)) (initWith (runK init k) init)
 
-def runSite : Site C N D → M C N D (List C) := runK fuel none none
+def runSite (init : Option (N × D)) : Site C N D → M C N D (List C) := runK init fuel none none
 
-/-- A client: the classes it loads, then the sites it executes, in order. -/
+/-- A client: the classes it loads, then the sites it executes, in order. With `init`, the name and
+descriptor of the no-argument constructor, an instance a site creates runs its constructor's body
+(`initWith`); without, constructors are not run (the `Jvm` catalogue's classes have empty ones). -/
 structure Program (C N D : Type) where
   loads : List C := []
   sites : List (Site C N D) := []
+  init : Option (N × D) := none
   deriving Repr
 
 def link (p : Program C N D) : M C N D (List C) := do
   for x in p.loads do load x
-  pure (← p.sites.mapM runSite).flatten
+  pure (← p.sites.mapM (runSite p.init)).flatten
 
 /-- The outcome of linking `p` in `w`: the first error, or the sequence of methods entered, in order
 (Track J4). A site that enters no method contributes the class whose field it accesses or that it

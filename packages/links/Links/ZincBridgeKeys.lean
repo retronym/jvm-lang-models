@@ -154,7 +154,8 @@ theorem coverage_fails :
 
 /-- **The loop.** From the old build, with `V` edited, Zinc recompiles `V` and `T` and stops. `O`
 keeps its old classfiles, which differ from a fresh build's, and the fresh build's caller fails
-to link against them. -/
+to link against them. Against the fresh build it runs the static forwarder `O.f`, the module's
+`O$.f` (read through `MODULE$`), its mixin forwarder `T.f$` and `T.f`. -/
 theorem loop_witness :
     "V" ∈ (compiler .s213).recompiled S src1 P 4 0 {"V"} s0 ∧
     "T" ∈ (compiler .s213).recompiled S src1 P 4 0 {"V"} s0 ∧
@@ -163,7 +164,7 @@ theorem loop_witness :
     old "O" ≠ fresh "O" ∧
     ((compiler .s213).zinc S src1 P 4 0 {"V"} s0).map
       (fun s' => Jvm.outcome (worldOf us s'.out) caller) = some (.error .noSuchMethod) ∧
-    Jvm.outcome (worldOf us fresh) caller = .ok ["O"] := by
+    Jvm.outcome (worldOf us fresh) caller = .ok ["O", "O$", "O$", "T", "T"] := by
   decide +kernel
 
 end Links.ZincBridgeKeys

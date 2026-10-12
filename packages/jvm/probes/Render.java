@@ -176,9 +176,27 @@ public class Render {
     return b.invokestatic(LOG, "mute", VOID).new_(r).dup().invokespecial(r, ConstantDescs.INIT_NAME, VOID).invokestatic(LOG, "unmute", VOID);
   }
 
-  /** The receiver: `this` (`aload_0`) for a site on `this`, else a new `recv`. */
+  /**
+   * The receiver: `this` (`aload_0`) for a site on `this`, else a new `recv`. A compiled client's
+   * receivers (`packages/scala/probes/run.py`) can instead be a module's `MODULE$` (`recvModule`), or
+   * built with another constructor (`recvCtor`, its descriptor), muted like `newObj`.
+   */
   static CodeBuilder recv(CodeBuilder b, Map<String, Object> s, ClassDesc recv) {
-    return bool(s, "this") ? b.aload(0) : newObj(b, recv);
+    if (bool(s, "this")) return b.aload(0);
+    if (bool(s, "recvModule")) return b.getstatic(recv, "MODULE$", recv);
+    if (s.get("recvCtor") != null) {
+      MethodTypeDesc d = MethodTypeDesc.ofDescriptor((String) s.get("recvCtor"));
+      return args(b.invokestatic(LOG, "mute", VOID).new_(recv).dup(), d).invokespecial(recv, ConstantDescs.INIT_NAME, d).invokestatic(LOG, "unmute", VOID);
+    }
+    return newObj(b, recv);
+  }
+
+  /** Zeros and nulls for a call's arguments. */
+  static CodeBuilder args(CodeBuilder b, MethodTypeDesc d) {
+    for (ClassDesc p : d.parameterList()) {
+      if (p.isPrimitive()) b.iconst_0(); else b.aconst_null();
+    }
+    return b;
   }
 
   static void popResult(CodeBuilder b, MethodTypeDesc d) {
@@ -193,28 +211,33 @@ public class Render {
     String desc = (String) s.get("desc");
     ClassDesc recv = s.get("recv") == null ? null : ClassDesc.of((String) s.get("recv"));
     switch (op) {
-      case "invokestatic" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); b.invokestatic(owner, n, d, false); popResult(b, d); }
-      case "invokestaticIface" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); b.invokestatic(owner, n, d, true); popResult(b, d); }
-      case "invokevirtual" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); recv(b, s, recv).invokevirtual(owner, n, d); popResult(b, d); }
-      case "invokeinterface" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); recv(b, s, recv).invokeinterface(owner, n, d); popResult(b, d); }
+      case "invokestatic" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); args(b, d).invokestatic(owner, n, d, false); popResult(b, d); }
+      case "invokestaticIface" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); args(b, d).invokestatic(owner, n, d, true); popResult(b, d); }
+      case "invokevirtual" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); args(recv(b, s, recv), d).invokevirtual(owner, n, d); popResult(b, d); }
+      case "invokeinterface" -> { MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc); args(recv(b, s, recv), d).invokeinterface(owner, n, d); popResult(b, d); }
       case "invokespecial" -> {
         MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc);
         // In an instance method's body, `super.m()` on `this`; elsewhere on a new instance of the site's class.
-        (inst ? b.aload(0) : newObj(b, self)).invokespecial(owner, n, d, bool(s, "iface"));
+        args(inst ? b.aload(0) : newObj(b, self), d).invokespecial(owner, n, d, bool(s, "iface"));
         popResult(b, d);
       }
       case "new" -> newObj(b, owner).pop().ldc((String) s.get("owner")).invokestatic(LOG, "ran", RAN);
       case "construct" -> {
         MethodTypeDesc d = MethodTypeDesc.ofDescriptor(desc);
-        b.new_(owner).dup();
-        for (ClassDesc p : d.parameterList()) {
-          if (p.isPrimitive()) b.iconst_0(); else b.aconst_null();
-        }
-        b.invokespecial(owner, ConstantDescs.INIT_NAME, d).pop();
+        args(b.new_(owner).dup(), d).invokespecial(owner, ConstantDescs.INIT_NAME, d).pop();
       }
       case "getfield" -> recv(b, s, recv).getfield(owner, n, ClassDesc.ofDescriptor(desc)).invokestatic(LOG, "ran", RAN);
       case "putfield" -> recv(b, s, recv).dup().ldc("put").putfield(owner, n, ClassDesc.ofDescriptor(desc)).ldc(n).invokestatic(LOG, "put", PUT);
-      case "getstatic" -> b.getstatic(owner, n, ClassDesc.ofDescriptor(desc)).invokestatic(LOG, "ran", RAN);
+      // A `String` field holds its owner's name; another field's read logs the reference's owner.
+      case "getstatic" -> {
+        ClassDesc fd = ClassDesc.ofDescriptor(desc);
+        b.getstatic(owner, n, fd);
+        if (fd.equals(STRING)) b.invokestatic(LOG, "ran", RAN);
+        else {
+          if (fd.equals(ConstantDescs.CD_long) || fd.equals(ConstantDescs.CD_double)) b.pop2(); else b.pop();
+          b.ldc((String) s.get("owner")).invokestatic(LOG, "ran", RAN);
+        }
+      }
       case "putstatic" -> b.ldc("put").putstatic(owner, n, ClassDesc.ofDescriptor(desc)).aconst_null().ldc(n).invokestatic(LOG, "put", PUT);
       default -> throw new IllegalArgumentException(op);
     }

@@ -155,8 +155,19 @@ structure ClassOut where
   record : Option (List (String × String)) := none
   deriving DecidableEq, Repr
 
-/-- The class's linkage view. JDK supertypes (`Object`, `Enum`, `Record`) are outside the class
-table, so a class extending one is a root. -/
+/-- A body's instruction as a `Jvm.Site` of method `m` in class `self`: a call on `self` is on `this`
+(a bridge), and `invokespecial` of a constructor is the `super(…)` call in a constructor, else a
+`new` (an enum constant, in `<clinit>`). -/
+def Insn.bodySite (self m : String) : Insn → Option (Jvm.Site String String String)
+  | ⟨"getstatic", o, n, d⟩ => some (.getstatic o n d)
+  | ⟨"invokestatic", o, n, d⟩ => some (.invokestatic o n d)
+  | ⟨"invokespecial", o, n, d⟩ => some (if m == "<init>" then .invokespecial o n d false else .construct o n d)
+  | ⟨"invokevirtual", o, n, d⟩ => some (if o == self then .invokevirtualThis o n d else .invokevirtual o n d o)
+  | ⟨"invokeinterface", o, n, d⟩ => some (if o == self then .invokeinterfaceThis o n d else .invokeinterface o n d o)
+  | _ => none
+
+/-- The class's linkage view; each method's body is its `calls` (Track J4). JDK supertypes (`Object`,
+`Enum`, `Record`) are outside the class table, so a class extending one is a root. -/
 def ClassOut.toJvm (c : ClassOut) : Jvm.Classfile String String String where
   header := { isInterface := c.itf, isAbstract := c.abs, isFinal := c.final,
               super := if c.itf || c.super.startsWith "java/" then none else some c.super,
@@ -164,7 +175,8 @@ def ClassOut.toJvm (c : ClassOut) : Jvm.Classfile String String String where
               permitted := if c.permitted.isEmpty then none else some c.permitted }
   methods := c.methods.map fun m =>
     (m.name, m.desc, { isStatic := m.static, isAbstract := m.abs, isFinal := m.final,
-                       access := match m.acc with | .pub => .pub | .priv => .priv | .pkg => .pkg })
+                       access := match m.acc with | .pub => .pub | .priv => .priv | .pkg => .pkg,
+                       body := m.calls.filterMap (Insn.bodySite c.name m.name) })
   fields := c.fields.map fun f =>
     (f.name, f.desc, { isStatic := f.static, isFinal := f.final,
                        access := match f.acc with | .pub => .pub | .priv => .priv | .pkg => .pkg })

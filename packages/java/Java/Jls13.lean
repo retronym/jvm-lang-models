@@ -67,15 +67,15 @@ subclass: it names `get()String`, and erasure leaves only `get()Object`. -/
 example : narrowedOverrideRemoved.before = .ok (.ok ["Q"]) ∧
     narrowedOverrideRemoved.after = .ok (.error .noSuchMethod) := by decide +kernel
 
-/-- Through the superclass the same edit links: `get()Object` selected `Q`'s bridge, now `P`'s
-method. -/
-example : narrowedOverrideRemovedViaP.before = .ok (.ok ["Q"]) ∧
+/-- Through the superclass the same edit links: `get()Object` selected `Q`'s bridge, which runs
+`Q.get()String`, and now selects `P`'s method. -/
+example : narrowedOverrideRemovedViaP.before = .ok (.ok ["Q", "Q"]) ∧
     narrowedOverrideRemovedViaP.after = .ok (.ok ["P"]) := by decide +kernel
 
 /-- Adding the override: the old call names the inherited `get()Object`, which is now `Q`'s
-bridge. -/
+bridge, running `Q.get()String`. -/
 example : narrowedOverrideAdded.before = .ok (.ok ["P"]) ∧
-    narrowedOverrideAdded.after = .ok (.ok ["Q"]) := by decide +kernel
+    narrowedOverrideAdded.after = .ok (.ok ["Q", "Q"]) := by decide +kernel
 
 /-! ## §13.5.3, §13.5.6: interface members -/
 
