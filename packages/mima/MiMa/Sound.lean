@@ -8,7 +8,7 @@ and class, the unreported variants are pinned and the rest shown sound without r
 then each unreported edit is run against all of `spaceB` (about 15 s and 6 GB each). So this
 module is not imported by `BinCompat` and is built on demand: `lake build BinCompat.Sound` (about
 half an hour). This is
-enumeration as testing (`docs/DESIGN-spec.md`), not a proof for all libraries.
+enumeration as testing (`docs/specification.md`), not a proof for all libraries.
 -/
 
 namespace BinCompat

@@ -61,7 +61,7 @@ F1 is gone, as predicted; F2, F3, G1 and G2 stay, because none adds a class: the
 
 ## Extending #34: a rule per family, as a specification (P10.7, P10.9, P10.10)
 
-Each remaining family gets a rule, run after every cycle as #34's is. `SplitProof.Spec` (names) and `SpecGivens.lean` (implicits) state the rules as keys of the framework's compiler (docs/DESIGN-spec.md) and prove what they guarantee for every program. `Names.lean`/`Givens.lean` check the same rules on the bounded spaces, against the harness, and measure their cost.
+Each remaining family gets a rule, run after every cycle as #34's is. `SplitProof.Spec` (names) and `SpecGivens.lean` (implicits) state the rules as keys of the framework's compiler (docs/specification.md) and prove what they guarantee for every program. `Names.lean`/`Givens.lean` check the same rules on the bounded spaces, against the harness, and measure their cost.
 
 The rules:
 

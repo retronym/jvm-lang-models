@@ -2,7 +2,7 @@
 
 ## Problem
 
-Java name resolution, sealed hierarchies and compile order are already Phases 12 and 14 (`packages/zinc/docs/PLAN-java.md`, `packages/zinc/docs/PLAN-order.md`), but nothing said what javac emits. Binary compatibility in Java is mostly JLS chapter 13, written as prose; with a Java front end lowering to `Jvm.World` (Track J), each of its rules becomes a checked statement, and Track B gets Java library edits to judge MiMa on. Java-defined libraries are also where MiMa's protected-member gap (MiMa-P1) bites.
+Java name resolution, sealed hierarchies and compile order are already Phases 12 and 14 (`packages/zinc/docs/12-java.md`, `packages/zinc/docs/14-order.md`), but nothing said what javac emits. Binary compatibility in Java is mostly JLS chapter 13, written as prose; with a Java front end lowering to `Jvm.World` (Track J), each of its rules becomes a checked statement, and Track B gets Java library edits to judge MiMa on. Java-defined libraries are also where MiMa's protected-member gap (MiMa-P1) bites.
 
 ## What was built
 
@@ -48,7 +48,7 @@ The last two needed `PermittedSubclasses` and `Site.construct` in `Jvm`, added b
 
 ## Not covered
 
-Nested, local and anonymous classes (so no nestmates; Track J3's open item), overloading beyond bridges, varargs, annotations, `Signature` and `InnerClasses`, lambdas, switch on enums or patterns, `module-info`. Not compared by the probe: the rest of the bytecode, `MethodParameters`, `invokedynamic` bootstrap arguments. Java catalogue cases are not yet run through MiMa (Track B3, `docs/ROADMAP.md`).
+Nested, local and anonymous classes (so no nestmates; Track J3's open item), overloading beyond bridges, varargs, annotations, `Signature` and `InnerClasses`, lambdas, switch on enums or patterns, `module-info`. Not compared by the probe: the rest of the bytecode, `MethodParameters`, `invokedynamic` bootstrap arguments. Java catalogue cases are not yet run through MiMa (Track B3, `docs/roadmap.md`).
 
 ## PRs
 

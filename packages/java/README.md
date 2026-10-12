@@ -4,7 +4,7 @@ What javac emits for a Java subset: lowering to classfiles as a `Task`, constant
 
 **Start here.** `Java/Lower.lean`, then `Java/Jls13.lean`.
 
-**Calibration.** `probes/probe.py` compiles the spaces with javac 17, 21 and 25: 99 programs agree. `docs/PLAN-track-java.md`.
+**Calibration.** `probes/probe.py` compiles the spaces with javac 17, 21 and 25: 99 programs agree. `docs/track-java.md`.
 
 **Gaps.** Java edits have not been run through MiMa (Track B3).
 

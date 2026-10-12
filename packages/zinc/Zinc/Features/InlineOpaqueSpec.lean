@@ -4,7 +4,7 @@ import Mathlib.Data.Fintype.Basic
 # Scala 3 `inline` and opaque types as a specification
 
 A `TCompiler` instance (`Tree.lean`: keys are read off the output) over any set of units and any
-program of the language below; the shape of `JavaSpec.lean`, and the design of `docs/DESIGN-spec.md`.
+program of the language below; the shape of `JavaSpec.lean`, and the design of `docs/specification.md`.
 
 **The language.** A unit declares, by name: a member with a signature (`member t`, a primitive
 erasure or an opaque type `c.n`), a constant (`final val`/`inline val`), a type alias read at the

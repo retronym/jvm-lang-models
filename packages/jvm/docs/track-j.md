@@ -17,9 +17,9 @@ Zinc asks whether a client must be *recompiled*; binary compatibility asks wheth
 Steps:
 - Track J1: calibrate the catalogue on HotSpot. Done.
 - Track J2: client spaces and verdicts. Done.
-- Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in `docs/ROADMAP.md`.
+- Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in `docs/roadmap.md`.
 - Track J5: sealed classes (`PermittedSubclasses`) and constructor calls. Done.
-- Track J4: behaviour (constants, method bodies). Open, see `docs/ROADMAP.md`.
+- Track J4: behaviour (constants, method bodies). Open, see `docs/roadmap.md`.
 
 ## Results
 
@@ -92,7 +92,7 @@ MiMa 1.2.1 is silent on five cases that break some client: `defaultConflict`, `o
 
 ## Not modelled
 
-Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in `docs/ROADMAP.md`.
+Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in `docs/roadmap.md`.
 
 ## PRs
 

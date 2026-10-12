@@ -29,7 +29,7 @@ Both prove `Obligations` and inherit T3a and the `Classpath` results. The narrow
 
 - `Names.lean`, `Givens.lean`, `InlineOpaque.lean`, `Split.lean`, `JavaNames.lean`: a `Compiler` instance each (the search algorithm as the task, the bridge as `keys`), the violation theorems for today's bridge, and `Obligations` proofs for the fixes. The existing enumerations stay as checks of the instance against the compiler.
 - `Model.lean`: whatever generalisation the instances need. Likely: a key whose hash is computed over a set of units (the coarse key), so that the upstream failure is expressible; and `covers` as a relation that may depend on the unit, for package-relative keys.
-- `docs/PLAN.md` and the phase files: a "proved generally / checked on a space" column per result.
+- `docs/status.md` and the phase files: a "proved generally / checked on a space" column per result.
 - Zinc PR descriptions (retronym/zinc#34 and the rule PRs): the key, hash and covering of each rule.
 
 ## Prior art

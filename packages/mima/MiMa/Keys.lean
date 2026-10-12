@@ -2,7 +2,7 @@ import MiMa.Edits
 /-!
 # MiMa as a bridge design: keys, covering, and its gaps
 
-In `docs/DESIGN-spec.md`'s terms, MiMa is a bridge between two versions of a library. Its *keys* are
+In `docs/specification.md`'s terms, MiMa is a bridge between two versions of a library. Its *keys* are
 what it compares (`Key`, per class public in the old library); a key's comparison is `check`,
 which reports problems; and `mima` reports every key's problems. A client's linkage *queries* are
 `Jvm.Q`: a class's header, whether it declares a method or a field, its declared methods. A key

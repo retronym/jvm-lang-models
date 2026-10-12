@@ -1,6 +1,6 @@
 # Phase 22 — Scala 3 macro dependencies: what an expansion reads, when it is recorded (`MacroDeps.lean`)
 
-BUG-MAP gap K-M1: sbt/zinc#249, #1478, scala/scala3#22999, #27125, #20119, partially #23852, #18100, sbt/zinc#1282, #1333, scala/scala3#27133. Phase 11 (`packages/zinc/docs/PLAN-inline.md`) specified inline bodies; a macro is an inline def whose body splices a call to an implementation, and the expansion is whatever that implementation *does*. This phase specifies it on the same shape: a `TCompiler` whose task is dotc's, keys read off the tree, a witness per bug, fixes as keys with their cost, and what is left to policy.
+BUG-MAP gap K-M1: sbt/zinc#249, #1478, scala/scala3#22999, #27125, #20119, partially #23852, #18100, sbt/zinc#1282, #1333, scala/scala3#27133. Phase 11 (`packages/zinc/docs/11-inline.md`) specified inline bodies; a macro is an inline def whose body splices a call to an implementation, and the expansion is whatever that implementation *does*. This phase specifies it on the same shape: a `TCompiler` whose task is dotc's, keys read off the tree, a witness per bug, fixes as keys with their cost, and what is left to policy.
 
 ## The query: what a macro expansion reads
 

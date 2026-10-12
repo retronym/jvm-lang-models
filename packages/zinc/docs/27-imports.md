@@ -71,5 +71,5 @@ Both are G1 (an instance in a package object, reached through no edge) under a n
 - [x] P27.1 Probes and bridge reading (above).
 - [x] P27.2 `Spec`: selector checks, coverage, obligations, witness.
 - [x] P27.3 `SpecGivens`: `Prio`, `best`, today's keys on the picked scope, obligations under both rules, witnesses, a bounded check.
-- [x] P27.4 Proved vs checked; docs/PLAN.md pointer.
+- [x] P27.4 Proved vs checked; docs/status.md pointer.
 - [x] P27.5 The two pending tests on retronym/zinc#58; each fails on develop as predicted (the client keeps `B`; a clean build picks `A`).

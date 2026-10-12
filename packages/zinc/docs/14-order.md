@@ -72,7 +72,7 @@ So neither single view dominates: each moves the view-agreement hypothesis to th
 
 `JavaSpec`'s instance with a second view: a Java class `java sv cv` has the member types `sv` in scalac's source view and `cv` in javac's classfile view; a query that tells them apart stands for whichever detail the parsers disagree on (the `Object` parent of scala/scala#11292, the `throws` clauses and constant expressions of scala/scala3#27264). Scala clients run the same lookup task, compiled by scalac. `group` per order is the two-stage composition above (`stageEnv`: the round's units answered from a chosen view where a predicate holds, the rest from the state); keys and hashes are `JavaSpec`'s fix. Pipelining's cycles are `Mixed` with every Java source in the round, so the early-output statement is the pipelining-specific one.
 
-Family IDs carry a `JO-` prefix (`JavaOrder.lean`'s docstrings say V1, V2, O1, O2) to keep them apart from `InlineOpaque`'s O1 and Track V's V1–V3 (`packages/java/docs/PLAN-track-java.md`).
+Family IDs carry a `JO-` prefix (`JavaOrder.lean`'s docstrings say V1, V2, O1, O2) to keep them apart from `InlineOpaque`'s O1 and Track V's V1–V3 (`packages/java/docs/track-java.md`).
 
 | Result | Status |
 |---|---|

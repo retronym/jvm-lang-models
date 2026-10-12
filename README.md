@@ -11,7 +11,7 @@ Lean 4 models of the tools that build JVM languages, layered so that each answer
 
 The Zinc model's hypotheses are the point: they are the specification a compiler bridge must meet. Nothing here verifies scalac; the models are calibrated against it.
 
-History: the Zinc model started in retronym/talks (`zinc-incrementality/lean/`, moved here with its history from talks `b9058db`), the IntelliJ model in retronym/scala-type-system-tck (`lean/`, likewise). `PLAN-repo.md` has the plan and the record of the split.
+History: the Zinc model started in retronym/talks (`zinc-incrementality/lean/`, moved here with its history from talks `b9058db`), the IntelliJ model in retronym/scala-type-system-tck (`lean/`, likewise). `docs/history/repository-split.md` has the plan and the record of the split.
 
 ```bash
 lake exe cache get && lake build
@@ -61,13 +61,13 @@ The Mathlib-free packages can be required on their own, for example `packages/in
 
 ## Start here, by goal
 
-**Understand the theory.** Read `packages/query/Query/Task.lean` (a compilation as a query tree with a trace), then `packages/inc-comp/IncComp/Model.lean` (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then `packages/inc-comp/IncComp/General.lean` (`XCompiler`, where T2, T3a, T4 and T5 are proved once). `packages/inc-comp/IncComp/Uniqueness.lean` and `packages/zinc/Zinc/Loop/Cycles.lean` show when incremental equals clean and where it fails. The statements are in [The theorems](#the-theorems); `docs/DESIGN-spec.md` gives the rationale for the method.
+**Understand the theory.** Read `packages/query/Query/Task.lean` (a compilation as a query tree with a trace), then `packages/inc-comp/IncComp/Model.lean` (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then `packages/inc-comp/IncComp/General.lean` (`XCompiler`, where T2, T3a, T4 and T5 are proved once). `packages/inc-comp/IncComp/Uniqueness.lean` and `packages/zinc/Zinc/Loop/Cycles.lean` show when incremental equals clean and where it fails. The statements are in [The theorems](#the-theorems); `docs/specification.md` gives the rationale for the method.
 
-**Start from a bug you know.** `docs/BUG-MAP.md` maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
+**Start from a bug you know.** `docs/evidence/bug-map.md` maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
 
-**Add a language feature to the Zinc model.** `packages/zinc/Zinc/Features/Sam.lean` is the template: the compiler's algorithm as the unit task of a `TCompiler`, today's bridge as keys, the failing cases as witnesses (`p1_today`, `p2_today`), the fix with `obligations_fix` and `fix_sound`. `packages/zinc/docs/PLAN-sam.md` has the question behind it. The witnesses became scripted tests in retronym/zinc#58, which fail on `develop` as predicted. The gap clusters in `docs/BUG-MAP.md` are the candidate features.
+**Add a language feature to the Zinc model.** `packages/zinc/Zinc/Features/Sam.lean` is the template: the compiler's algorithm as the unit task of a `TCompiler`, today's bridge as keys, the failing cases as witnesses (`p1_today`, `p2_today`), the fix with `obligations_fix` and `fix_sound`. `packages/zinc/docs/28-sam.md` has the question behind it. The witnesses became scripted tests in retronym/zinc#58, which fail on `develop` as predicted. The gap clusters in `docs/evidence/bug-map.md` are the candidate features.
 
-**Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from retronym/zinc#25) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in `packages/harness/scripts/`. The workflow is in `packages/zinc/docs/PLAN-names.md` and `packages/zinc/docs/PLAN-java.md`; pending tests in `docs/TESTS-catalogue.md`.
+**Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from retronym/zinc#25) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in `packages/harness/scripts/`. The workflow is in `packages/zinc/docs/10-names.md` and `packages/zinc/docs/12-java.md`; pending tests in `docs/evidence/tests.md`.
 
 **Maintain javac, scalac or dotc.** `packages/java`, `packages/scala` and `packages/scala-types` state what the compilers emit for a subset, calibrated by the probes beside them. `packages/scala/Scala/Facts.lean` and the `comp` failures in the bug map are where joint and separate compilation differ.
 
@@ -116,15 +116,14 @@ The local `Compiler` (`Model.lean:67`) has the first three. The policy's one obl
 ## Trust
 
 - No `sorry`, `admit` or `axiom` declarations.
-- `native_decide` appears only in `example`s, never in a `theorem` or `lemma`: those are checks on a bounded space, not results (docs/DESIGN-spec.md). `scripts/lint_native_decide.py` enforces this over every `.lean` file of every package, in CI.
+- `native_decide` appears only in `example`s, never in a `theorem` or `lemma`: those are checks on a bounded space, not results (docs/specification.md). `scripts/lint_native_decide.py` enforces this over every `.lean` file of every package, in CI.
 - `scripts/Axioms.lean` prints the axioms of the core theorems, of the counterexamples proved by `decide`, and of the instances' soundness theorems; `scripts/check_axioms.py` fails unless each uses only `propext`, `Classical.choice` and `Quot.sound` (so no `sorryAx` and no `Lean.ofReduceBool`), in CI.
 
 ## Documents
 
-- `PLAN-repo.md`: the plan for this repository, and the record of the split.
-- `docs/PLAN.md`: phase status, with what is proved for every program and what is checked on a space.
-- Each package's `docs/`: its phase and track plans (`packages/zinc/docs/PLAN-*.md` per Zinc feature, `packages/inc-comp/docs/PLAN-framework.md` for the `XCompiler` merge, `packages/jvm/docs/PLAN-track-j.md`, `packages/java/docs/PLAN-track-java.md`, `packages/scala/docs/PLAN-track-s.md`, `packages/mima/docs/PLAN-track-b.md`).
-- `docs/ROADMAP.md`: open work on the JVM, Scala, Java and binary-compatibility layers.
-- `docs/BUGS-catalogue.md`: Zinc's incremental-compilation bugs. `docs/TESTS-catalogue.md`: pending and disabled scripted tests. `docs/BUG-MAP.md`: each mapped to the instance that covers it, or to a gap.
-- `docs/DESIGN-spec.md`: why the model is a specification, and the rules that follow from it.
-- `docs/REVIEW-2026-10-11.md`, `docs/REVIEW-2026-10-11-central.md`: reviews of the framework, the findings and the documents, taken before the split (their paths are updated; their content is as written).
+[`docs/README.md`](docs/README.md) is the index, by what a document is for:
+
+- **current**: `docs/status.md` (what is proved and what is checked), `docs/specification.md` (why the model is a specification), `docs/roadmap.md` (open work);
+- **evidence**: `docs/evidence/` (the bug catalogue, the scripted-test catalogue, and the bug map that ties them to the model);
+- **per package**: each package's `docs/` (the Zinc phase records `packages/zinc/docs/NN-topic.md`, the calibration tracks);
+- **history**: `docs/history/` (the phase log, the reviews, the record of the repository split).
