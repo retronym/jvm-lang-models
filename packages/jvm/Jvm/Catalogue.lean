@@ -10,15 +10,16 @@ HotSpot.
 
 Classes: `A`, `B` (library classes), `I`, `J` (library interfaces), `X` (the client's class); the
 calibration spaces of `Clients.lean` also use `K` (a third interface) and `Y` (a second client class).
+`O` is `java.lang.Object`, in the class tables that need it (`object`).
 -/
 
 namespace Jvm.Catalogue
 
-inductive C | A | B | I | J | X | K | Y
+inductive C | A | B | I | J | X | K | Y | O
   deriving DecidableEq, Repr
 
-/-- `init` is `<init>`, a constructor. -/
-inductive N | m | init
+/-- `init` is `<init>`, a constructor; `hashCode` and `finalize` are `Object`'s. -/
+inductive N | m | init | hashCode | finalize
   deriving DecidableEq, Repr
 
 /-- `v` is `()V`, `i` is `()I`; `s` is a field of type `String`; `iv` is `(I)V`. -/
@@ -541,6 +542,41 @@ def fieldIfaceDepthBeforeSuper : Case where
 
 def j8 : List Case := [fieldIfaceDepthBeforeSuper]
 
+/-! ## `Object`'s methods in interface resolution
+
+`object` is `java.lang.Object` as far as these cases need it: a public `hashCode()I` and a protected
+`finalize()V`, in a package of its own (`java.lang`; the number is the model's, the dump names it
+`java.lang.Object`). An interface's superclass is `Object` (`super := some .O`), as in its classfile. -/
+
+def object : C × Classfile C N D :=
+  (.O, { header := { pkg := 9 }, methods := [(.hashCode, .i, inst), (.finalize, .v, { access := .prot })] })
+
+def ifaceO : Header C := { isInterface := true, super := some .O }
+
+/-- An interface drops its redeclaration of `hashCode`. `I i = new X(); i.hashCode()` still links:
+interface method resolution finds `Object`'s public `hashCode` (§5.4.3.4 step 2), and selection runs
+it on `X`, both before and after. -/
+def ifaceHashCodeRemoved : Case where
+  name := "ifaceHashCodeRemoved"
+  mima := none
+  v0 := [object, (.I, { header := ifaceO, methods := [(.hashCode, .i, abs)] })]
+  v1 := [object, (.I, { header := ifaceO })]
+  client := [(.X, { header := { super := some .O, ifaces := [.I] } })]
+  prog := { sites := [invokeinterface .I .hashCode .i .X] }
+
+/-- An interface drops its declaration of `finalize()V`, which the client's `X` implements. Step 2
+of §5.4.3.4 finds only public methods of `Object`, and `Object.finalize` is protected, so
+`i.finalize()` no longer resolves. -/
+def ifaceFinalizeRemoved : Case where
+  name := "ifaceFinalizeRemoved"
+  mima := none
+  v0 := [object, (.I, { header := ifaceO, methods := [(.finalize, .v, abs)] })]
+  v1 := [object, (.I, { header := ifaceO })]
+  client := [(.X, { header := { super := some .O, ifaces := [.I] }, methods := [(.finalize, .v, inst)] })]
+  prog := { sites := [invokeinterface .I .finalize .v .X] }
+
+def jObject : List Case := [ifaceHashCodeRemoved, ifaceFinalizeRemoved]
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,
@@ -609,5 +645,7 @@ example : ctorClassBecomesAbstract.before = .ok [.A] ∧ ctorClassBecomesAbstrac
 
 example : pkgMethodAboveDefault.before = .ok [.I] ∧ pkgMethodAboveDefault.after = .error .illegalAccess := by decide
 example : fieldIfaceDepthBeforeSuper.before = .ok [.A] ∧ fieldIfaceDepthBeforeSuper.after = .ok [.K] := by decide
+example : ifaceHashCodeRemoved.before = .ok [.O] ∧ ifaceHashCodeRemoved.after = .ok [.O] := by decide
+example : ifaceFinalizeRemoved.before = .ok [.X] ∧ ifaceFinalizeRemoved.after = .error .noSuchMethod := by decide
 
 end Jvm.Catalogue

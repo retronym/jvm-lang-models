@@ -205,7 +205,9 @@ def accs : List Access := [.pub, .prot, .pkg, .priv]
 
 def accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg" | .priv => "priv"
 
-def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y"
+def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y" | .O => "Object"
+
+def nTag : N → String | .m => "m" | .init => "init" | .hashCode => "hashCode" | .finalize => "finalize"
 
 /-- `m()V` with `mi`, or nothing. -/
 def declM : Option MethodInfo → List (N × D × MethodInfo)
@@ -269,8 +271,8 @@ def chainSpace : List Case :=
 /-- A site's tag in a program's name: the instruction's initials and the owner: `vA.m` is
 `invokevirtual A.m`, `iK.m` `invokeinterface K.m`, `gfB.m` `getfield B.m`, `psJ.m` `putstatic J.m`. -/
 def siteTag : Site C N D → String
-  | .invokevirtual c .. => s!"v{cName c}.m"
-  | .invokeinterface c .. => s!"i{cName c}.m"
+  | .invokevirtual c n .. => s!"v{cName c}.{nTag n}"
+  | .invokeinterface c n .. => s!"i{cName c}.{nTag n}"
   | .getfield c .. => s!"gf{cName c}.m"
   | .putfield c .. => s!"pf{cName c}.m"
   | .getstatic c .. => s!"gs{cName c}.m"
@@ -352,5 +354,33 @@ def fieldsSpace : List Case :=
     ([C.A, .B, .X, .J].flatMap fun c => [Site.getstatic c .m .s, .putstatic c .m .s]))
   build "fields" (iface .I [] ⊗ iface .K [] ⊗ iface .J [.K] ⊗ cls .A 1 none [.I] ⊗ cls .B 2 (some .A) [.J] ⊗
     x ⊗ sites)
+
+/-- `Object`'s methods in interface resolution (JVMS §5.4.3.4 step 2): `Object` (`Catalogue.object`,
+with a public `hashCode()I` and a protected `finalize()V`) is in the class table. `I` declares
+`hashCode` as a default, abstract, static or private method or not at all, and an abstract `finalize`
+or not; `J extends I` declares `hashCode` default, abstract or not at all (interfaces in package 2).
+The client's `X extends Object` implements `I` or `J` and declares public `hashCode` and `finalize`
+or not. One `invokeinterface` of `I` or `J`'s `hashCode` or `finalize`, or `invokevirtual` of
+`X`'s, on an `X`, from a client class `Y` in package 0, 1 or 2. A space of its own rather than a
+column of `defaultsSpace`, where it would repeat over every declaration of `m`. -/
+def objectSpace : List Case :=
+  let hc (mi : MethodInfo) := (N.hashCode, D.i, mi)
+  let fin (mi : MethodInfo) := (N.finalize, D.v, mi)
+  let i : List Part := do
+    let (t, h) ← [("-", []), ("default", [hc inst]), ("abstract", [hc abs]),
+                  ("static", [hc { isStatic := true }]), ("private", [hc { access := .priv }])]
+    let (u, f) ← [("-", []), ("abstract", [fin abs])]
+    pure { label := s!"I=hashCode:{t}+finalize:{u}",
+           lib := [object, (.I, { header := { ifaceO with pkg := 2 }, methods := h ++ f })] }
+  let j : List Part := [("-", []), ("default", [hc inst]), ("abstract", [hc abs])].map fun (t, h) =>
+    { label := s!"J=hashCode:{t}", lib := [(.J, { header := { ifaceO with pkg := 2, ifaces := [.I] }, methods := h })] }
+  let x : List Part := do
+    let c ← [C.I, .J]
+    let (t, h) ← [("-", []), ("hashCode", [hc inst])]
+    let (u, f) ← [("", []), ("+finalize", [fin inst])]
+    pure { label := s!"X<{cName c}>={t}{u}", client := [(.X, { header := { super := some .O, ifaces := [c] }, methods := h ++ f })] }
+  let sites := fromY ([C.I, .J].flatMap (fun c => [Site.invokeinterface c .hashCode .i .X, .invokeinterface c .finalize .v .X]) ++
+    [Site.invokevirtual .X .hashCode .i .X, .invokevirtual .X .finalize .v .X])
+  build "object" (i ⊗ j ⊗ x ⊗ sites)
 
 end Jvm.Clients

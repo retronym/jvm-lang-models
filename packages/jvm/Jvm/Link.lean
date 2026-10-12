@@ -18,10 +18,11 @@ the new library. Both are questions about a task's trace against an edited envir
 
 The model is generic in class, method-name and descriptor types. Calibrated against HotSpot 21, 25
 and 27 by `packages/jvm/probes`. Not modelled: nestmates (private access is same-class only), method bodies
-(a library method's own calls), signature-polymorphic methods, `Object`'s methods in interface
-resolution, loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
+(a library method's own calls), signature-polymorphic methods, loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
 the first site that hits it; a class is loaded, with its loading checks, when it is first referred
 to, and each site is verified just before it runs (as if each site were its own method).
+`Object` is a class like any other, present when a class table has it: an interface's `super` is
+its classfile's `super_class`, `Object`, and interface method resolution looks there (§5.4.3.4 step 2).
 -/
 
 open Query
@@ -40,6 +41,8 @@ structure Header (C : Type) where
   isInterface : Bool := false
   isAbstract : Bool := false
   isFinal : Bool := false
+  /-- The superclass; for an interface, `Object` (its classfile's `super_class`), or `none` when the
+  class table leaves `Object` out. -/
   super : Option C := none
   ifaces : List C := []
   isPublic : Bool := true
@@ -365,7 +368,12 @@ def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
   if !h.isInterface then throw .incompatibleClassChange
   match ← askMethod c n d with
   | some i => checkAccess cur (c, i)
-  | none => checkAccess cur (← fromIfaces c n d)
+  | none =>
+    -- Step 2: a public instance method of `Object`, the interface's superclass.
+    if let some o := h.super then
+      if let some i ← askMethod o n d then
+        if i.access = .pub && !i.isStatic then return (o, i)
+    checkAccess cur (← fromIfaces c n d)
 
 /-- Method selection on the receiver's class `r` for the resolved method `(a, ma)`, §5.4.6, with
 `invokevirtual`'s and (`iface`) `invokeinterface`'s errors. A private resolved method is selected

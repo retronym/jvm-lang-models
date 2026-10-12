@@ -20,6 +20,8 @@ group or space, clients, programs) for `scripts/model_stats.py`. A space's progr
 `lake exe jvmcases fields`: the Track J8 space of field resolution through superinterfaces
 (`Jvm.Clients.fieldsSpace`).
 
+`lake exe jvmcases object`: `Object`'s methods in interface resolution (`Jvm.Clients.objectSpace`).
+
 `lake exe jvmcases verdicts`: per edit, MiMa's problem, the Track J2 verdicts and the number of clients in
 the space that break or change, as a markdown table. -/
 
@@ -37,12 +39,14 @@ def main (args : List String) : IO Unit := do
     IO.println s!"catalogue\tJ5\t{j5.length}"
     IO.println s!"catalogue\tJ7\t{j7.length}"
     IO.println s!"catalogue\tJ8\t{j8.length}"
+    IO.println s!"catalogue\tObject\t{jObject.length}"
     IO.println s!"space\tspace\t{space.length}\t{programs all space}"
     IO.println s!"space\tspace3\t{space3.length}\t{programs j3 space3}"
     IO.println s!"space\tspace5\t{space5.length}\t{programs j5 space5}"
     IO.println s!"space\tchainSpace\t{chainSpace.length}\t{chainSpace.length}"
     IO.println s!"space\tdefaultsSpace\t{defaultsSpace.length}\t{defaultsSpace.length}"
     IO.println s!"space\tfieldsSpace\t{fieldsSpace.length}\t{fieldsSpace.length}"
+    IO.println s!"space\tobjectSpace\t{objectSpace.length}\t{objectSpace.length}"
     IO.println s!"space\tMiMa.spaceB\t{MiMa.spaceB.length}\t"
     return
   if args.contains "chain" then
@@ -57,13 +61,17 @@ def main (args : List String) : IO Unit := do
     for k in fieldsSpace do
       IO.println (Jvm.Dump.caseJson k)
     return
+  if args.contains "object" then
+    for k in objectSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
   if args.contains "j3" then
     for k in j3 do
       IO.println s!"{k.name}\t{repr k.before}\t{repr k.after}"
     return
   let cases := if args.contains "space" || args.contains "verdicts" then
       all.map (·, space) ++ j3.map (·, space3) ++ j5.map (·, space5) ++ j7.map (·, space) ++ j8.map (·, space3)
-    else (all ++ j3 ++ j5 ++ j7 ++ j8).map (·, space)
+    else (all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject).map (·, space)
   for (k, space) in cases do
     if args.contains "verdicts" then
       let ok := space.filter fun cl => let k' := k.withClient cl; wellTyped k'.w0 cl.2 && links k'.w0 cl.2

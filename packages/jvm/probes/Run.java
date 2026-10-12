@@ -132,7 +132,8 @@ public class Run {
           }
         }
         return "?";
-      default: return ProbeLog.last;
+      // Only `Object`'s methods run without logging.
+      default: return ProbeLog.last == null ? "java.lang.Object" : ProbeLog.last;
     }
   }
 

@@ -14,7 +14,7 @@ def jstr (s : String) : String := "\"" ++ s ++ "\""
 def jarr (l : List String) : String := "[" ++ ",".intercalate l ++ "]"
 def jbool (b : Bool) : String := if b then "true" else "false"
 
-def cBase : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y"
+def cBase : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y" | .O => "java.lang.Object"
 
 /-- The package of each class, from the first table that has it (packages are part of a name and
 must agree between tables). -/
@@ -23,8 +23,8 @@ def pkgIn (l : List (C × Classfile C N D)) (c : C) : Nat :=
 
 /-- The binary name: package `n > 0` is `p<n>`. -/
 def qual (pk : C → Nat) (c : C) : String :=
-  if pk c = 0 then cBase c else s!"p{pk c}.{cBase c}"
-def nName : N → String | .m => "m" | .init => "<init>"
+  if pk c = 0 || c = .O then cBase c else s!"p{pk c}.{cBase c}"
+def nName : N → String | .m => "m" | .init => "<init>" | .hashCode => "hashCode" | .finalize => "finalize"
 def dName : D → String | .v => "()V" | .i => "()I" | .s => "Ljava/lang/String;" | .iv => "(I)V"
 
 def accName : Access → String | .pub => "public" | .prot => "protected" | .pkg => "package" | .priv => "private"
@@ -90,7 +90,8 @@ def outcomeJson : Except LinkError (List C) → String
   | .ok l => "{\"ok\":" ++ jarr (l.map (jstr ∘ qual pk)) ++ "}"
   | .error e => "{\"error\":" ++ jstr (errName e) ++ "}"
 
-def tableJson (l : List (C × Classfile C N D)) : String := jarr (l.map (classJson pk))
+/-- The classes to render: all but `Object`, which the JVM has. -/
+def tableJson (l : List (C × Classfile C N D)) : String := jarr ((l.filter (·.1 != .O)).map (classJson pk))
 end
 
 def caseJson (k : Case) : String :=
