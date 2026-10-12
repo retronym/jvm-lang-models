@@ -58,6 +58,25 @@ example : madeFinal = methodBecomesFinal := rfl
 
 HotSpot reports `finalOverride` as an `IncompatibleClassChangeError`, as the JLS says.
 
+The check is against every final method of every superclass, not only the nearest declaration of
+the name. A first version of the model compared a class's method with the nearest one only, and a
+sweep over chains of three library classes (Track J6) found the difference: 1,836 of 28,800
+programs where HotSpot refused to load a class that the model loaded. The case that javac can
+produce has the client in the library's package, behind a redeclaration in another package:
+
+```lean
+example :
+    methodBecomesFinalBehind.before = .ok [] ∧
+    methodBecomesFinalBehind.after =
+      .error .finalOverride := by
+  decide
+```
+
+`A.m` is package-private in package 1, and `B` in package 2 redeclares a public `m` that does not
+override it. The client's `X`, in package 1, extends `B`; its `m` overrides `B.m`, and `A.m` from
+`A`'s own package. Making `A.m` final breaks `X`. MiMa reports nothing, since it does not check
+package-private methods.
+
 # Static methods
 
 > If a method that is not declared private is also declared static (that is, a class method) and is changed to not be declared static (that is, to an instance method), or vice versa, then compatibility with pre-existing binaries may be broken, resulting in a linkage time error, namely an IncompatibleClassChangeError, if these methods are used by the pre-existing binaries.

@@ -6,6 +6,9 @@ import Jvm.Clients
 space (`space3` for the Track J3 cases, `space5` for Track J5), named `<case>/<n>`, so the probe checks the model's outcome for each client, not only the
 catalogue's own.
 
+`lake exe jvmcases chain`: the Track J6 space of overriding chains (`Jvm.Clients.chainSpace`), each a case with
+`v1 = v0`.
+
 `lake exe jvmcases verdicts`: per edit, MiMa's problem, the Track J2 verdicts and the number of clients in
 the space that break or change, as a markdown table. -/
 
@@ -13,6 +16,10 @@ the space that break or change, as a markdown table. -/
 open Jvm.Catalogue Jvm.Clients
 
 def main (args : List String) : IO Unit := do
+  if args.contains "chain" then
+    for k in chainSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
   if args.contains "j3" then
     for k in j3 do
       IO.println s!"{k.name}\t{repr k.before}\t{repr k.after}"

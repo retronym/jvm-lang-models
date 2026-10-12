@@ -370,6 +370,20 @@ def transitiveOverride : Case where
              (.J, { header := p1 })]
   prog := { sites := [within .J (invokevirtual .A .m .v .X)] }
 
+/-- A final method behind a redeclaration. `A.m` is package-private in package 1; `B` in package 2
+redeclares a public `m`, which does not override it; the client's `X` in package 1 extends `B`, and
+its `m` overrides both `B.m` and, from `A`'s package, `A.m`. The edit makes `A.m` final, and loading
+`X` fails (§5.3.5 checks every superclass's final methods, not the nearest declaration). -/
+def methodBecomesFinalBehind : Case where
+  name := "methodBecomesFinalBehind"
+  mima := none
+  v0 := [(.A, { header := p1, methods := [(.m, .v, { access := .pkg })] }),
+         (.B, { header := { pkg := 2, super := some .A }, methods := [(.m, .v, inst)] })]
+  v1 := [(.A, { header := p1, methods := [(.m, .v, { access := .pkg, isFinal := true })] }),
+         (.B, { header := { pkg := 2, super := some .A }, methods := [(.m, .v, inst)] })]
+  client := [(.X, { header := { p1 with super := some .B }, methods := [(.m, .v, inst)] })]
+  prog := { loads := [.X] }
+
 def j3 : List Case :=
   [methodBecomesPrivate, methodBecomesPackagePrivate, classBecomesPackagePrivate,
    methodBecomesProtected, methodBecomesProtectedSub, methodBecomesProtectedOther,
@@ -377,7 +391,7 @@ def j3 : List Case :=
    superCallAbstract, defaultSuperCallAbstract, staticIfaceMethodRemoved, staticMovedToIface,
    defaultBecomesStatic, defaultBecomesPrivate, fieldRemoved, fieldBecomesStatic,
    fieldBecomesFinal, fieldBecomesPrivate, fieldShadowed, fieldIfaceBeforeSuper,
-   putstaticBecomesFinal, transitiveOverride]
+   putstaticBecomesFinal, transitiveOverride, methodBecomesFinalBehind]
 
 /-! ## Track J5: sealed classes and constructors
 
@@ -542,6 +556,7 @@ example : fieldShadowed.before = .ok [.A] ∧ fieldShadowed.after = .ok [.B] := 
 example : fieldIfaceBeforeSuper.before = .ok [.A] ∧ fieldIfaceBeforeSuper.after = .ok [.I] := by decide
 example : putstaticBecomesFinal.before = .ok [.A] ∧ putstaticBecomesFinal.after = .error .illegalAccess := by decide
 example : transitiveOverride.before = .ok [.I] ∧ transitiveOverride.after = .ok [.X] := by decide
+example : methodBecomesFinalBehind.before = .ok [] ∧ methodBecomesFinalBehind.after = .error .finalOverride := by decide
 
 example : classBecomesSealed.before = .ok [] ∧ classBecomesSealed.after = .error .incompatibleClassChange := by decide
 example : classBecomesSealedPermitting.after = .ok [] := by decide

@@ -6,8 +6,8 @@ Zinc asks whether a client must be *recompiled*; binary compatibility asks wheth
 
 ## What was built
 
-- **[`packages/jvm/Jvm/Link.lean`](../Jvm/Link.lean).** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: [`link_congr`](../Jvm/Link.lean#L566). `Compatible` and [`compatible_of_footprint`](../Jvm/Link.lean#L576) state binary compatibility and prove it where the edit misses the footprint.
-- **The contract.** [`Jvm.World`](../Jvm/Link.lean#L71) (classfiles), [`Jvm.Program`](../Jvm/Link.lean#L547) (what a client loads and executes) and [`Jvm.Site`](../Jvm/Link.lean#L396). Front ends produce a `World`; consumers read one. These types were changed only additively.
+- **[`packages/jvm/Jvm/Link.lean`](../Jvm/Link.lean).** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: [`link_congr`](../Jvm/Link.lean#L578). `Compatible` and [`compatible_of_footprint`](../Jvm/Link.lean#L588) state binary compatibility and prove it where the edit misses the footprint.
+- **The contract.** [`Jvm.World`](../Jvm/Link.lean#L71) (classfiles), [`Jvm.Program`](../Jvm/Link.lean#L559) (what a client loads and executes) and [`Jvm.Site`](../Jvm/Link.lean#L408). Front ends produce a `World`; consumers read one. These types were changed only additively.
 - **Sites as javac emits them.** `C c = new R(); c.m()` is `new R; invokespecial R.<init>; invokevirtual C.m`, so the verifier's upcast check, instantiation and load-on-reference are part of `Site` semantics. `Site.construct c n d` is `new c(…)`.
 - **[`packages/jvm/Jvm/Catalogue.lean`](../Jvm/Catalogue.lean).** 45 library edits, each with MiMa's expected problem, linked before and after by kernel `decide`.
 - **[`packages/jvm/Jvm/Clients.lean`](../Jvm/Clients.lean).** `breaksSomeClient k`: some client in a bounded space links on `v0` and fails on `v1`. `changesSomeClient k`: some client links on both and runs a different method (the first form of "links, but runs different code"). Clients must be well-typed against `v0`. Three spaces: `space` (15,652 programs; an optional client class `X` and one call site of any kind), `space3` (44,144; adds fields, `invokespecial`, interface statics, sites inside `X`), `space5` (14,256; constructors and `new`).
@@ -19,6 +19,7 @@ Steps:
 - Track J2: client spaces and verdicts. Done.
 - Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in [`docs/roadmap.md`](../../../docs/roadmap.md).
 - Track J5: sealed classes (`PermittedSubclasses`) and constructor calls. Done.
+- Track J6: overriding along a chain of library classes, the shape of JVMS §5.4.5's example: `chainSpace` in [`Clients.lean`](../Jvm/Clients.lean), 28,800 programs (`lake exe jvmcases chain`). Done; it found two model bugs, below.
 - Track J4: behaviour (constants, method bodies). Open, see [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## Results
@@ -33,6 +34,7 @@ Steps:
 - The protected-receiver check (§4.10.1.8), predicted by `methodBecomesProtectedOther`.
 - `PermittedSubclasses` (JVMS §5.3.5) is checked after the final-superclass check and before the access check, as HotSpot's class file parser does: the class must be listed and, unless public, in the sealed type's run-time package.
 - A constructor resolves like any method, walking superclasses with an access check, and must then be declared by `c` itself (JVMS §6.5 `invokespecial`, linking exceptions), so an inherited match is `noSuchMethod` (`ctorPulledUp`). The access check comes first: an inherited private match is `illegalAccess` (`ctorPulledUpPrivate`).
+- The final-method check at loading (§5.3.5) looks at every final method of every superclass, not the nearest declaration of the name. Found by Track J6: with a final `A.m` behind a `B.m` that does not override it (private, or package-private elsewhere), the model let `I` or `X` load, and HotSpot 21, 25 and 27 report "overrides final method A.m" (1,836 of the 28,800 programs). `methodBecomesFinalBehind` is the javac-reachable form, through a client in `A`'s package; MiMa 1.2.1 reports nothing for it, since `A.m` is package-private.
 - Transitive overriding (§5.4.5 (b)): a package-private method is also overridden from another package through an intermediate method that overrides it and is overridden in turn. Found by encoding the JVMS's own example as `transitiveOverride`: the model, without (b), predicted `I.m` after the intermediate method became public, and HotSpot 21, 25 and 27 run `X.m`. The calibration spaces had not found it: no client of `space3` declares a package-private method in another package below two library classes.
 
 **Known JDK bugs hit by the probe**, both fixed in JDK 25. The model follows the JVMS; the probe reports the JDK 21 results as known deviations.
@@ -78,6 +80,7 @@ Steps:
 | `fieldShadowed` | — | links, runs `B` | same | no | yes (42/165) |
 | `fieldIfaceBeforeSuper` | — | links, runs `I` | same | yes (37/224) | yes (37/224) |
 | `putstaticBecomesFinal` | — | `illegalAccess` | `IllegalAccessError` | yes (13/49) | no |
+| `methodBecomesFinalBehind` | — | `finalOverride` | `IncompatibleClassChangeError` | no (0/69); its own client breaks, but no client of `space3` is in `A`'s package | no |
 | `transitiveOverride` | — | links, runs `X` | same | no (0/60) | no (0/60); the case's own client changes, but no client of `space3` has the shape |
 | `classBecomesSealed` | — | `incompatibleClassChange` | `IncompatibleClassChangeError` | yes (15/32) | no |
 | `classBecomesSealedPermitting` | — | links | same | no | no |

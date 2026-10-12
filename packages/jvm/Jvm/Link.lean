@@ -245,6 +245,17 @@ def permits (x : C) (h hs : Header C) : Bool :=
   | none => true
   | some ps => (h.isPublic || h.pkg == hs.pkg) && ps.contains x
 
+/-- The final instance methods named `n` with descriptor `d` declared in `c` or a superclass. -/
+def finalsAbove (n : N) (d : D) : Nat → C → M C N D (List (C × MethodInfo))
+  | 0, _ => pure []
+  | k + 1, c => do
+    let here := match ← askMethod c n d with
+      | some i => if i.isFinal && !i.isStatic then [(c, i)] else []
+      | none => []
+    match (← hdr c).super with
+    | none => pure here
+    | some s => pure (here ++ (← finalsAbove n d k s))
+
 /-- Load a class, and first its superinterfaces and superclass (HotSpot's class file parser resolves
 them in that order): each superinterface must be an interface, the superclass a non-final class,
 both accessible from the class and, if sealed, permitting it (§5.3.5), and none of the class's instance methods may override a final one. The JVM loads a class when a
@@ -273,8 +284,9 @@ def loadK : Nat → C → M C N D Unit
         if !permits x h hi then throw .incompatibleClassChange
         if !hi.isPublic && hi.pkg != h.pkg then throw .illegalAccess
       for (n, d, mi) in ← askDeclared x do
-        if let some (a, si) ← chain true n d depth s then
-          if si.isFinal && (← overrides n d x mi a si) then throw .finalOverride
+        -- §5.3.5: any final method of a superclass, not only the nearest declaration
+        for (a, si) in ← finalsAbove n d depth s do
+          if ← overrides n d x mi a si then throw .finalOverride
 
 def load (x : C) : M C N D Unit := loadK depth x
 

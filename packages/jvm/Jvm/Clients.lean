@@ -173,4 +173,43 @@ example : breaksSomeClient fieldIfaceBeforeSuper space3 = true ∧
     changesSomeClient fieldIfaceBeforeSuper space3 = true := by decide +kernel
 example : breaksSomeClient putstaticBecomesFinal space3 = true := by decide +kernel
 
+
+/-- The Track J6 space: overriding along a chain of library classes, the shape of JVMS §5.4.5's
+example. `A` (package 1), `B extends A` and `I extends B` (`I` is a class here; `B` and `I` each in
+package 1 or 2); `A` declares `m()V` with any access, final or not, and `B` and `I` each declare it
+with any access or not at all. The client's `X extends I`, in the unnamed package, declares `m()V`
+public, package-private, private or not at all; one `invokevirtual` of `A.m`, `B.m` or `I.m` on an
+`X`, from a client class `J` in package 0, 1 or 2. Each program is a case with `v1 = v0`: it
+calibrates selection (§5.4.6) and the load-time check for final methods (§5.3.5), both of which
+use transitive overriding (§5.4.5 (b)). -/
+def chainSpace : List Case :=
+  let accs : List Access := [.pub, .prot, .pkg, .priv]
+  let opt : Option Access → List (N × D × MethodInfo)
+    | none => []
+    | some a => [(.m, .v, { access := a })]
+  let tag : Option Access → String
+    | none => "-" | some .pub => "pub" | some .prot => "prot" | some .pkg => "pkg" | some .priv => "priv"
+  let cn : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+  let cases : List Case := do
+    let aAcc ← accs
+    let aFin ← [false, true]
+    let bAcc ← none :: accs.map some
+    let bPkg ← [1, 2]
+    let iAcc ← none :: accs.map some
+    let iPkg ← [1, 2]
+    let xAcc ← [none, some .pub, some .pkg, some .priv]
+    let owner ← [C.A, .B, .I]
+    let jPkg ← [0, 1, 2]
+    let lib : List (C × Classfile C N D) :=
+      [(.A, { header := p1, methods := [(.m, .v, { access := aAcc, isFinal := aFin })] }),
+       (.B, { header := { pkg := bPkg, super := some .A }, methods := opt bAcc }),
+       (.I, { header := { pkg := iPkg, super := some .B }, methods := opt iAcc })]
+    let name := s!"chain/A={tag (some aAcc)}{if aFin then "+final" else ""},B=p{bPkg}.{tag bAcc}," ++
+      s!"I=p{iPkg}.{tag iAcc},X={tag xAcc},site={cn owner}.m@p{jPkg}"
+    pure { name, mima := none, v0 := lib, v1 := lib,
+           client := [(.X, { header := { super := some .I }, methods := opt xAcc }),
+                      (.J, { header := { pkg := jPkg } })],
+           prog := { sites := [.within .J (.invokevirtual owner .m .v .X)] } }
+  cases
+
 end Jvm.Clients
