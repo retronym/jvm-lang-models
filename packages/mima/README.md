@@ -8,7 +8,7 @@ Which library edits MiMa reports, which it misses, and corrected rules. MiMa (`m
 
 **Gaps.** `MiMa/Sound.lean` checks the corrected rules on the edit space only; a proof for every library is open. 17 `ReversedMissingMethodProblem` reports need method bodies (Track J4).
 
-`MiMa/Sound.lean` is outside the default target: `lake build MiMa.Sound` (about half an hour).
+`MiMa/Sound.lean` is outside the default target: `lake build MiMa.Sound` (about 35 minutes; in CI only on demand).
 
 ## Files
 
