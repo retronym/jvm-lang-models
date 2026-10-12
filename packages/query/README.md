@@ -13,4 +13,5 @@ A computation that asks questions: a query tree (`Task`) that either returns or 
 | File | Contents |
 |---|---|
 | [`Task.lean`](Query/Task.lean) | Free monad of query trees; `run`, `trace`; T1 [`run_eq_of_trace`](Query/Task.lean#L40), [`run_congr`](Query/Task.lean#L79) |
+| [`Interp.lean`](Query/Interp.lean) | A task over one query interface run over another (`interp`, `rename`): [`run_interp`](Query/Interp.lean#L34), [`trace_interp`](Query/Interp.lean#L42) |
 | [`Basic.lean`](Query/Basic.lean) | What the Mathlib-free layers took from Mathlib: decidable equality of `Except`, a low-priority `List` monad, `dedupLast` (Mathlib's `dedup`, structural) |

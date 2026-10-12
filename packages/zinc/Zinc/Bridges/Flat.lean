@@ -58,6 +58,12 @@ namespace Zinc.Flat
 open Zinc.Hier (Cls Name Ty allCls)
 open Zinc.Hier.Cls Zinc.Hier.Name
 
+/-- `asSeenFrom` on `Hier`'s toy types: instantiate the parameter. `Flat` keeps its own walk until
+it is restated over the shared layer (`packages/zinc/docs/29-shared-scala.md`). -/
+def _root_.Zinc.Hier.Ty.subst (arg : Ty) : Ty → Ty
+  | .param => arg
+  | t => t
+
 instance : Fintype Cls := ⟨allCls, by intro x; cases x <;> decide⟩
 
 def names : List Name := [m, g]
