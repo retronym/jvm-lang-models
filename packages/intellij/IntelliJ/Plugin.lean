@@ -1,4 +1,4 @@
-import AsSeenFrom.Scalac
+import IntelliJ.Scalac
 
 /-!
 # The plugin's walk: scalac's, plus a fallback

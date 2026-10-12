@@ -39,6 +39,10 @@ name = "links"
 path = "packages/links"
 
 [[require]]
+name = "intellij"
+path = "packages/intellij"
+
+[[require]]
 name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.34.1"

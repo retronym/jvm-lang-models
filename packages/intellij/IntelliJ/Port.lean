@@ -1,11 +1,11 @@
-import AsSeenFrom.Scalac
-import AsSeenFrom.Shared
+import IntelliJ.Scalac
+import ScalaTypes.AsSeenFrom
 
 /-!
 # This model as an instance of the shared `asSeenFrom`
 
-`Shared.lean` (vendored from retronym/talks) states scalac's walk once, for any type language
-with substitutable leaves, and proves the composition law there. This file makes `Ty` such a
+`ScalaTypes.AsSeenFrom` (the `scala-types` package of this repository) states scalac's walk once,
+for any type language with substitutable leaves, and proves the composition law there. This file makes `Ty` such a
 language (its leaves are this-types; it has no class type parameters, so `bargs` is empty) and
 proves that `Scalac.asf` *is* the shared map. `Chain.compose` and `Chain.chain_is_single` are then
 the shared theorems (`compose_of_shared`, `chain_is_single_of_shared`).

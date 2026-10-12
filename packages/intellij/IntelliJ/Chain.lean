@@ -1,5 +1,5 @@
-import AsSeenFrom.Scalac
-import AsSeenFrom.Port
+import IntelliJ.Scalac
+import IntelliJ.Port
 
 /-!
 # Chains of links versus one `asSeenFrom`
@@ -82,7 +82,7 @@ intended one; `chain_is_intended` below is about that, and `Cases.B` shows a wro
 theorem compose (p₁ : Ty) (c₁ : Class) (p₂ : Ty) (c₂ : Class) (t : Ty)
     (h : inView W p₁ c₁ t) :
     asf W p₂ c₂ (asf W p₁ c₁ t) = asf W (asf W p₂ c₂ p₁) c₁ t := by
-  -- the shared theorem (`Shared.lean`), through `Port`: `asf` is the shared map
+  -- the shared theorem (`ScalaTypes.AsSeenFrom`), through `Port`: `asf` is the shared map
   haveI := Port.lockstep W Lockstep.bpre_comm Lockstep.hasBase_comm
   simp only [Port.asf_eq]
   exact AsSeenFrom.compose W.shared _ _ _ _ _ ((Port.inView_iff W _ _ _).1 h)

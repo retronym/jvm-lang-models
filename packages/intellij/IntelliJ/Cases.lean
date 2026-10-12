@@ -1,6 +1,6 @@
-import AsSeenFrom.Chain
-import AsSeenFrom.IntelliJ
-import AsSeenFrom.Relaxations
+import IntelliJ.Chain
+import IntelliJ.Plugin
+import IntelliJ.Relaxations
 
 /-!
 # Two cases from scala/scala, as checked computations

@@ -53,11 +53,10 @@ What is not proved: that `BaseTypes.baseType` satisfies lockstep (an assumption 
 |---|---|
 | `Model.lean` | classes as owner paths, types with this-leaves, a `World` of base-type facts |
 | `Scalac.lean` | scalac's `thisTypeAsSeen` and `asSeenFrom` as structural recursion, so termination is the checker's; `inView` |
-| `Shared.lean` | vendored from retronym/talks (`zinc-incrementality/lean/Scala/AsSeenFrom.lean`): the same walk for any type language with this-type and class-parameter leaves, and the composition law proved once; also used by the talks Scala layer's lowering to classfiles |
-| `Port.lean` | `Ty` as an instance of `Shared` (this-leaves only); `asf_eq`: `Scalac.asf` is the shared map; lockstep carries over. `Chain.compose` is proved from the shared theorem through it |
+| `Port.lean` | `Ty` as an instance of `ScalaTypes.AsSeenFrom` (the same walk for any type language with this-type and class-parameter leaves, with the composition law proved once; shared with the Scala layer's lowering) (this-leaves only); `asf_eq`: `Scalac.asf` is the shared map; lockstep carries over. `Chain.compose` is proved from the shared theorem through it |
 | `Chain.lean` | lockstep; `compose`, `chain_is_single`, `idempotent`; then the checkable conditions `wellAnchored`, `fixedTarget`, `stateSafe` and their theorems; last, self-rooted links and `once_is_scalac` |
 | `Relaxations.lean` | three shapes of link that fail A1's arms and are admitted by a relaxation: compound self-rooted, outer-rooted, respelled; and a checkable condition for `once_is_scalac` |
-| `IntelliJ.lean` | the plugin's walk with its narrow-against-target fallback; `agrees` |
+| `Plugin.lean` | the plugin's walk with its narrow-against-target fallback; `agrees` |
 | `Cases.lean` | three cases from scala/scala, decided by computation: a mis-anchored chain (`MatchWarnings`), the fallback firing where scalac's walk stops (`Importers`), a self-rooted link applied once and twice (`Scanners`), and the shapes of `Relaxations` (D, E) |
 
 ```

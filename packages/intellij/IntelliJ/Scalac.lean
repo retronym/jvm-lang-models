@@ -1,4 +1,4 @@
-import AsSeenFrom.Model
+import IntelliJ.Model
 
 /-!
 # scalac: `asSeenFrom` as one anchored walk

@@ -1,5 +1,5 @@
-import AsSeenFrom.Chain
-import AsSeenFrom.IntelliJ
+import IntelliJ.Chain
+import IntelliJ.Plugin
 
 /-!
 # Relaxing A1: which non-idempotent links are still right
