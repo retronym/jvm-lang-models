@@ -559,8 +559,36 @@ def ifaceHookPackagePrivate : Case where
   client := [(.X, { header := { ifaces := [.J] }, methods := [(.m, .i, { access := .pkg })] })]
   prog := { sites := [invokeinterface .J .run .v .X] }
 
+/-- `A` and its inner class `B` as javac compiles them: `A` is the nest host and lists `B`, `B` names
+`A`; `B.run()` calls `A`'s private `m` (`new A().m()`). -/
+def nestA (members : List C) : Classfile C N D :=
+  { header := { p1 with nestMembers := members }, methods := [(.m, .v, { access := .priv })] }
+def nestB (host : Option C) : Classfile C N D :=
+  { header := { p1 with nestHost := host }, methods := [(.run, .v, { body := [invokevirtual .A .m .v .A] })] }
+
+/-- The inner class leaves the nest (`A`'s `NestMembers` no longer lists `B`, as when `B` is
+recompiled as a top-level class beside an old `B`): the library's own call of `A.m` from `B.run` fails
+(JVMS §5.4.4). The client only calls `B.run`. -/
+def nestMemberRemoved : Case where
+  name := "nestMemberRemoved"
+  mima := none
+  v0 := [(.A, nestA [.B]), (.B, nestB (some .A))]
+  v1 := [(.A, nestA []), (.B, nestB (some .A))]
+  prog := { sites := [invokevirtual .B .run .v .B] }
+
+/-- The inner class moves to another nest: `B`'s `NestHost` is now `I`, which lists it, so `A` and
+`B` are no longer nestmates. -/
+def nestHostChanged : Case where
+  name := "nestHostChanged"
+  mima := none
+  v0 := [(.A, nestA [.B]), (.B, nestB (some .A)), (.I, { header := p1 })]
+  v1 := [(.A, nestA [.B]), (.B, nestB (some .I)), (.I, { header := { p1 with nestMembers := [.B] } })]
+  prog := { sites := [invokevirtual .B .run .v .B] }
+
 /-- The Track J4 cases the probe runs (`selfCall` overflows the JVM's stack instead). -/
-def j4 : List Case := [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate, ifaceHookPackagePrivate]
+def j4 : List Case :=
+  [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate, ifaceHookPackagePrivate, nestMemberRemoved,
+   nestHostChanged]
 
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
@@ -635,5 +663,7 @@ example : hookBecomesAbstract.before = .ok [.A, .A] ∧
 example : hookBecomesPrivate.before = .ok [.A, .X] ∧ hookBecomesPrivate.after = .ok [.A, .A] := by decide
 example : ifaceHookPackagePrivate.before = .ok [.J] ∧
     ifaceHookPackagePrivate.after = .error .illegalAccess := by decide
+example : nestMemberRemoved.before = .ok [.B, .A] ∧ nestMemberRemoved.after = .error .illegalAccess := by decide
+example : nestHostChanged.before = .ok [.B, .A] ∧ nestHostChanged.after = .error .illegalAccess := by decide
 
 end Jvm.Catalogue

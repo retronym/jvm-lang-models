@@ -274,4 +274,47 @@ def bodySpace : List Case :=
            prog := { sites := [.invokevirtual w .run .v recv] } }
   cases
 
+/-- The Track J4 nest space: private access between nestmates (JVMS §5.4.4), reached through a library
+method's body. `A` and `I` (a class here) in package 1, `B` in package 1 or 2, extending `A` or not;
+eight nest configurations of `NestHost` and `NestMembers` (none, `A` hosting `B`, either half of that
+alone, `B` hosting `A`, `I` hosting both, `I` listing only `A`, `B` claiming `I` while `A` lists `B`).
+`run()V` in `B` (or in `A`) reads the other class's member `m`, private or public: `new A().m()`, a
+static `m()`, a field or a static field, or `this.m()` from `B extends A`. The client calls `run`.
+Each program is a case with `v1 = v0`. -/
+def nestSpace : List Case :=
+  let cn : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+  -- (name, A's NestHost, A's NestMembers, B's NestHost, B's NestMembers, I's NestMembers)
+  let cfgs : List (String × Option C × List C × Option C × List C × List C) :=
+    [("none", none, [], none, [], []), ("A>B", none, [.B], some .A, [], []),
+     ("B->A", none, [], some .A, [], []), ("A:B", none, [.B], none, [], []),
+     ("B>A", some .B, [], none, [.A], []), ("I>AB", some .I, [], some .I, [], [.A, .B]),
+     ("I>A,B->I", some .I, [], some .I, [], [.A]), ("A:B,B->I", none, [.B], some .I, [], [.B])]
+  let cases : List Case := do
+    let (cfg, aH, aM, bH, bM, iM) ← cfgs
+    let bPkg ← [1, 2]
+    let bSup ← [false, true]
+    let (w, dc) ← [(C.B, C.A), (C.A, C.B)]
+    let acc ← [Access.priv, .pub]
+    -- (name, the member `dc` declares, the site in `w.run`)
+    let kinds : List (String × (List (N × D × MethodInfo C N D) × List (N × D × FieldInfo)) × Site C N D) :=
+      [("new().m()", ([(.m, .v, { access := acc })], []), .invokevirtual dc .m .v dc),
+       ("static m()", ([(.m, .v, { access := acc, isStatic := true })], []), .invokestatic dc .m .v),
+       ("getfield", ([], [(.m, .s, { access := acc })]), .getfield dc .m .s dc),
+       ("getstatic", ([], [(.m, .s, { access := acc, isStatic := true })]), .getstatic dc .m .s)] ++
+      (if w = .B && bSup then [("this.m()", ([(.m, .v, { access := acc })], []), .invokevirtualThis .A .m .v)] else [])
+    let (kn, (dms, dfs), site) ← kinds
+    let runM : N × D × MethodInfo C N D := (.run, .v, { body := [site] })
+    let members (c : C) : List (N × D × MethodInfo C N D) × List (N × D × FieldInfo) :=
+      ((if c = w then [runM] else []) ++ (if c = dc then dms else []), if c = dc then dfs else [])
+    let lib : List (C × Classfile C N D) :=
+      [(.A, { header := { pkg := 1, nestHost := aH, nestMembers := aM },
+              methods := (members .A).1, fields := (members .A).2 }),
+       (.B, { header := { pkg := bPkg, super := if bSup then some .A else none, nestHost := bH, nestMembers := bM },
+              methods := (members .B).1, fields := (members .B).2 }),
+       (.I, { header := { pkg := 1, nestMembers := iM } })]
+    let name := s!"nest/{cfg},B=p{bPkg}{if bSup then "<A" else ""},{cn w}.run:{kn},{cn dc}.m=" ++
+      (if acc = .priv then "priv" else "pub")
+    pure { name, mima := none, v0 := lib, v1 := lib, prog := { sites := [.invokevirtual w .run .v w] } }
+  cases
+
 end Jvm.Clients

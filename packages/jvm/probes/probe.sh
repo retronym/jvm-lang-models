@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renders the catalogue with the Classfile API (JDK 24+) and runs it on every JDK given.
-# Usage: packages/jvm/probes/probe.sh [catalogue|space|chain|bodies|cases.jsonl] -- JAVA_HOME...   (run from the repository root)
+# Usage: packages/jvm/probes/probe.sh [catalogue|space|chain|bodies|nests|cases.jsonl] -- JAVA_HOME...   (run from the repository root)
 # A space name is dumped with `lake exe jvmcases <name>` (`catalogue`, the default, is plain `jvmcases`).
 # With OUT=dir, the rendered classfiles are kept in dir/<case>/{v0,v1,client,sites} (for MiMa, Track B).
 # With RUNS=ledger.jsonl, the run is appended to the ledger as one JSON line, and the per-program
@@ -15,7 +15,7 @@ trap 'rm -rf "$work"' EXIT
 out=${OUT:-$work/out}
 case "$arg" in
   catalogue) space=catalogue; cases=$work/cases.jsonl; lake exe jvmcases > "$cases" ;;
-  space|chain|bodies) space=$arg; cases=$work/cases.jsonl; lake exe jvmcases "$arg" > "$cases" ;;
+  space|chain|bodies|nests) space=$arg; cases=$work/cases.jsonl; lake exe jvmcases "$arg" > "$cases" ;;
   *) space=$(basename "$arg" .jsonl); cases=$arg ;;
 esac
 commit=$(git rev-parse HEAD)

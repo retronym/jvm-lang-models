@@ -18,8 +18,8 @@ the new library. Both are questions about a task's trace against an edited envir
 
 The model is generic in class, method-name and descriptor types. Calibrated against HotSpot 21, 25
 and 27 by `packages/jvm/probes`. A method's body is its linkage behaviour (Track J4): the sites it runs, in
-order, with `this` as a receiver; a program's outcome is the sequence of methods it enters. Not modelled:
-nestmates (private access is same-class only), data and control flow in bodies, constructor chaining
+order, with `this` as a receiver; a program's outcome is the sequence of methods it enters. Private access
+extends to nestmates (§5.4.4). Not modelled: data and control flow in bodies, constructor chaining
 (a constructor's implicit `super(…)` call), signature-polymorphic methods, `Object`'s methods in interface
 resolution, loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
 the first site that hits it; a class is loaded, with its loading checks, when it is first referred
@@ -48,6 +48,10 @@ structure Header (C : Type) where
   pkg : Nat := 0
   /-- The `PermittedSubclasses` attribute: `some ps` for a sealed class or interface. -/
   permitted : Option (List C) := none
+  /-- The `NestHost` attribute: the class that claims to be this class's nest host. -/
+  nestHost : Option C := none
+  /-- The `NestMembers` attribute of a nest host. -/
+  nestMembers : List C := []
   deriving DecidableEq, Repr
 
 /-- A call site, as javac emits it for `new R().m()` with the static receiver type `C` (an upcast
@@ -348,12 +352,25 @@ def resolveCls (cur : Cur C) (c : C) : M C N D (Header C) := do
   if !h.isPublic && h.pkg != (← curPkg cur) then throw .illegalAccess
   pure h
 
-/-- Member access from `cur` to a member of `decl` (§5.4.4). Private access is same-class only:
-nestmates are not modelled. -/
+/-- The nest host of `c` (JVMS §5.4.4): the class its `NestHost` attribute names, if that class is
+present, in `c`'s run-time package and lists `c` in its `NestMembers`; otherwise `c` itself (since
+JDK 15 a failed nest-host check is not an error, `c` is just alone in its nest). -/
+def nestHostOf (c : C) : M C N D C := do
+  let h ← hdr c
+  let some n := h.nestHost | return c
+  match ← askHeader n with
+  | some hn => pure (if hn.pkg = h.pkg && hn.nestMembers.contains c then n else c)
+  | none => pure c
+
+/-- Member access from `cur` to a member of `decl` (§5.4.4). A private member is accessible from its
+own class and from the classes of its nest: `cur` and `decl` have the same nest host. -/
 def accessible (cur : Cur C) (decl : C) (acc : Access) : M C N D Bool := do
   match acc with
   | .pub => pure true
-  | .priv => pure (cur = some decl)
+  | .priv =>
+    match cur with
+    | none => pure false
+    | some x => if x = decl then pure true else pure ((← nestHostOf x) = (← nestHostOf decl))
   | .pkg => pure ((← hdr decl).pkg = (← curPkg cur))
   | .prot =>
     if (← hdr decl).pkg = (← curPkg cur) then return true

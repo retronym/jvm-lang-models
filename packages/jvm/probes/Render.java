@@ -1,5 +1,7 @@
 import java.lang.classfile.*;
 import java.lang.classfile.attribute.ConstantValueAttribute;
+import java.lang.classfile.attribute.NestHostAttribute;
+import java.lang.classfile.attribute.NestMembersAttribute;
 import java.lang.classfile.attribute.PermittedSubclassesAttribute;
 import java.lang.constant.*;
 import java.nio.file.*;
@@ -103,6 +105,12 @@ public class Render {
         List<ClassDesc> ps = new ArrayList<>();
         for (Object p : Json.arr(c.get("permits"))) ps.add(ClassDesc.of((String) p));
         cb.with(PermittedSubclassesAttribute.ofSymbols(ps));
+      }
+      if (c.get("nestHost") != null) cb.with(NestHostAttribute.of(ClassDesc.of((String) c.get("nestHost"))));
+      if (c.get("nestMembers") != null) {
+        List<ClassDesc> ms = new ArrayList<>();
+        for (Object m : Json.arr(c.get("nestMembers"))) ms.add(ClassDesc.of((String) m));
+        cb.with(NestMembersAttribute.ofSymbols(ms));
       }
       for (Map<String, Object> f : fields) {
         boolean st = bool(f, "static");

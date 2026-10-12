@@ -93,6 +93,8 @@ def classJson (c : C × Classfile C N D) : String :=
   ",\"super\":" ++ (match h.super with | some s => jstr (cName s) | none => "null") ++
   ",\"ifaces\":" ++ jarr (h.ifaces.map (jstr ∘ cName)) ++
   ",\"permits\":" ++ (match h.permitted with | some ps => jarr (ps.map (jstr ∘ cName)) | none => "null") ++
+  (match h.nestHost with | some n => ",\"nestHost\":" ++ jstr (cName n) | none => "") ++
+  (if h.nestMembers.isEmpty then "" else ",\"nestMembers\":" ++ jarr (h.nestMembers.map (jstr ∘ cName))) ++
   ",\"methods\":" ++ jarr (c.2.methods.map (methodJson pk)) ++
   ",\"fields\":" ++ jarr (c.2.fields.map fieldJson) ++ "}"
 
