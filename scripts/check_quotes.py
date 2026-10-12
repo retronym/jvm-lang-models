@@ -58,7 +58,7 @@ def section_text(page, anchor):
         n = nxt.search(page, m.end())
         return norm(page[start:n.start() if n else len(page)])
     depth = anchor.count('.')
-    nxt = re.compile(r'(?:id|name)="(jvms|jls)-[0-9.]+"')
+    nxt = re.compile(r'(?:id|name)="(jvms|jls)-[0-9][0-9a-z_.]*"')
     end = len(page)
     for n in nxt.finditer(page, m.end()):
         a = n.group(0).split('"')[1]
