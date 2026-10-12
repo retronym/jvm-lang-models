@@ -49,3 +49,15 @@ That is all. No data, no control flow, no exceptions, no `<clinit>`: the body is
 6. **Nestmates.** `NestHost`/`NestMembers` in `Header`, the nest check in `accessible` for private members, catalogue edits (member leaves the nest, host changes) whose breaking client is a library inner class's body, calibrated on HotSpot. Closes the last Track J3 item.
 
 Each step is one commit series with the lints green; steps 3 and 6 each add a Track J line and a Results paragraph to [`track-j.md`](track-j.md), and step 4 a paragraph to [`track-b.md`](../../mima/docs/track-b.md).
+
+## As built
+
+All six steps are done; results are in [`track-j.md`](track-j.md), [`track-b.md`](../../mima/docs/track-b.md) and [`track-s.md`](../../scala/docs/track-s.md). Where the code departs from the decisions above:
+
+- **[`MethodInfo`](../Jvm/Link.lean#L91) takes the class table's type parameters**, since a body is a list of `Site C N D`. Every mention of it became `MethodInfo C N D`; `World`, `Program` and `Site` changed only additively (four `this` sites, `Program.init`).
+- **The outcome is the list of owners entered**, not (class, method) pairs: that is what `ProbeLog` can see, and it is the per-site class list when bodies are empty. Running out of fuel is `LinkError.outOfFuel`, which no JVM outcome matches.
+- **A new instance can run its constructor.** `Program.init` names the no-argument constructor; when set, building a receiver or `new c` runs that constructor's body, its entries muted as the probe mutes them. The Scala and Java catalogues set it, which is how `valAddedToTrait` fails at `new X`; the `Jvm` catalogue's constructors have empty bodies and leave it unset.
+- **A static method entered from a body keeps the caller's `this`**, which is how Scala's `$init$(this)` and `m$(this)` see their receiver.
+- **The 17 reversed edits found a rule**: `invokeinterface` fails with `IllegalAccessError` when it selects a method neither public nor private (JVMS §6.5), the same rule Track J7 found.
+- **The Java catalogue's `runs`**, which re-ran a client method's calls as top-level sites, is gone: the client's compiled bodies run when its methods are called.
+- **Scala's `$init$` carries its `val` setters' calls**, calibrated by the lowering probe, and [`run.py`](../../scala/probes/run.py) runs the Scala catalogue on HotSpot with instrumented scalac output. Case-class `copy` and `apply` bodies come from the desugaring as user members and are not synthesized.

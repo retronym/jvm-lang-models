@@ -49,7 +49,7 @@ Per edit, MiMa's report against `breaksSomeClient`:
 
 The edit-space verdicts above are unchanged by the rule.
 
-**Nest attributes are out of MiMa's scope.** `nestMemberRemoved` and `nestHostChanged` (Track J4) edit `NestMembers` or `NestHost` and break a client calling `B.run`, an inner class's method that calls its outer class's private member. MiMa does not compare nest attributes, and neither do the corrected rules (private members get no key). The broken call is the library's own: the new library does not link by itself, so it is not a build of one source tree, which MiMa assumes; we record it as a scope line, as for `methodBecomesFinalBehind`.
+**Nest attributes are out of MiMa's scope.** `nestMemberRemoved` and `nestHostChanged` (Track J4) edit `NestMembers` or `NestHost` and break a client calling `B.run`, an inner class's method that calls its outer class's private member. MiMa 1.2.1 is silent on both (it does not compare nest attributes), and so are the corrected rules (private members get no key); on the other Track J4 catalogue cases MiMa reports what the model predicts. The broken call is the library's own: the new library does not link by itself, so it is not a build of one source tree, which MiMa assumes; we record it as a scope line, as for `methodBecomesFinalBehind`.
 
 ### Why MiMa misses: coverage and abstraction gaps (Track B2)
 
