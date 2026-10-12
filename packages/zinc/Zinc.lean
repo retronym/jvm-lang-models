@@ -50,4 +50,5 @@ import Zinc.Bridges.Companions
 import Zinc.Features.Extensions
 import Zinc.Loop.Files
 import Zinc.Features.Sam
+import Zinc.Spec
 

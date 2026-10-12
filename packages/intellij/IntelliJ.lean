@@ -6,6 +6,7 @@ import IntelliJ.Chain
 import IntelliJ.Relaxations
 import IntelliJ.Plugin
 import IntelliJ.Cases
+import IntelliJ.Spec
 
 /-!
 # The IntelliJ Scala plugin's asSeenFrom, formalized

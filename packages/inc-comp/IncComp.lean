@@ -8,3 +8,4 @@ import IncComp.NonLocal
 import IncComp.NonLocalAns
 import IncComp.Stale
 import IncComp.Classpath
+import IncComp.Spec

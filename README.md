@@ -57,6 +57,8 @@ flowchart BT
 | [`links`](packages/links/README.md) | B4: Zinc-clean implies binary-compatible | yes |
 | [`harness`](packages/harness/README.md) | executables and scripts that drive the calibration | yes |
 
+Each package also has a `Spec` module (`Query.Spec`, `IncComp.Spec`, `Zinc.Spec`, …): its key definitions and theorems stated in prose, each name checked by the build. Sizes per package are in [`docs/stats.md`](docs/stats.md), generated.
+
 The Mathlib-free packages can be required on their own, for example [`packages/intellij`](packages/intellij) by `git … subDir`, as the TCK does.
 
 ## Start here, by goal
