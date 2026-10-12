@@ -19,22 +19,15 @@ The five scenarios of `Hier` agree (kernel `decide`, below).
 `space` enumerates hierarchies over `A`, `B`, `M`, `C`: each class's parents drawn from the classes
 before it, at most two, each parent's type argument and each declaration of `m` one of `Int`,
 `String` or the class's parameter; 1,638,400 hierarchies. `lake exe exhaustive hiershared`
-compares the two semantics on every one:
+compares the two semantics on every one, and they agree on all of them: tree-shaped or not, up to
+depth 3, and also where scalac would reject the program for inconsistent type arguments (both
+keep the first, as `lin` does).
 
-| hierarchies | agree |
-|---|---|
-| tree-shaped, depth ≤ 2 | 290,560 of 290,560 |
-| tree-shaped, depth 3 | 6,831 of 6,912 |
-| a shared ancestor, consistent type arguments | 269,398 of 284,160 |
-| inconsistent type arguments (scalac rejects them) | 963,476 of 1,056,768 |
-
-* **Where the toy is scalac:** every hierarchy in which no class reaches an ancestor along two
-  paths, up to depth 2. All of `Hier`'s scenarios are of that shape.
-* **Depth 3** is fuel: `resolve 3` gives up on `C → M → B → A`, where `lin` does not.
-* **A shared ancestor** is a real difference. `Hier` walks the parents last first, depth first, so
-  in `class C extends M with A`, with `M extends A`, it reaches `A` directly; Scala's
-  linearization is `C, M, A` (`A` once), so `M.m` overrides `A.m`. With `A.m: Int` and
-  `M.m: String`, the toy says `Int` and scalac `String`.
+History: `Hier` first walked the parents depth first, the last parent first, and agreed only on
+tree-shaped hierarchies up to depth 2 (290,560 of them). With a shared ancestor it differed: in
+`class C extends M with A`, with `M extends A`, it reached `A` directly, where Scala's
+linearization is `C, M, A` and `M.m` overrides `A.m`. `Hier.resolve` now follows the
+linearization; the scenarios and the designs' obligations (`HierSound`) are unchanged.
 -/
 
 open Query
@@ -149,5 +142,13 @@ def consistent (decls : Cls → Hier.Decl) : Bool :=
   [Cls.A, .B, .M, .C].all fun c =>
     let bs := bases decls 4 c .param
     bs.all fun (p, a) => bs.all fun (q, b) => p != q || a == b
+
+/-- Every 64th hierarchy of `space`, so that the build checks agreement (about 25,600; the whole
+space is `lake exe exhaustive hiershared`). A change to `Hier` or to the shared semantics that
+breaks agreement fails here. -/
+def sample : List (Cls → Hier.Decl) :=
+  (space.zipIdx.filter fun (_, i) => i % 64 == 0).map (·.1)
+
+example : sample.all agrees = true := by native_decide
 
 end Zinc.Hier.Shared
