@@ -59,6 +59,8 @@ flowchart BT
 
 Each package also has a `Spec` module (`Query.Spec`, `IncComp.Spec`, `Zinc.Spec`, …): its key definitions and theorems stated in prose, each name checked by the build. Sizes per package are in [`docs/stats.md`](docs/stats.md), generated. API documentation for every library is built by doc-gen4 (`cd docbuild && lake build All:docs`) and published to [retronym.github.io/jvm-lang-models](https://retronym.github.io/jvm-lang-models/) by the on-demand `API docs` workflow.
 
+The literate pages in [`literate/`](literate/) read the models next to the specifications: each quotes the JLS, JVMS or SLS clause it models, includes the model's docstrings, and checks an example by evaluation and by the kernel. Built with Verso (`cd literate && lake exe literate --output _out`). [`scripts/check_quotes.py`](scripts/check_quotes.py) checks every quotation against the specification verbatim, and keeps the Oracle quotations within a word budget. So far: field resolution, overriding in Java and the JVM, and overriding in Scala.
+
 The Mathlib-free packages can be required on their own, for example [`packages/intellij`](packages/intellij) by `git … subDir`, as the TCK does.
 
 ## Start here, by goal

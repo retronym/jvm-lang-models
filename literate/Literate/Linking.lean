@@ -25,12 +25,12 @@ cannot change how the client links ({name}`Jvm.link_congr`).
 The JVMS states the search order for a field in four steps:
 
 > If C declares a field with the name and descriptor specified by the field reference, field lookup succeeds. The declared field is the result of the field lookup.
->
-> Otherwise, field lookup is applied recursively to the direct superinterfaces of the specified class or interface C.
->
-> Otherwise, if C has a superclass S, field lookup is applied recursively to S.
->
-> Otherwise, field lookup fails.
+
+  Otherwise, field lookup is applied recursively to the direct superinterfaces of the specified class or interface C.
+
+  Otherwise, if C has a superclass S, field lookup is applied recursively to S.
+
+  Otherwise, field lookup fails.
 
 — [JVMS §5.4.3.2](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-5.html#jvms-5.4.3.2), Java SE 21.
 

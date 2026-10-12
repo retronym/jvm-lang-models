@@ -14,6 +14,10 @@ rev = "v4.34.0"
 name = "jvm"
 path = "../packages/jvm"
 
+[[require]]
+name = "scala-types"
+path = "../packages/scala-types"
+
 [[lean_lib]]
 name = "Literate"
 

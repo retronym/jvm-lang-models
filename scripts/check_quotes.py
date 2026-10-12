@@ -1,13 +1,14 @@
 """Checks the specification quotes in the literate pages against the specifications.
 
-A quote is a Verso block quote (`>` lines) followed by an attribution line that links to the
+A quote is a Verso quotation (a `>` line and the blocks indented under it) followed by an attribution line that links to the
 section it quotes, for example
 
     — [JVMS §5.4.3.2](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-5.html#jvms-5.4.3.2), Java SE 21.
 
 For each quote the script fetches the linked page once (cached in `.cache/specs/`), takes the text
-of the anchored section up to the next section heading, and fails unless every paragraph of the
-quote appears in it verbatim, up to whitespace. It also reports how much is quoted from each
+of the anchored section up to the next section heading, and fails unless every paragraph or list
+item of the quote appears in it verbatim, up to whitespace, markup, and the SLS's `´` math
+delimiters. It also reports how much is quoted from each
 Oracle specification: their licence allows brief excerpts that do not, in aggregate, make up a
 significant portion of the specification, so the total is kept under a budget.
 
@@ -31,14 +32,16 @@ def fetch(url):
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, re.sub(r'[^A-Za-z0-9.]+', '_', url))
     if not os.path.exists(path):
-        with urllib.request.urlopen(url) as r:
+        # docs.oracle.com refuses urllib's default user agent
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (check_quotes.py)'})
+        with urllib.request.urlopen(req) as r:
             open(path, 'wb').write(r.read())
     return open(path, encoding='utf-8', errors='replace').read()
 
 
 def norm(s):
     s = re.sub(r'<[^>]+>', '', s)
-    s = html.unescape(s)
+    s = html.unescape(s).replace('´', '')
     return re.sub(r'\s+', ' ', s).strip()
 
 
@@ -48,6 +51,12 @@ def section_text(page, anchor):
     if not m:
         return None
     start = m.start()
+    h = re.search(r'<h([1-6])[^<]*$', page[:start])
+    if not re.match(r'(jvms|jls)-', anchor) and h:
+        # the SLS: a heading with the id, up to the next heading of the same or a higher level
+        nxt = re.compile(r'<h[1-' + h.group(1) + r'][\s>]')
+        n = nxt.search(page, m.end())
+        return norm(page[start:n.start() if n else len(page)])
     depth = anchor.count('.')
     nxt = re.compile(r'(?:id|name)="(jvms|jls)-[0-9.]+"')
     end = len(page)
@@ -60,20 +69,21 @@ def section_text(page, anchor):
 
 
 def quotes(path):
+    """Verso's quotations: a `>` line, then the blocks indented under it."""
     lines = open(path, encoding='utf-8').read().split('\n')
     i = 0
     while i < len(lines):
         if lines[i].startswith('>'):
-            j = i
-            block = []
-            while j < len(lines) and lines[j].startswith('>'):
-                block.append(lines[j][1:].strip())
+            block = [lines[i][1:]]
+            j = i + 1
+            while j < len(lines) and (not lines[j].strip() or lines[j][0] == ' '):
+                block.append(lines[j])
                 j += 1
             k = j
-            while k < len(lines) and not lines[k].strip():
-                k += 1
             m = ATTRIB.match(lines[k]) if k < len(lines) else None
-            paras = [norm(p) for p in '\n'.join(block).split('\n\n') if p.strip()]
+            # paragraphs, and list items (`*`, `+` or `-` lines, nested by indentation) as units of their own
+            units = re.split(r'\n\s*\n|\n(?=\s*[*+-] )', '\n'.join(block))
+            paras = [norm(re.sub(r'^\s*[*+-] ', '', u).replace('`', '')) for u in units if u.strip()]
             yield i + 1, paras, m
             i = j
         else:

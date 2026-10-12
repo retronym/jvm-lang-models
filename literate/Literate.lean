@@ -1,5 +1,7 @@
 import VersoManual
 import Literate.Linking
+import Literate.Overriding
+import Literate.ScalaOverriding
 
 open Verso.Genre Manual
 
@@ -14,3 +16,7 @@ next to the specifications they formalise. Each section quotes the clause it mod
 model's definition, and checks an example by evaluation and by the kernel.
 
 {include 1 Literate.Linking}
+
+{include 1 Literate.Overriding}
+
+{include 1 Literate.ScalaOverriding}
