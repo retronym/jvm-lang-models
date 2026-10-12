@@ -15,7 +15,10 @@ Checks every `.md` file outside `.lake/` and fails on:
     exactly one `theorem`, `lemma`, `def`, `abbrev`, `structure`, `inductive` or `class` by a
     suffix of its full name; it is linked to its line. The name must contain `_` or `.`, or be
     CamelCase with two capitals (`XCompiler`), so that ordinary words are left alone;
-* a link to a Lean declaration whose line anchor is out of date (the declaration moved).
+* a link to a Lean declaration whose line anchor is out of date (the declaration moved);
+* a line number written by hand (`General.lean:108`) outside `docs/history/`: it drifts as the
+  file changes, so name the declaration instead. In `docs/history/` such references are kept as
+  written and linked to the file without a line.
 
 With `--fix` it rewrites those mentions into links in place, relative to the file, and reports
 what it could not fix. Fenced code blocks, inline code that is not a path, and existing links are
@@ -183,13 +186,20 @@ def process(md, text, fix):
         spans = protected_spans(line)
         codes = [m.span() for m in INLINE_CODE.finditer(line)]
 
+        history = md.startswith('docs/history/')
+        if not history:
+            for m in re.finditer(r'`[^`]+\.lean:\d+`', line):
+                problems.append(f'{md}:{n}: line number written by hand in {m.group(0)}: '
+                                f'name the declaration instead (its link keeps the line current)')
+
         def code_path(m):
             if inside(m.start(), spans) or (m.start() > 0 and line[m.start() - 1] == '['):
                 return m.group(0)
             p = resolve(md, m.group(1))
             if p is None:
                 return m.group(0)
-            href = rel(md, p) + (f'#L{m.group(2)}' if m.group(2) else '')
+            # a written line number drifts; in history documents link the file only
+            href = rel(md, p) + (f'#L{m.group(2)}' if m.group(2) and not history else '')
             problems.append(f'{md}:{n}: unlinked path {m.group(0)}')
             return f'[{m.group(0)}]({href})'
 

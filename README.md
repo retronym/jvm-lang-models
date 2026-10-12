@@ -79,29 +79,29 @@ The Mathlib-free packages can be required on their own, for example [`packages/i
 
 This is the canonical statement of the obligations and T1–T5; other documents point here.
 
-**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On [`XCompiler`](packages/inc-comp/IncComp/General.lean#L20) ([`General.lean:45`](packages/inc-comp/IncComp/General.lean#L45)):
+**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On [`XCompiler`](packages/inc-comp/IncComp/General.lean#L20):
 
 - **comp** (compositionality): joint compilation of a group is a fixed point of the per-unit tasks, with group-mates answered from their fresh interfaces;
 - **coverage**: every traced query, misses included, is covered by a recorded key;
 - **abstraction**: equal hashes on a key give equal answers to every query it covers;
 - **locality**: a key's hash reads only the interfaces in its declared `hashDeps`.
 
-The local `Compiler` (`Model.lean:67`) has the first three. The policy's one obligation is [`Policy.Sound`](packages/inc-comp/IncComp/Model.lean#L117) (`Model.lean:117`): never drop an invalidated unit outside the round just compiled.
+The local [`Zinc.Compiler`](packages/inc-comp/IncComp/Model.lean#L26) has the first three. The policy's one obligation is [`Policy.Sound`](packages/inc-comp/IncComp/Model.lean#L117): never drop an invalidated unit outside the round just compiled.
 
 | | Name | Statement | Hypotheses |
 |---|---|---|---|
-| T1 | [`Task.run_eq_of_trace`](packages/query/Query/Task.lean#L40) ([`Task.lean:42`](packages/query/Query/Task.lean#L42)) | Oracles that agree on a run's trace give the same output and trace | none |
-| T2 | [`XCompiler.round_preserves`](packages/inc-comp/IncComp/General.lean#L107) ([`General.lean:108`](packages/inc-comp/IncComp/General.lean#L108)) | One round, with `Δ` over the affected units, preserves the invariant | the obligations; dirty set `D ⊆ R` |
-| T3a | [`XCompiler.zinc_sound`](packages/inc-comp/IncComp/General.lean#L168) ([`General.lean:169`](packages/inc-comp/IncComp/General.lean#L169)) | If the loop returns, every unit is up to date: a per-unit fixed point | plus [`Policy.Sound`](packages/inc-comp/IncComp/Model.lean#L117) |
-| T3b | [`Compiler.fixpoint_unique_of_wf`](packages/inc-comp/IncComp/Uniqueness.lean#L64), `_of_explicit` ([`Uniqueness.lean:65`](packages/inc-comp/IncComp/Uniqueness.lean#L65), `:82`) | Per-unit fixed points are unique | traced dependencies well-founded under every oracle, or every interface a function of the source alone |
-| T3 | [`Compiler.zinc_eq_clean_of_wf`](packages/inc-comp/IncComp/Uniqueness.lean#L120), `_of_explicit` ([`Uniqueness.lean:121`](packages/inc-comp/IncComp/Uniqueness.lean#L121), `:136`) | Incremental = clean | T3a's and T3b's; on `Compiler`, and on [`TCompiler`](packages/inc-comp/IncComp/Tree.lean#L24) through `toCompiler` (`:189`, `:204`) |
-| T4 | [`XCompiler.zinc_some_of_monotoneFrom`](packages/inc-comp/IncComp/General.lean#L217) ([`General.lean:218`](packages/inc-comp/IncComp/General.lean#L218)); [`Compiler.zinc_some_of_explicit`](packages/inc-comp/IncComp/Termination.lean#L99), `_of_wf` ([`Termination.lean:100`](packages/inc-comp/IncComp/Termination.lean#L100), `:184`) | The loop returns within a bound: `k + \|S\| + 1` rounds; 2; height + 2 | a policy monotone from round `k` (`transitiveStep`); or T3b's hypotheses, `Compiler` only |
-| | [`PingPong.zinc_diverges`](packages/zinc/Zinc/Loop/PingPong.lean#L217) ([`PingPong.lean:218`](packages/zinc/Zinc/Loop/PingPong.lean#L218)) | Without `transitiveStep`, Zinc's loop diverges for every fuel on three mutually inferred classes | kernel `decide` |
-| T5 | [`XCompiler.downstream_sound`](packages/inc-comp/IncComp/General.lean#L315) ([`General.lean:316`](packages/inc-comp/IncComp/General.lean#L316)) | A downstream subproject's loop, seeded from changed sources and external invalidations, ends sound against the new classpath | fresh snapshots; T5a `inv_external` (`:281`) needs only abstraction |
-| | [`Stale.stale_unsound`](packages/inc-comp/IncComp/Stale.lean#L130), [`stale_affected`](packages/inc-comp/IncComp/Stale.lean#L135) ([`Stale.lean:131`](packages/inc-comp/IncComp/Stale.lean#L131), `:136`) | T2-stale: a non-local hash diffed over the recompiled set alone undercompiles; over `affected` it does not | kernel `decide` |
-| | [`Cycles.zinc_ne_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L189), [`annotated_eq_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L218) ([`Cycles.lean:190`](packages/zinc/Zinc/Loop/Cycles.lean#L190), `:219`) | T3a without T3 for inferred types in a cycle; T3 when every member is annotated | |
-| B4 | [`XCompiler.untouched_eq_clean`](packages/links/Links/ZincBridge.lean#L130) ([`packages/links/Links/ZincBridge.lean:131`](packages/links/Links/ZincBridge.lean#L131)) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through [`XCompiler.fixpoint_unique_of_explicit`](packages/links/Links/ZincBridge.lean#L99) (`:100`) |
-| | [`zinc_sound_charged`](packages/zinc/Zinc/Loop/Files.lean#L174) ([`Files.lean:175`](packages/zinc/Zinc/Loop/Files.lean#L175)) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
+| T1 | [`Task.run_eq_of_trace`](packages/query/Query/Task.lean#L40) | Oracles that agree on a run's trace give the same output and trace | none |
+| T2 | [`XCompiler.round_preserves`](packages/inc-comp/IncComp/General.lean#L107) | One round, with `Δ` over the affected units, preserves the invariant | the obligations; dirty set `D ⊆ R` |
+| T3a | [`XCompiler.zinc_sound`](packages/inc-comp/IncComp/General.lean#L168) | If the loop returns, every unit is up to date: a per-unit fixed point | plus [`Policy.Sound`](packages/inc-comp/IncComp/Model.lean#L117) |
+| T3b | [`Compiler.fixpoint_unique_of_wf`](packages/inc-comp/IncComp/Uniqueness.lean#L64), `_of_explicit` | Per-unit fixed points are unique | traced dependencies well-founded under every oracle, or every interface a function of the source alone |
+| T3 | [`Compiler.zinc_eq_clean_of_wf`](packages/inc-comp/IncComp/Uniqueness.lean#L120), `_of_explicit` | Incremental = clean | T3a's and T3b's; on `Compiler`, and on [`TCompiler`](packages/inc-comp/IncComp/Tree.lean#L24) through `toCompiler` (`:189`, `:204`) |
+| T4 | [`XCompiler.zinc_some_of_monotoneFrom`](packages/inc-comp/IncComp/General.lean#L217); [`Compiler.zinc_some_of_explicit`](packages/inc-comp/IncComp/Termination.lean#L99), `_of_wf` | The loop returns within a bound: `k + \|S\| + 1` rounds; 2; height + 2 | a policy monotone from round `k` (`transitiveStep`); or T3b's hypotheses, `Compiler` only |
+| | [`PingPong.zinc_diverges`](packages/zinc/Zinc/Loop/PingPong.lean#L217) | Without `transitiveStep`, Zinc's loop diverges for every fuel on three mutually inferred classes | kernel `decide` |
+| T5 | [`XCompiler.downstream_sound`](packages/inc-comp/IncComp/General.lean#L315) | A downstream subproject's loop, seeded from changed sources and external invalidations, ends sound against the new classpath | fresh snapshots; T5a `inv_external` (`:281`) needs only abstraction |
+| | [`Stale.stale_unsound`](packages/inc-comp/IncComp/Stale.lean#L130), [`stale_affected`](packages/inc-comp/IncComp/Stale.lean#L135) | T2-stale: a non-local hash diffed over the recompiled set alone undercompiles; over `affected` it does not | kernel `decide` |
+| | [`Cycles.zinc_ne_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L189), [`annotated_eq_clean`](packages/zinc/Zinc/Loop/Cycles.lean#L218) | T3a without T3 for inferred types in a cycle; T3 when every member is annotated | |
+| B4 | [`XCompiler.untouched_eq_clean`](packages/links/Links/ZincBridge.lean#L130) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through [`XCompiler.fixpoint_unique_of_explicit`](packages/links/Links/ZincBridge.lean#L99) (`:100`) |
+| | [`zinc_sound_charged`](packages/zinc/Zinc/Loop/Files.lean#L174) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
 
 **Where the hypotheses bite.**
 
