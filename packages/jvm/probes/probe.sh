@@ -19,7 +19,7 @@ case "$arg" in
   *) space=$(basename "$arg" .jsonl); cases=$arg ;;
 esac
 commit=$(git rev-parse HEAD)
-dirty=false; git diff --quiet HEAD -- . ':(exclude)packages/*/probes/runs' || dirty=true
+dirty=false; git diff --quiet HEAD -- . ':(exclude,glob)packages/*/probes/runs/**' || dirty=true
 render=${RENDER_JAVA_HOME:-$HOME/.sdkman/candidates/java/25.0.4-tem}
 "$render/bin/javac" -d "$work/render" "$here/Render.java" "$here/Json.java"
 "$render/bin/java" -cp "$work/render" Render "$cases" "$out"

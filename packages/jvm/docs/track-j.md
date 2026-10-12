@@ -28,7 +28,7 @@ Steps:
 
 ## Results
 
-**Calibration.** On Temurin 21.0.12, 25.0.4 and 27, the probe agrees with the model on every catalogue case and on every program of `space`, `space3`, `space5` and `chainSpace`, apart from two known HotSpot bugs on JDK 21, below. Runs from Track J6 on are recorded in the [calibration ledger](../probes/runs/README.md), one line per run with its commit.
+**Calibration.** On Temurin 21.0.12, 25.0.4 and 27, the probe agrees with the model on every catalogue case and on every program of `space`, `space3`, `space5`, `chainSpace`, `defaultsSpace`, `fieldsSpace` and `objectSpace`, apart from two known HotSpot bugs on JDK 21, below. Runs from Track J6 on are recorded in the [calibration ledger](../probes/runs/README.md), one line per run with its commit; the last full run is at `ba79791`: catalogue 52 cases, `space` 65,391 programs, chain 28,800, defaults 63,000, fields 33,600, object 3,600, 0 disagreements on each JDK. Its lines after the first say `dirty: true` only because `probe.sh`'s exclusion of the ledger did not match files, so the ledger's own new lines counted; fixed since.
 
 **[`LinkError`](../Jvm/Link.lean#L114) to the JVM's exceptions**, the same on all three JDKs: `noClassDef` → `NoClassDefFoundError`, `incompatibleClassChange` → `IncompatibleClassChangeError`, `noSuchMethod` → `NoSuchMethodError`, `noSuchField` → `NoSuchFieldError`, `abstractMethod` → `AbstractMethodError`, `instantiation` → `InstantiationError`, `illegalAccess` → `IllegalAccessError`, `verify` → `VerifyError`. `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`, not `VerifyError`.
 
