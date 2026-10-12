@@ -25,7 +25,9 @@ Steps:
 
 ### The model of MiMa agrees with MiMa (Track B1)
 
-As a multiset of problems per library, on all 35 `Jvm` catalogue cases of Tracks J1–J3 and all 302 edits ([`packages/mima/probes/compare.py`](../probes/compare.py)). On the catalogue the first problem MiMa reports is each case's `mima` field, checked against the model by kernel `decide`; two expected names were wrong before (`defaultRemoved` gets `DirectAbstractMethodProblem`, `superCallAbstract` gets `AbstractClassProblem`).
+As a multiset of problems per library, on every `Jvm` catalogue case (Tracks J1–J3, J5 and J6) and every edit of the edit space ([`packages/mima/probes/compare.py`](../probes/compare.py), last run on 12 October 2026). On the catalogue the first problem MiMa reports is each case's `mima` field, checked against the model by kernel `decide`; two expected names were wrong before (`defaultRemoved` gets `DirectAbstractMethodProblem`, `superCallAbstract` gets `AbstractClassProblem`). The cases with no expected problem (`mima := none`) are silent in MiMa itself, not only in the model.
+
+Running the J5 cases found one model bug: the model looked constructors up in superclasses, so `ctorPulledUp` (a constructor moved from `B` up to `A`) was silent. MiMa's `ClassInfo.lookupClassMethods` does not inherit constructors, as it does not inherit static methods, and reports `DirectMissingMethodProblem`; the model now does the same.
 
 Per edit, MiMa's report against `breaksSomeClient`:
 
@@ -53,6 +55,8 @@ Per edit, MiMa's report against `breaksSomeClient`:
 MiMa-P1 is outside the edit space (the bases have no protected member), hence its own witness. Scala's `protected` is public in bytecode, so it affects Java-defined libraries.
 
 **The corrected rules** ([`packages/mima/MiMa/Fixed.lean`](../MiMa/Fixed.lean)) are MiMa plus: the member a reference *through* each public class resolves to, by JVM resolution with private members and superinterfaces, compared by access rank, `static`, `abstract` and `final`, for methods and fields (MiMa-M1, MiMa-F1); an interface that newly sees a field (MiMa-F2); a new default that an unrelated public interface also has (MiMa-D1). On the space they report all 40 false negatives and nothing that breaks no client beyond MiMa's own 17. [`packages/mima/MiMa/Sound.lean`](../MiMa/Sound.lean) checks by kernel `decide` that every unreported edit leaves every client of `spaceB` linking: 105 edits against the full client space, about 30 minutes and 7 GB, so it is built on demand (`lake build MiMa.Sound`).
+
+**Package-private members are out of scope.** Track J6's `methodBecomesFinalBehind` makes a package-private `A.m` final behind a public `B.m` in another package, and breaks a client class in `A`'s package that overrides both. MiMa is silent, and so are the corrected rules (kernel `decide` in [`Fixed.lean`](../MiMa/Fixed.lean)): through `A` the method is package-private, which no key covers, and through `B` it resolves to `B.m`, which is unchanged. A package-private member is visible only in its run-time package, so the clients it can break are classes another JAR adds to the library's package, a split package. We take that as a scope line, not a sixth gap. Over the same edit on every library of the chain space, whose clients are outside the library's packages, every break the corrected rules miss has a library that no longer loads by itself, since one of its own classes now overrides the final `A.m` (`lake exe bincompat finalBehind`).
 
 Not proved: soundness of the corrected rules for all libraries ([`docs/roadmap.md`](../../../docs/roadmap.md)). The equality design (every query a key, compared by equality) is sound for all libraries by [`link_congr`](../../jvm/Jvm/Link.lean#L578), but reports every edit.
 

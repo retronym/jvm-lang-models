@@ -109,8 +109,11 @@ def flds (c : C) : List (N × D × FieldInfo) :=
 def named (c : C) (n : N) : List (C × D × MethodInfo) :=
   ((meths l c).filter (·.1 = n)).map fun m => (c, m.2.1, m.2.2)
 
+/-- Constructors and static methods are not inherited (`ClassInfo.lookupClassMethods`), so neither is
+looked up in a superclass: `ctorPulledUp` is a `DirectMissingMethodProblem` though `A` now has `B`'s
+constructor. -/
 def lookupClassMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
-  if static then named l c n else (c :: supers l fuel c).flatMap fun x => named l x n
+  if static || n = .init then named l c n else (c :: supers l fuel c).flatMap fun x => named l x n
 
 def lookupIfaceMethods (c : C) (n : N) (static : Bool) : List (C × D × MethodInfo) :=
   if static then [] else (allIfaces l fuel c).flatMap fun x => named l x n

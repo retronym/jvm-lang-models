@@ -125,6 +125,38 @@ example : [finalField, shadowStatic, shadowField, overridePrivate, ifaceField, d
     protectedRemoved].all
     (fun x => fixedReports x.o x.n) = true := by decide +kernel
 
+/-! ## Package-private members: `methodBecomesFinalBehind`
+
+Track J6's `methodBecomesFinalBehind` makes a package-private `A.m` final behind a public `B.m` in
+another package; the client's `X`, in `A`'s package, overrides both and no longer loads. The corrected
+rules are silent, as MiMa is: through `A` the method is package-private, so neither MiMa nor
+`resolveMethod` keys it, and through `B` it resolves to `B.m`, which is unchanged. A package-private
+member is visible only in its run-time package, so the only clients it can break are classes another
+JAR adds to the library's package (a split package). That is a scope line, not a gap. -/
+
+example : fixedReports methodBecomesFinalBehind.v0 methodBecomesFinalBehind.v1 = false ∧
+    methodBecomesFinalBehind.after = .error .finalOverride := by decide +kernel
+
+/-- `A.m` made final in a library of `Jvm.Clients.chainSpace`. -/
+def finalA (l : Lib) : Lib :=
+  l.map fun (c, cf) => if c = .A then (c, { cf with methods := cf.methods.map fun (n, d, i) => (n, d, { i with isFinal := true }) }) else (c, cf)
+
+/-- The edit space of `methodBecomesFinalBehind`'s shape over the chain space, whose clients are
+outside the library's packages (`X` in the unnamed package): each program whose `A.m` is not final,
+with `A.m` made final in `v1`. -/
+def finalBehindEdits : List Case :=
+  (chainSpace.filter fun k => !(k.v0.any fun (c, cf) => c = .A && cf.methods.any (·.2.2.isFinal))).map
+    fun k => { k with name := k.name ++ "/final", v1 := finalA k.v0 }
+
+/-- The library's own classes load on `l`. -/
+def libLoads (l : Lib) : Bool := links (world l) { loads := l.map (·.1) }
+
+/-- An edit of `finalBehindEdits` that breaks its client, that the corrected rules miss, and whose
+library still loads by itself. `lake exe bincompat finalBehind` finds none (too large a space for
+kernel `decide` in the build). -/
+def finalBehindMissed (k : Case) : Bool :=
+  links k.w0 k.prog && !links k.w1 k.prog && !fixedReports k.v0 k.v1 && libLoads k.v1
+
 /-! ## The edit space, indexed for `packages/mima/MiMa/Sound.lean` -/
 
 
