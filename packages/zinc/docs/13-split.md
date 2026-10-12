@@ -1,8 +1,8 @@
-# Phase 13 — name resolution across subprojects (`Split.lean`, the `split` layout)
+# Phase 13 — name resolution across subprojects ([`Split.lean`](../Zinc/Features/Split.lean), the `split` layout)
 
 ## Question
 
-Phase 10 put the client and every binding in one subproject. In a real build the binding is as often upstream: a class of an inner package, a package object member, a wildcard-imported object or a top-level given in a library subproject, the client downstream. Zinc then never sees the edit as a changed source of the client's subproject. The downstream run learns of it only through its external dependencies: `detectInitialChanges` compares, for each upstream class in `apis.allExternals` (the classes the downstream recorded an edge to), the stored `AnalyzedClass` with the upstream analysis's (a missing one is `emptyAnalyzedClass`), behind the `apiHash` gate (`hashesMatch`), and `invalidateClassesExternally` applies the same name-hash and inheritance rules as inside a subproject. Do F1–F6 and G1–G3 change across the boundary? And retronym/zinc#34's `invalidateByAddedClasses` reads the classes a cycle of the *current* subproject added: does F1 come back when the added class is upstream?
+Phase 10 put the client and every binding in one subproject. In a real build the binding is as often upstream: a class of an inner package, a package object member, a wildcard-imported object or a top-level given in a library subproject, the client downstream. Zinc then never sees the edit as a changed source of the client's subproject. The downstream run learns of it only through its external dependencies: `detectInitialChanges` compares, for each upstream class in `apis.allExternals` (the classes the downstream recorded an edge to), the stored `AnalyzedClass` with the upstream analysis's (a missing one is `emptyAnalyzedClass`), behind the `apiHash` gate (`hashesMatch`), and `invalidateClassesExternally` applies the same name-hash and inheritance rules as inside a subproject. Do F1–F6 and G1–G3 change across the boundary? And [retronym/zinc#34](https://github.com/retronym/zinc/issues/34)'s `invalidateByAddedClasses` reads the classes a cycle of the *current* subproject added: does F1 come back when the added class is upstream?
 
 ## Prediction
 
@@ -13,18 +13,18 @@ Phase 10 put the client and every binding in one subproject. In a real build the
 
 ## Model
 
-Two files, separate from `Names.lean` and `Givens.lean`.
+Two files, separate from [`Names.lean`](../ZincNames/Names.lean) and [`Givens.lean`](../ZincNames/Givens.lean).
 
-`SplitProof.lean` (proofs, no enumeration). The slot language: a client looks a name up in scopes `0 … n-1`, any number, in any search order; each scope binds or not, and is pinned (Zinc records an edge to it from a class that uses the name: inherited `P`, block import `V`, explicit import `X`, a wildcard import charged to a user of the name), required (explicit import selector), top-level (a class file) and upstream or not. Resolution is the first binding scope unless an ambiguity applies; ambiguities need two bindings, so they are monotone. An edit changes any set of bindings. Rules: `today` (a changed scope with an edge: pinned, or the resolved one; inside a subproject or, through `allExternals`, across), `cheap` (#34: also an added top-level class in the client's own subproject), `proposed` (also any unpinned scope that gained a binding, in any subproject: an added top-level class anywhere on the classpath, a member added to a package object).
+[`SplitProof.lean`](../Zinc/Features/SplitProof.lean) (proofs, no enumeration). The slot language: a client looks a name up in scopes `0 … n-1`, any number, in any search order; each scope binds or not, and is pinned (Zinc records an edge to it from a class that uses the name: inherited `P`, block import `V`, explicit import `X`, a wildcard import charged to a user of the name), required (explicit import selector), top-level (a class file) and upstream or not. Resolution is the first binding scope unless an ambiguity applies; ambiguities need two bindings, so they are monotone. An edit changes any set of bindings. Rules: `today` (a changed scope with an edge: pinned, or the resolved one; inside a subproject or, through `allExternals`, across), `cheap` (#34: also an added top-level class in the client's own subproject), `proposed` (also any unpinned scope that gained a binding, in any subproject: an added top-level class anywhere on the classpath, a member added to a package object).
 
-`Split.lean` (the concrete space, as in Phase 10): `Layout` (`single`, or `split` with every binding upstream and the client's file downstream), Zinc's external rule on its own terms (the client file's edges as charged class, target slot, inheritance), modes `today`, `cheap`, `upstream` (#34 across subprojects, classes only) and `names` (the proposal), the trait initialiser only in `single`. `lake exe conformance names|givens 2|3 [cheap|upstream|proposed] split` dumps the verdicts with each file's tier.
+[`Split.lean`](../Zinc/Features/Split.lean) (the concrete space, as in Phase 10): `Layout` (`single`, or `split` with every binding upstream and the client's file downstream), Zinc's external rule on its own terms (the client file's edges as charged class, target slot, inheritance), modes `today`, `cheap`, `upstream` (#34 across subprojects, classes only) and `names` (the proposal), the trait initialiser only in `single`. `lake exe conformance names|givens 2|3 [cheap|upstream|proposed] split` dumps the verdicts with each file's tier.
 
 ### Proved, for every program of the slot language
 
 * `proposed_sound`: under the proposal, for every client that compiles and every edit, the client is invalidated or it still compiles and resolves to the same scope.
 * `cheap_sound_of_local`: #34 has the same guarantee exactly when every unpinned scope is a top-level class of the client's own subproject.
 * Counterexamples, two scopes each, by evaluation (`decide`): `today_misses_added_class` (F1, either side), `cheap_misses_upstream_class` (#34 across subprojects), `cheap_misses_package_object` (F2, either side); `cheap_catches_local_class`, `proposed_catches`.
-* The specification (`SplitProof.Spec`), per `docs/specification.md`: an `NCompiler` over the client and `n` scopes with any flags, units split into `Up` and `S` as in `Classpath.lean`; the client's task asks `bound i` per scope and stops at the first hit. Designs are keys:
+* The specification (`SplitProof.Spec`), per [`docs/specification.md`](../../../docs/specification.md): an `NCompiler` over the client and `n` scopes with any flags, units split into `Up` and `S` as in [`Classpath.lean`](../../inc-comp/IncComp/Classpath.lean); the client's task asks `bound i` per scope and stops at the first hit. Designs are keys:
   * `today` (an existence key on the scope the lookup stopped at and on pinned scopes) fails coverage on the upstream miss `bound a.b.Foo` (`today_not_obligations`);
   * `cheap`, #34 as the key `named false` whose `covers` claims every top-level scope and whose hash reads the top-level scopes of `S` only, fails abstraction across subprojects: equal hash before and after the upstream adds `a.b.Foo`, different answer (`cheap_not_abstraction`, `cheap_not_obligations`, the trace of `added-class-upstream`); it meets the obligations within one subproject (`cheap_obligations_of_local`: every scope pinned or a top-level class, every top-level class in `S`);
   * `cross`, the same key with its hash over every scope of `Up ∪ S`, meets the obligations (`cross_obligations`), and so inherits T5 (`cross_downstream_sound`, via `NCompiler.downstream_sound`); `searched` (a key per scope asked, Kotlin's `LookupTracker`) too (`searched_obligations`).
@@ -43,11 +43,11 @@ Not proved: that the concrete Names/Givens rules (Scala 2's and 3's ambiguities,
 
 ## Harness
 
-retronym/zinc#36's `Conformance` already has a `split` layout (`macros`, `up`, `down`) and places a file by its base's `tiers`, falling back to the flat space's names. Source-file bases need every file an edit can create in `tiers` (an added `Inner.scala` must go upstream), which the dump supplies; run with `--layouts split`.
+[retronym/zinc#36](https://github.com/retronym/zinc/issues/36)'s `Conformance` already has a `split` layout (`macros`, `up`, `down`) and places a file by its base's `tiers`, falling back to the flat space's names. Source-file bases need every file an edit can create in `tiers` (an added `Inner.scala` must go upstream), which the dump supplies; run with `--layouts split`.
 
 ## Results
 
-Harness runs (retronym/zinc#36's `Conformance` with `--layouts split`), the same base selections as Phase 10 (names 2.13 narrowed to 286 bases). Model and harness agree on every case; resolution agrees with the compiler on every case.
+Harness runs ([retronym/zinc#36](https://github.com/retronym/zinc/issues/36)'s `Conformance` with `--layouts split`), the same base selections as Phase 10 (names 2.13 narrowed to 286 bases). Model and harness agree on every case; resolution agrees with the compiler on every case.
 
 | Space | Cases | split, develop | single, develop (Phase 10) | single, #34, same cases |
 |---|---|---|---|---|

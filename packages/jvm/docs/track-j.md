@@ -6,20 +6,20 @@ Zinc asks whether a client must be *recompiled*; binary compatibility asks wheth
 
 ## What was built
 
-- **`packages/jvm/Jvm/Link.lean`.** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: `link_congr`. `Compatible` and `compatible_of_footprint` state binary compatibility and prove it where the edit misses the footprint.
+- **[`packages/jvm/Jvm/Link.lean`](../Jvm/Link.lean).** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: `link_congr`. `Compatible` and `compatible_of_footprint` state binary compatibility and prove it where the edit misses the footprint.
 - **The contract.** `Jvm.World` (classfiles), `Jvm.Program` (what a client loads and executes) and `Jvm.Site`. Front ends produce a `World`; consumers read one. These types were changed only additively.
 - **Sites as javac emits them.** `C c = new R(); c.m()` is `new R; invokespecial R.<init>; invokevirtual C.m`, so the verifier's upcast check, instantiation and load-on-reference are part of `Site` semantics. `Site.construct c n d` is `new c(…)`.
-- **`packages/jvm/Jvm/Catalogue.lean`.** 45 library edits, each with MiMa's expected problem, linked before and after by kernel `decide`.
-- **`packages/jvm/Jvm/Clients.lean`.** `breaksSomeClient k`: some client in a bounded space links on `v0` and fails on `v1`. `changesSomeClient k`: some client links on both and runs a different method (the first form of "links, but runs different code"). Clients must be well-typed against `v0`. Three spaces: `space` (15,652 programs; an optional client class `X` and one call site of any kind), `space3` (44,144; adds fields, `invokespecial`, interface statics, sites inside `X`), `space5` (14,256; constructors and `new`).
-- **The HotSpot probe.** `lake exe jvmcases` dumps the catalogue and spaces as JSON lines; `packages/jvm/probes` renders each case's `v0`, `v1` and client with the Classfile API (version 65), runs the client against both, and compares the `Throwable` and the method that ran. `OUT=dir` keeps the classfiles for MiMa.
+- **[`packages/jvm/Jvm/Catalogue.lean`](../Jvm/Catalogue.lean).** 45 library edits, each with MiMa's expected problem, linked before and after by kernel `decide`.
+- **[`packages/jvm/Jvm/Clients.lean`](../Jvm/Clients.lean).** `breaksSomeClient k`: some client in a bounded space links on `v0` and fails on `v1`. `changesSomeClient k`: some client links on both and runs a different method (the first form of "links, but runs different code"). Clients must be well-typed against `v0`. Three spaces: `space` (15,652 programs; an optional client class `X` and one call site of any kind), `space3` (44,144; adds fields, `invokespecial`, interface statics, sites inside `X`), `space5` (14,256; constructors and `new`).
+- **The HotSpot probe.** `lake exe jvmcases` dumps the catalogue and spaces as JSON lines; [`packages/jvm/probes`](../probes) renders each case's `v0`, `v1` and client with the Classfile API (version 65), runs the client against both, and compares the `Throwable` and the method that ran. `OUT=dir` keeps the classfiles for MiMa.
 - **No `native_decide`** (review finding 7). Catalogue witnesses use `decide`; client-space verdicts use `decide +kernel`, since the elaborator's `decide` hits its recursion limit.
 
 Steps:
 - Track J1: calibrate the catalogue on HotSpot. Done.
 - Track J2: client spaces and verdicts. Done.
-- Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in `docs/roadmap.md`.
+- Track J3: fields, `invokespecial`, private methods, static and private interface methods, access control, the protected check. Done, except nestmates and the smaller items in [`docs/roadmap.md`](../../../docs/roadmap.md).
 - Track J5: sealed classes (`PermittedSubclasses`) and constructor calls. Done.
-- Track J4: behaviour (constants, method bodies). Open, see `docs/roadmap.md`.
+- Track J4: behaviour (constants, method bodies). Open, see [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## Results
 
@@ -92,9 +92,9 @@ MiMa 1.2.1 is silent on five cases that break some client: `defaultConflict`, `o
 
 ## Not modelled
 
-Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in `docs/roadmap.md`.
+Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## PRs
 
-- retronym/talks#50: HotSpot calibration, client spaces, fields, access and `invokespecial` (Tracks J1–J3).
-- retronym/talks#63: sealed classes and constructor call sites (Track J5).
+- [retronym/talks#50](https://github.com/retronym/talks/issues/50): HotSpot calibration, client spaces, fields, access and `invokespecial` (Tracks J1–J3).
+- [retronym/talks#63](https://github.com/retronym/talks/issues/63): sealed classes and constructor call sites (Track J5).

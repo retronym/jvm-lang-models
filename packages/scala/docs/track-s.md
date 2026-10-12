@@ -6,20 +6,20 @@ Each Zinc feature file has its own toy Scala, sized to what Zinc hashes, and non
 
 ## What was built
 
-**Lowering is a `Task`** (`packages/scala/Scala/Lower.lean`). Its queries are other definitions' interfaces (`decl d`: kind, parents, members with signatures, no bodies), which is what scalac reads from pickles or TASTy. Lowering a unit asks for its own declaration, its ancestors' (linearization, mixin forwarders, bridges), each value class in a signature (erasure) and its companion (static forwarders). Its output is `ClassOut`: a `Jvm.Classfile` plus what `Jvm` does not model (fields' flags, `ACC_BRIDGE`, `InnerClasses`, the invokes of synthesized bodies). So lowering has a trace, and `lower_congr` is T1 for it: an edit outside a unit's trace leaves its classfiles unchanged. That is the hook to `XCompiler` and Track B4.
+**Lowering is a `Task`** ([`packages/scala/Scala/Lower.lean`](../Scala/Lower.lean)). Its queries are other definitions' interfaces (`decl d`: kind, parents, members with signatures, no bodies), which is what scalac reads from pickles or TASTy. Lowering a unit asks for its own declaration, its ancestors' (linearization, mixin forwarders, bridges), each value class in a signature (erasure) and its companion (static forwarders). Its output is `ClassOut`: a `Jvm.Classfile` plus what `Jvm` does not model (fields' flags, `ACC_BRIDGE`, `InnerClasses`, the invokes of synthesized bodies). So lowering has a trace, and `lower_congr` is T1 for it: an edit outside a unit's trace leaves its classfiles unchanged. That is the hook to `XCompiler` and Track B4.
 
 **Scala 2.12, 2.13 and 3 are one parameter,** `Dialect`, read only where the probe found the compilers differ.
 
-**Calibration is by probe, not by reading the spec.** A Lean exe enumerates a bounded space, prints each program as Scala source and as the model's classfiles; `packages/scala/probes/probe.py` compiles them with each scalac (one run per dialect, two for separate-compilation cases), parses the classfiles and diffs. Enumeration is testing, per `docs/specification.md`.
+**Calibration is by probe, not by reading the spec.** A Lean exe enumerates a bounded space, prints each program as Scala source and as the model's classfiles; [`packages/scala/probes/probe.py`](../probes/probe.py) compiles them with each scalac (one run per dialect, two for separate-compilation cases), parses the classfiles and diffs. Enumeration is testing, per [`docs/specification.md`](../../../docs/specification.md).
 
 Steps:
 - Track S1: lowering for Scala 2.12+: classes, traits (defaults, `$init$`, static `m$`, trait fields), mixin forwarders, objects (`MODULE$`, static forwarders), bridges, value classes.
 - Track S2: Scala 3 deltas: trait initialisers under separate compilation (F6), `@static`, extension methods, `Serializable` objects.
 - Track S3: the calibration probe.
-- Track S4: one `asSeenFrom`, shared with the TCK (`packages/scala-types/ScalaTypes/AsSeenFrom.lean`).
-- Track S5: membership and overriding as refchecks (`packages/scala-types/ScalaTypes/Members.lean`).
-- Track S6: case classes, enums, inline and opaque, nested classes, by desugaring (`packages/scala-types/ScalaTypes/Desugar.lean`).
-- A source-level edit catalogue (`packages/scala/Scala/Catalogue.lean`), the input to Track B3.
+- Track S4: one `asSeenFrom`, shared with the TCK ([`packages/scala-types/ScalaTypes/AsSeenFrom.lean`](../../scala-types/ScalaTypes/AsSeenFrom.lean)).
+- Track S5: membership and overriding as refchecks ([`packages/scala-types/ScalaTypes/Members.lean`](../../scala-types/ScalaTypes/Members.lean)).
+- Track S6: case classes, enums, inline and opaque, nested classes, by desugaring ([`packages/scala-types/ScalaTypes/Desugar.lean`](../../scala-types/ScalaTypes/Desugar.lean)).
+- A source-level edit catalogue ([`packages/scala/Scala/Catalogue.lean`](../Scala/Catalogue.lean)), the input to Track B3.
 
 All done.
 
@@ -39,20 +39,20 @@ The model started from the textbook rules. The probe corrected it here, each now
 - **Trait setter names carry the trait's full name,** package mangled: `p1$T$_setter_$v_$eq`.
 - A mixin forwarder for a `final` trait method is `final`. A Scala 3 `@static val` is a public static final field of the companion class, with no accessor.
 
-**F6, extended.** A Scala 3 trait whose only initialiser is a `lazy val`, *or which has any extension method*, has an `$init$`. A subclass compiled in the same run calls it; one compiled against the trait's TASTy does not (the TASTy says `NoInits`). The extension-method case is new and likely the common one (syntax traits for type classes). In the model lowering depends on `View.inRun`, a compositionality failure witnessed by kernel `decide` in `packages/scala/Scala/Facts.lean` (`ctorInits`); the probe confirms both runs. Track B4 shows what it costs and that retronym/scala3#10 fixes it.
+**F6, extended.** A Scala 3 trait whose only initialiser is a `lazy val`, *or which has any extension method*, has an `$init$`. A subclass compiled in the same run calls it; one compiled against the trait's TASTy does not (the TASTy says `NoInits`). The extension-method case is new and likely the common one (syntax traits for type classes). In the model lowering depends on `View.inRun`, a compositionality failure witnessed by kernel `decide` in [`packages/scala/Scala/Facts.lean`](../Scala/Facts.lean) (`ctorInits`); the probe confirms both runs. Track B4 shows what it costs and that [retronym/scala3#10](https://github.com/retronym/scala3/issues/10) fixes it.
 
 ### One `asSeenFrom` (Track S4)
 
-`packages/scala-types/ScalaTypes/AsSeenFrom.lean` defines scalac's `asSeenFrom(pre, clazz)` once, generic in the type language: any language with substitutable leaves (this-types and class type parameters, anchored at their owner) and a lawful `bind`. `leafAsSeen` is the walk; `asf` is `bind` of it. `compose` and `chain_is_single` are proved once, from lockstep. It imports only Lean core, so a Mathlib-free project can use it.
+[`packages/scala-types/ScalaTypes/AsSeenFrom.lean`](../../scala-types/ScalaTypes/AsSeenFrom.lean) defines scalac's `asSeenFrom(pre, clazz)` once, generic in the type language: any language with substitutable leaves (this-types and class type parameters, anchored at their owner) and a lawful `bind`. `leafAsSeen` is the walk; `asf` is `bind` of it. `compose` and `chain_is_single` are proved once, from lockstep. It imports only Lean core, so a Mathlib-free project can use it.
 
 Consumers:
 - **Lowering.** `lin` computes each base type's arguments as `asSeenFrom(C.this, P)` (scalac's `baseType`), replacing an ad hoc substitution; members are grouped by `memberType` (`sigGroups`), and bridges and forwarders work per group. The new `asf` probe family found two corrections: a bridge to an override at a value class unboxes and boxes, and an overload next to an inherited generic method is not an override (name-only lookup had dropped a mixin forwarder).
-- **The TCK.** On retronym/scala-type-system-tck branch `claude/shared-asf`, `lean/AsSeenFrom/Shared.lean` is a vendored copy, and `Port.lean` makes the TCK's `Ty` an instance and proves its `Scalac.asf` *is* the shared map (`asf_eq` in that file). `Chain.compose` now follows from the shared `compose`; the other TCK results build unchanged.
-- **`Zinc/Hier`, `Zinc/Erasure`:** not yet; see `docs/roadmap.md`.
+- **The TCK.** On retronym/scala-type-system-tck branch `claude/shared-asf`, `lean/AsSeenFrom/Shared.lean` is a vendored copy, and [`Port.lean`](../../intellij/IntelliJ/Port.lean) makes the TCK's `Ty` an instance and proves its `Scalac.asf` *is* the shared map (`asf_eq` in that file). `Chain.compose` now follows from the shared `compose`; the other TCK results build unchanged.
+- **`Zinc/Hier`, `Zinc/Erasure`:** not yet; see [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ### Membership and overriding (Track S5)
 
-`packages/scala-types/ScalaTypes/Members.lean` is refchecks as a `Task` over interfaces, on the shared `asSeenFrom`: for a class, either the errors scalac or dotc reports, or per signature the member a selection runs. Calibrated by `packages/scala/probes/members.py` on 4704 hierarchies (`T`, `U`, `B`, `C`, each declaring `m` one of eleven ways), **rejected programs included**: errors are compared per class and kind, and for accepted programs a `main` checks which owner's `m` runs.
+[`packages/scala-types/ScalaTypes/Members.lean`](../../scala-types/ScalaTypes/Members.lean) is refchecks as a `Task` over interfaces, on the shared `asSeenFrom`: for a class, either the errors scalac or dotc reports, or per signature the member a selection runs. Calibrated by [`packages/scala/probes/members.py`](../probes/members.py) on 4704 hierarchies (`T`, `U`, `B`, `C`, each declaring `m` one of eleven ways), **rejected programs included**: errors are compared per class and kind, and for accepted programs a `main` checks which owner's `m` runs.
 
 | compiler | agree | accepted |
 |---|---|---|
@@ -67,7 +67,7 @@ The rules the probe forced, beyond the textbook:
 - **Accidental override needs a real override;** otherwise it is "inherits conflicting members".
 - **Re-abstraction.** An abstract member of a *class* re-abstracts the concrete one it extends; one in a *trait* does not. Scala 3 forms a pair there; Scala 2 doesn't.
 
-**A scalac 2 bug, found by the runtime check** (the 4 disagreements). `trait T { val m = "T" }; abstract class B extends T { def m: String }; class C extends B with T { override val m = "C" }` compiles with 2.12.21 and 2.13.18, and `new C` throws `AbstractMethodError`: `T.$init$` calls the trait setter, which `C` does not implement. Scala 3 runs it. Nearest report: scala/bug#12456. Not yet filed (`docs/roadmap.md`).
+**A scalac 2 bug, found by the runtime check** (the 4 disagreements). `trait T { val m = "T" }; abstract class B extends T { def m: String }; class C extends B with T { override val m = "C" }` compiles with 2.12.21 and 2.13.18, and `new C` throws `AbstractMethodError`: `T.$init$` calls the trait setter, which `C` does not implement. Scala 3 runs it. Nearest report: [scala/bug#12456](https://github.com/scala/bug/issues/12456). Not yet filed ([`docs/roadmap.md`](../../../docs/roadmap.md)).
 
 **Java's rules (JLS 8.4.8), the spec Track V diffs against:**
 - **Order.** No linearization: a class method always beats an interface default; among interfaces the maximally specific default wins, and two unrelated defaults are an error unless the class declares the method.
@@ -96,7 +96,7 @@ What the probe corrected:
 
 ### The source-level catalogue
 
-`packages/scala/Scala/Catalogue.lean`: library edits in Scala source, each lowered and linked `before`, `after` (old client classfiles, new library) and `fresh` (client recompiled) by kernel `decide`. Two show the gaps between Zinc and binary compatibility:
+[`packages/scala/Scala/Catalogue.lean`](../Scala/Catalogue.lean): library edits in Scala source, each lowered and linked `before`, `after` (old client classfiles, new library) and `fresh` (client recompiled) by kernel `decide`. Two show the gaps between Zinc and binary compatibility:
 - `traitOverrideAdded`: the old client has no forwarder, so the JVM selects the superclass's method; a fresh build runs the trait's. Links either way, MiMa is silent, Zinc must recompile. Confirmed on HotSpot with 2.13.18.
 - `widenedToValueClass`: `W`'s classfile changes although `W`'s source did not, because its lowering trace contains `V`.
 
@@ -106,11 +106,11 @@ And from Track S6: `caseFieldAdded` (accessor links; constructor, `apply`, `copy
 
 ## Out of scope
 
-Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in `docs/roadmap.md`.
+Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## PRs
 
-- retronym/talks#39: lowering, calibration against 2.12/2.13/3 (Tracks S1–S3) and the catalogue.
-- retronym/talks#56: the shared `asSeenFrom` (Track S4).
-- retronym/talks#58: membership and overriding (Track S5).
-- retronym/talks#65: case classes, enums, inline and opaque, nested classes (Track S6).
+- [retronym/talks#39](https://github.com/retronym/talks/issues/39): lowering, calibration against 2.12/2.13/3 (Tracks S1–S3) and the catalogue.
+- [retronym/talks#56](https://github.com/retronym/talks/issues/56): the shared `asSeenFrom` (Track S4).
+- [retronym/talks#58](https://github.com/retronym/talks/issues/58): membership and overriding (Track S5).
+- [retronym/talks#65](https://github.com/retronym/talks/issues/65): case classes, enums, inline and opaque, nested classes (Track S6).

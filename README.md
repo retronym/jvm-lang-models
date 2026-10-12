@@ -11,7 +11,7 @@ Lean 4 models of the tools that build JVM languages, layered so that each answer
 
 The Zinc model's hypotheses are the point: they are the specification a compiler bridge must meet. Nothing here verifies scalac; the models are calibrated against it.
 
-History: the Zinc model started in retronym/talks (`zinc-incrementality/lean/`, moved here with its history from talks `b9058db`), the IntelliJ model in retronym/scala-type-system-tck (`lean/`, likewise). `docs/history/repository-split.md` has the plan and the record of the split.
+History: the Zinc model started in retronym/talks (`zinc-incrementality/lean/`, moved here with its history from talks `b9058db`), the IntelliJ model in retronym/scala-type-system-tck (`lean/`, likewise). [`docs/history/repository-split.md`](docs/history/repository-split.md) has the plan and the record of the split.
 
 ```bash
 lake exe cache get && lake build
@@ -21,7 +21,7 @@ Lean `v4.34.1`, Mathlib `v4.34.1`, one toolchain for the workspace. `lake build`
 
 ## Packages
 
-Each package under `packages/` has its own `lakefile.toml` and a README with the question it answers, where to start, its calibration and its gaps. Imports go one way: the core layers never import a consumer.
+Each package under `packages/` has its own Lake configuration and a README with the question it answers, where to start, its calibration and its gaps. Imports go one way: the core layers never import a consumer.
 
 ```mermaid
 flowchart BT
@@ -57,29 +57,29 @@ flowchart BT
 | [`links`](packages/links/README.md) | B4: Zinc-clean implies binary-compatible | yes |
 | [`harness`](packages/harness/README.md) | executables and scripts that drive the calibration | yes |
 
-The Mathlib-free packages can be required on their own, for example `packages/intellij` by `git … subDir`, as the TCK does.
+The Mathlib-free packages can be required on their own, for example [`packages/intellij`](packages/intellij) by `git … subDir`, as the TCK does.
 
 ## Start here, by goal
 
-**Understand the theory.** Read `packages/query/Query/Task.lean` (a compilation as a query tree with a trace), then `packages/inc-comp/IncComp/Model.lean` (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then `packages/inc-comp/IncComp/General.lean` (`XCompiler`, where T2, T3a, T4 and T5 are proved once). `packages/inc-comp/IncComp/Uniqueness.lean` and `packages/zinc/Zinc/Loop/Cycles.lean` show when incremental equals clean and where it fails. The statements are in [The theorems](#the-theorems); `docs/specification.md` gives the rationale for the method.
+**Understand the theory.** Read [`packages/query/Query/Task.lean`](packages/query/Query/Task.lean) (a compilation as a query tree with a trace), then [`packages/inc-comp/IncComp/Model.lean`](packages/inc-comp/IncComp/Model.lean) (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then [`packages/inc-comp/IncComp/General.lean`](packages/inc-comp/IncComp/General.lean) (`XCompiler`, where T2, T3a, T4 and T5 are proved once). [`packages/inc-comp/IncComp/Uniqueness.lean`](packages/inc-comp/IncComp/Uniqueness.lean) and [`packages/zinc/Zinc/Loop/Cycles.lean`](packages/zinc/Zinc/Loop/Cycles.lean) show when incremental equals clean and where it fails. The statements are in [The theorems](#the-theorems); [`docs/specification.md`](docs/specification.md) gives the rationale for the method.
 
-**Start from a bug you know.** `docs/evidence/bug-map.md` maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
+**Start from a bug you know.** [`docs/evidence/bug-map.md`](docs/evidence/bug-map.md) maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
 
-**Add a language feature to the Zinc model.** `packages/zinc/Zinc/Features/Sam.lean` is the template: the compiler's algorithm as the unit task of a `TCompiler`, today's bridge as keys, the failing cases as witnesses (`p1_today`, `p2_today`), the fix with `obligations_fix` and `fix_sound`. `packages/zinc/docs/28-sam.md` has the question behind it. The witnesses became scripted tests in retronym/zinc#58, which fail on `develop` as predicted. The gap clusters in `docs/evidence/bug-map.md` are the candidate features.
+**Add a language feature to the Zinc model.** [`packages/zinc/Zinc/Features/Sam.lean`](packages/zinc/Zinc/Features/Sam.lean) is the template: the compiler's algorithm as the unit task of a `TCompiler`, today's bridge as keys, the failing cases as witnesses (`p1_today`, `p2_today`), the fix with `obligations_fix` and `fix_sound`. [`packages/zinc/docs/28-sam.md`](packages/zinc/docs/28-sam.md) has the question behind it. The witnesses became scripted tests in [retronym/zinc#58](https://github.com/retronym/zinc/issues/58), which fail on `develop` as predicted. The gap clusters in [`docs/evidence/bug-map.md`](docs/evidence/bug-map.md) are the candidate features.
 
-**Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from retronym/zinc#25) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in `packages/harness/scripts/`. The workflow is in `packages/zinc/docs/10-names.md` and `packages/zinc/docs/12-java.md`; pending tests in `docs/evidence/tests.md`.
+**Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from [retronym/zinc#25](https://github.com/retronym/zinc/issues/25)) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in [`packages/harness/scripts/`](packages/harness/scripts). The workflow is in [`packages/zinc/docs/10-names.md`](packages/zinc/docs/10-names.md) and [`packages/zinc/docs/12-java.md`](packages/zinc/docs/12-java.md); pending tests in [`docs/evidence/tests.md`](docs/evidence/tests.md).
 
-**Maintain javac, scalac or dotc.** `packages/java`, `packages/scala` and `packages/scala-types` state what the compilers emit for a subset, calibrated by the probes beside them. `packages/scala/Scala/Facts.lean` and the `comp` failures in the bug map are where joint and separate compilation differ.
+**Maintain javac, scalac or dotc.** [`packages/java`](packages/java), [`packages/scala`](packages/scala) and [`packages/scala-types`](packages/scala-types) state what the compilers emit for a subset, calibrated by the probes beside them. [`packages/scala/Scala/Facts.lean`](packages/scala/Scala/Facts.lean) and the `comp` failures in the bug map are where joint and separate compilation differ.
 
-**Maintain MiMa.** `packages/mima`: MiMa as a bridge design, its five gaps, corrected rules; `packages/links` connects it to Zinc (B4).
+**Maintain MiMa.** [`packages/mima`](packages/mima): MiMa as a bridge design, its five gaps, corrected rules; [`packages/links`](packages/links) connects it to Zinc (B4).
 
-**Maintain the IntelliJ Scala plugin.** `packages/intellij`: the theorems behind the plugin's substitutor checks, on top of `ScalaTypes.AsSeenFrom`.
+**Maintain the IntelliJ Scala plugin.** [`packages/intellij`](packages/intellij): the theorems behind the plugin's substitutor checks, on top of `ScalaTypes.AsSeenFrom`.
 
 ## The theorems
 
 This is the canonical statement of the obligations and T1–T5; other documents point here.
 
-**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On `XCompiler` (`General.lean:45`):
+**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On `XCompiler` ([`General.lean:45`](packages/inc-comp/IncComp/General.lean#L45)):
 
 - **comp** (compositionality): joint compilation of a group is a fixed point of the per-unit tasks, with group-mates answered from their fresh interfaces;
 - **coverage**: every traced query, misses included, is covered by a recorded key;
@@ -90,40 +90,43 @@ The local `Compiler` (`Model.lean:67`) has the first three. The policy's one obl
 
 | | Name | Statement | Hypotheses |
 |---|---|---|---|
-| T1 | `Task.run_eq_of_trace` (`Task.lean:42`) | Oracles that agree on a run's trace give the same output and trace | none |
-| T2 | `XCompiler.round_preserves` (`General.lean:108`) | One round, with `Δ` over the affected units, preserves the invariant | the obligations; dirty set `D ⊆ R` |
-| T3a | `XCompiler.zinc_sound` (`General.lean:169`) | If the loop returns, every unit is up to date: a per-unit fixed point | plus `Policy.Sound` |
-| T3b | `Compiler.fixpoint_unique_of_wf`, `_of_explicit` (`Uniqueness.lean:65`, `:82`) | Per-unit fixed points are unique | traced dependencies well-founded under every oracle, or every interface a function of the source alone |
-| T3 | `Compiler.zinc_eq_clean_of_wf`, `_of_explicit` (`Uniqueness.lean:121`, `:136`) | Incremental = clean | T3a's and T3b's; on `Compiler`, and on `TCompiler` through `toCompiler` (`:189`, `:204`) |
-| T4 | `XCompiler.zinc_some_of_monotoneFrom` (`General.lean:218`); `Compiler.zinc_some_of_explicit`, `_of_wf` (`Termination.lean:100`, `:184`) | The loop returns within a bound: `k + \|S\| + 1` rounds; 2; height + 2 | a policy monotone from round `k` (`transitiveStep`); or T3b's hypotheses, `Compiler` only |
-| | `PingPong.zinc_diverges` (`PingPong.lean:218`) | Without `transitiveStep`, Zinc's loop diverges for every fuel on three mutually inferred classes | kernel `decide` |
-| T5 | `XCompiler.downstream_sound` (`General.lean:316`) | A downstream subproject's loop, seeded from changed sources and external invalidations, ends sound against the new classpath | fresh snapshots; T5a `inv_external` (`:281`) needs only abstraction |
-| | `Stale.stale_unsound`, `stale_affected` (`Stale.lean:131`, `:136`) | T2-stale: a non-local hash diffed over the recompiled set alone undercompiles; over `affected` it does not | kernel `decide` |
-| | `Cycles.zinc_ne_clean`, `annotated_eq_clean` (`Cycles.lean:190`, `:219`) | T3a without T3 for inferred types in a cycle; T3 when every member is annotated | |
-| B4 | `XCompiler.untouched_eq_clean` (`packages/links/Links/ZincBridge.lean:131`) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through `XCompiler.fixpoint_unique_of_explicit` (`:100`) |
-| | `zinc_sound_charged` (`Files.lean:175`) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
+| T1 | `Task.run_eq_of_trace` ([`Task.lean:42`](packages/query/Query/Task.lean#L42)) | Oracles that agree on a run's trace give the same output and trace | none |
+| T2 | `XCompiler.round_preserves` ([`General.lean:108`](packages/inc-comp/IncComp/General.lean#L108)) | One round, with `Δ` over the affected units, preserves the invariant | the obligations; dirty set `D ⊆ R` |
+| T3a | `XCompiler.zinc_sound` ([`General.lean:169`](packages/inc-comp/IncComp/General.lean#L169)) | If the loop returns, every unit is up to date: a per-unit fixed point | plus `Policy.Sound` |
+| T3b | `Compiler.fixpoint_unique_of_wf`, `_of_explicit` ([`Uniqueness.lean:65`](packages/inc-comp/IncComp/Uniqueness.lean#L65), `:82`) | Per-unit fixed points are unique | traced dependencies well-founded under every oracle, or every interface a function of the source alone |
+| T3 | `Compiler.zinc_eq_clean_of_wf`, `_of_explicit` ([`Uniqueness.lean:121`](packages/inc-comp/IncComp/Uniqueness.lean#L121), `:136`) | Incremental = clean | T3a's and T3b's; on `Compiler`, and on `TCompiler` through `toCompiler` (`:189`, `:204`) |
+| T4 | `XCompiler.zinc_some_of_monotoneFrom` ([`General.lean:218`](packages/inc-comp/IncComp/General.lean#L218)); `Compiler.zinc_some_of_explicit`, `_of_wf` ([`Termination.lean:100`](packages/inc-comp/IncComp/Termination.lean#L100), `:184`) | The loop returns within a bound: `k + \|S\| + 1` rounds; 2; height + 2 | a policy monotone from round `k` (`transitiveStep`); or T3b's hypotheses, `Compiler` only |
+| | `PingPong.zinc_diverges` ([`PingPong.lean:218`](packages/zinc/Zinc/Loop/PingPong.lean#L218)) | Without `transitiveStep`, Zinc's loop diverges for every fuel on three mutually inferred classes | kernel `decide` |
+| T5 | `XCompiler.downstream_sound` ([`General.lean:316`](packages/inc-comp/IncComp/General.lean#L316)) | A downstream subproject's loop, seeded from changed sources and external invalidations, ends sound against the new classpath | fresh snapshots; T5a `inv_external` (`:281`) needs only abstraction |
+| | `Stale.stale_unsound`, `stale_affected` ([`Stale.lean:131`](packages/inc-comp/IncComp/Stale.lean#L131), `:136`) | T2-stale: a non-local hash diffed over the recompiled set alone undercompiles; over `affected` it does not | kernel `decide` |
+| | `Cycles.zinc_ne_clean`, `annotated_eq_clean` ([`Cycles.lean:190`](packages/zinc/Zinc/Loop/Cycles.lean#L190), `:219`) | T3a without T3 for inferred types in a cycle; T3 when every member is annotated | |
+| B4 | `XCompiler.untouched_eq_clean` ([`packages/links/Links/ZincBridge.lean:131`](packages/links/Links/ZincBridge.lean#L131)) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through `XCompiler.fixpoint_unique_of_explicit` (`:100`) |
+| | `zinc_sound_charged` ([`Files.lean:175`](packages/zinc/Zinc/Loop/Files.lean#L175)) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
 
 **Where the hypotheses bite.**
 
 - Abstraction is perfect hashing: collisions of Zinc's 32-bit name hashes are excluded by fiat.
-- T3's well-founded case covers every traced query under every oracle, which rules out self-queries and body-level cycles; uniqueness should need only that the dependencies affecting interfaces are well-founded (sbt/zinc#1284's condition). Its explicit case needs every interface independent of every oracle, so a mix of annotated and inferred members is unproved.
+- T3's well-founded case covers every traced query under every oracle, which rules out self-queries and body-level cycles; uniqueness should need only that the dependencies affecting interfaces are well-founded ([sbt/zinc#1284](https://github.com/sbt/zinc/issues/1284)'s condition). Its explicit case needs every interface independent of every oracle, so a mix of annotated and inferred members is unproved.
 - T3 and T4's explicit and well-founded cases are on `Compiler` (and `TCompiler` for T3). On `XCompiler` only the explicit T3b exists, inside `BinCompat`.
 - `comp` fails for F4, F5 and F6 (`SplitProof.Spec.joint_not_comp`, `ZincBridgeScala3.not_comp`).
-- The set of units is fixed; additions and deletions are absent sources (`Added.lean`).
+- The set of units is fixed; additions and deletions are absent sources ([`Added.lean`](packages/zinc/Zinc/Features/Added.lean)).
 - T3a covers only runs that return within fuel.
 - Precision has no framework definition; it is proved per instance.
 
 ## Trust
 
 - No `sorry`, `admit` or `axiom` declarations.
-- `native_decide` appears only in `example`s, never in a `theorem` or `lemma`: those are checks on a bounded space, not results (docs/specification.md). `scripts/lint_native_decide.py` enforces this over every `.lean` file of every package, in CI.
-- `scripts/Axioms.lean` prints the axioms of the core theorems, of the counterexamples proved by `decide`, and of the instances' soundness theorems; `scripts/check_axioms.py` fails unless each uses only `propext`, `Classical.choice` and `Quot.sound` (so no `sorryAx` and no `Lean.ofReduceBool`), in CI.
+- `native_decide` appears only in `example`s, never in a `theorem` or `lemma`: those are checks on a bounded space, not results (docs/specification.md). [`scripts/lint_native_decide.py`](scripts/lint_native_decide.py) enforces this over every `.lean` file of every package, in CI.
+- [`scripts/Axioms.lean`](scripts/Axioms.lean) prints the axioms of the core theorems, of the counterexamples proved by `decide`, and of the instances' soundness theorems; [`scripts/check_axioms.py`](scripts/check_axioms.py) fails unless each uses only `propext`, `Classical.choice` and `Quot.sound` (so no `sorryAx` and no `Lean.ofReduceBool`), in CI.
 
 ## Documents
 
+Documents link every file, Lean file name and GitHub reference they mention; [`scripts/lint_links.py`](scripts/lint_links.py) checks this in CI, and `python3 -I scripts/lint_links.py --fix` writes the missing links.
+
+
 [`docs/README.md`](docs/README.md) is the index, by what a document is for:
 
-- **current**: `docs/status.md` (what is proved and what is checked), `docs/specification.md` (why the model is a specification), `docs/roadmap.md` (open work);
-- **evidence**: `docs/evidence/` (the bug catalogue, the scripted-test catalogue, and the bug map that ties them to the model);
+- **current**: [`docs/status.md`](docs/status.md) (what is proved and what is checked), [`docs/specification.md`](docs/specification.md) (why the model is a specification), [`docs/roadmap.md`](docs/roadmap.md) (open work);
+- **evidence**: [`docs/evidence/`](docs/evidence) (the bug catalogue, the scripted-test catalogue, and the bug map that ties them to the model);
 - **per package**: each package's `docs/` (the Zinc phase records `packages/zinc/docs/NN-topic.md`, the calibration tracks);
-- **history**: `docs/history/` (the phase log, the reviews, the record of the repository split).
+- **history**: [`docs/history/`](docs/history) (the phase log, the reviews, the record of the repository split).

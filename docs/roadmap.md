@@ -6,7 +6,7 @@ The Lean model was built to answer one question: is Zinc's invalidation sound, r
 
 - **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged (`link_congr`).
 - **IDE type systems.** The TCK (`retronym/scala-type-system-tck`) checks IntelliJ against an `asSeenFrom` model that now shares its core with the Scala layer.
-- **Scala 2 → 3 migration.** The name-resolution calibration in talks#21 is already a list of differences between the two compilers.
+- **Scala 2 → 3 migration.** The name-resolution calibration in [talks#21](https://github.com/retronym/talks/issues/21) is already a list of differences between the two compilers.
 
 ## Architecture
 
@@ -14,16 +14,16 @@ The layers and their imports are in [the root README](../README.md#packages). `J
 
 ## Done
 
-The TCK's dependency on `asSeenFrom` is resolved: the IntelliJ model is `packages/intellij`, on top of `ScalaTypes.AsSeenFrom`, and the TCK pins it (retronym/scala-type-system-tck#9).
+The TCK's dependency on `asSeenFrom` is resolved: the IntelliJ model is [`packages/intellij`](../packages/intellij), on top of `ScalaTypes.AsSeenFrom`, and the TCK pins it ([retronym/scala-type-system-tck#9](https://github.com/retronym/scala-type-system-tck/issues/9)).
 
 Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J3, J5 | JVM linkage, calibrated on HotSpot 21/25/27 over ~58k client programs | `packages/jvm/docs/track-j.md` |
-| Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | `packages/scala/docs/track-s.md` |
-| Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | `packages/java/docs/track-java.md` |
-| Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | `packages/mima/docs/track-b.md` |
+| Tracks J1–J3, J5 | JVM linkage, calibrated on HotSpot 21/25/27 over ~58k client programs | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
+| Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
+| Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
 
 ## Open
 
@@ -31,43 +31,43 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Why.** The JVM model links but runs no code. A library method's own calls are invisible, so MiMa's 17 `ReversedMissingMethodProblem` reports that break no client in the model are unjudged, and nestmates can't be modelled usefully (a nest change breaks a client only through a library method's own calls). Constants folded into the client are part of the same gap.
 
-**Done looks like.** Method bodies as a list of sites linked when the method runs; constants folded at the client; `changesSomeClient` generalised to "links, but runs different code"; the 17 reports classified on HotSpot. Track: `packages/jvm/docs/track-j.md`.
+**Done looks like.** Method bodies as a list of sites linked when the method runs; constants folded at the client; `changesSomeClient` generalised to "links, but runs different code"; the 17 reports classified on HotSpot. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
 
 ### Track J3 remainder: nestmates and smaller linkage gaps
 
-**Why.** These are what `packages/jvm/Jvm/Link.lean` still says it doesn't model, and each can hide a MiMa gap.
+**Why.** These are what [`packages/jvm/Jvm/Link.lean`](../packages/jvm/Jvm/Link.lean) still says it doesn't model, and each can hide a MiMa gap.
 
-**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; a space over two client classes; protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Track: `packages/jvm/docs/track-j.md`.
+**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; a space over two client classes; protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
 
 ### Track B3: source-level spaces
 
 **Why.** MiMa's users edit source, not classfiles. The JVM edit space found MiMa's gaps; a source edit space would find which ones real Scala and Java edits reach, and where scalac's encoding (forwarders, `$init$`, value classes) makes a source-compatible-looking edit break.
 
-**Done looks like.** A space of source edits, Scala and Java, lowered, linked against a client space and checked against MiMa and HotSpot, as the JVM edit space was. Today only the Scala catalogue's first cases have been run through MiMa, and the Java catalogue not at all. Track: `packages/mima/docs/track-b.md`.
+**Done looks like.** A space of source edits, Scala and Java, lowered, linked against a client space and checked against MiMa and HotSpot, as the JVM edit space was. Today only the Scala catalogue's first cases have been run through MiMa, and the Java catalogue not at all. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
 
 ### A general proof for the corrected MiMa rules
 
-**Why.** `packages/mima/MiMa/Sound.lean` checks the corrected rules on the edit space only. Upstreaming them to MiMa is stronger with a proof that they are sound for every library.
+**Why.** [`packages/mima/MiMa/Sound.lean`](../packages/mima/MiMa/Sound.lean) checks the corrected rules on the edit space only. Upstreaming them to MiMa is stronger with a proof that they are sound for every library.
 
-**Done looks like.** A theorem that if `Fixed` reports nothing, every client that linked on the old library links on the new one, for all libraries. It needs a monotonicity argument about resolution and selection over the whole `Jvm` model. Track: `packages/mima/docs/track-b.md`.
+**Done looks like.** A theorem that if `Fixed` reports nothing, every client that linked on the old library links on the new one, for all libraries. It needs a monotonicity argument about resolution and selection over the whole `Jvm` model. Track: [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md).
 
 ### Port `Hier`, `Erasure`, `Flat` and `ImplicitScope` onto the shared Scala layer
 
-**Why.** These four `Zinc/` files each have their own toy Scala, their own `asSeenFrom` and their own query plumbing. No `Zinc/` file imports `packages/scala-types/ScalaTypes/AsSeenFrom.lean` or `packages/scala/Scala/Lower.lean`. Until they do, Zinc's bridge instances, Track B4 and the MiMa model don't share one Scala semantics, and Track B4's key model (`ZincBridgeKeys.lean`) stays separate from the Zinc one.
+**Why.** These four `Zinc/` files each have their own toy Scala, their own `asSeenFrom` and their own query plumbing. No `Zinc/` file imports [`packages/scala-types/ScalaTypes/AsSeenFrom.lean`](../packages/scala-types/ScalaTypes/AsSeenFrom.lean) or [`packages/scala/Scala/Lower.lean`](../packages/scala/Scala/Lower.lean). Until they do, Zinc's bridge instances, Track B4 and the MiMa model don't share one Scala semantics, and Track B4's key model ([`ZincBridgeKeys.lean`](../packages/links/Links/ZincBridgeKeys.lean)) stays separate from the Zinc one.
 
-**Done looks like.** The four files restated over `ScalaTypes.AsSeenFrom`, `ScalaTypes.Resolve` and `Scala.Lower`, with their theorems kept (`Task` is already in its own package, `query`); the explicit-interface T3 that Track B4 restates in `packages/links/Links/ZincBridge.lean` moved into `General.lean`. Single-writer work, since it touches `Zinc/`. Track: `packages/scala/docs/track-s.md`.
+**Done looks like.** The four files restated over `ScalaTypes.AsSeenFrom`, `ScalaTypes.Resolve` and `Scala.Lower`, with their theorems kept (`Task` is already in its own package, `query`); the explicit-interface T3 that Track B4 restates in [`packages/links/Links/ZincBridge.lean`](../packages/links/Links/ZincBridge.lean) moved into [`General.lean`](../packages/inc-comp/IncComp/General.lean). Single-writer work, since it touches `Zinc/`. Track: [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md).
 
 ### Scala and Java layer remainders
 
 **Why.** Each widens what Track B3's source spaces can express.
 
-**Done looks like.** Membership: type members, `var`, `protected` and qualified access, `abstract override`, objects as overriders, and a probe of the Java rules. Lowering: case classes with type parameters or several parameter lists, enums with type parameters, objects nested in classes, local classes, constructor parameters of plain classes, `lazy val` and `var` in classes, overloading, Java-defined parents. Tracks: `packages/scala/docs/track-s.md`, `packages/java/docs/track-java.md`.
+**Done looks like.** Membership: type members, `var`, `protected` and qualified access, `abstract override`, objects as overriders, and a probe of the Java rules. Lowering: case classes with type parameters or several parameter lists, enums with type parameters, objects nested in classes, local classes, constructor parameters of plain classes, `lazy val` and `var` in classes, overloading, Java-defined parents. Tracks: [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md), [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md).
 
 ### Upstream reports
 
 **Why.** Findings help no one until filed.
 
-**Done looks like.** The five MiMa issues (drafts in `packages/mima/docs/track-b.md`, "Issues to file") and the scalac 2 trait-setter `AbstractMethodError` (`packages/scala/docs/track-s.md`) filed.
+**Done looks like.** The five MiMa issues (drafts in [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md), "Issues to file") and the scalac 2 trait-setter `AbstractMethodError` ([`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md)) filed.
 
 ### Contributors
 

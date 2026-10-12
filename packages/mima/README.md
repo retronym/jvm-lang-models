@@ -2,21 +2,21 @@
 
 Which library edits MiMa reports, which it misses, and corrected rules. MiMa (`mima-core` 1.2.1's `Analyzer`) modelled as a bridge design over `jvm`: its keys, what they cover, and its gaps as missed footprint queries.
 
-**Start here.** `MiMa/Keys.lean`.
+**Start here.** [`MiMa/Keys.lean`](MiMa/Keys.lean).
 
-**Calibration.** `probes/` runs MiMa on the rendered cases and compares: five gaps (MiMa-F1, M1, F2, D1, P1), 40 false negatives on the edit space. `docs/track-b.md`.
+**Calibration.** `probes/` runs MiMa on the rendered cases and compares: five gaps (MiMa-F1, M1, F2, D1, P1), 40 false negatives on the edit space. [`docs/track-b.md`](docs/track-b.md).
 
-**Gaps.** `MiMa/Sound.lean` checks the corrected rules on the edit space only; a proof for every library is open. 17 `ReversedMissingMethodProblem` reports need method bodies (Track J4).
+**Gaps.** [`MiMa/Sound.lean`](MiMa/Sound.lean) checks the corrected rules on the edit space only; a proof for every library is open. 17 `ReversedMissingMethodProblem` reports need method bodies (Track J4).
 
-`MiMa/Sound.lean` is outside the default target: `lake build MiMa.Sound` (about 35 minutes; in CI only on demand).
+[`MiMa/Sound.lean`](MiMa/Sound.lean) is outside the default target: `lake build MiMa.Sound` (about 35 minutes; in CI only on demand).
 
 ## Files
 
 | File | Contents |
 |---|---|
-| `Mima.lean` | `mima-core` 1.2.1's `Analyzer` as a function of the old and new classfiles |
-| `Edits.lean` | The space of single library edits, and their clients |
-| `Keys.lean` | MiMa as a bridge design: keys, covering, and its gaps as missed footprint queries |
-| `Fixed.lean` | A corrected rule set, one key per gap |
-| `Sound.lean` | The corrected rules are sound on the space (kernel `decide`; built on demand) |
+| [`Mima.lean`](MiMa/Mima.lean) | `mima-core` 1.2.1's `Analyzer` as a function of the old and new classfiles |
+| [`Edits.lean`](MiMa/Edits.lean) | The space of single library edits, and their clients |
+| [`Keys.lean`](MiMa/Keys.lean) | MiMa as a bridge design: keys, covering, and its gaps as missed footprint queries |
+| [`Fixed.lean`](MiMa/Fixed.lean) | A corrected rule set, one key per gap |
+| [`Sound.lean`](MiMa/Sound.lean) | The corrected rules are sound on the space (kernel `decide`; built on demand) |
 | `probes/` | `Mima.scala` runs MiMa on rendered cases, `scala.sh` on the Scala catalogue, `compare.py` diffs MiMa against the model |

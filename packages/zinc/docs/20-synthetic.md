@@ -1,14 +1,14 @@
-# Phase 20 — constructors and synthetic case-class members (`Synthetic.lean`)
+# Phase 20 — constructors and synthetic case-class members ([`Synthetic.lean`](../Zinc/Features/Synthetic.lean))
 
 ## Question
 
-A client's `new C(…)`, `C(…)`, `c.copy(…)` or `case C(a, b)` asks for the signature of a constructor or of a member the compiler synthesised. Zinc's key for it is a used name, checked against the name hashes of the classes the client depends on; a used name does not record which class it came from. Every constructor is called `<init>`, and synthetic members have shapes that need not follow the fields they stand for. BUG-MAP's cluster K-C1: sbt/zinc#97 (fixed by #288), #1324, scala/scala3#12401 (fixed by #12712), #12898, #19910 / sbt/zinc#1334 (fixed by #19911), sbt/zinc#572, scala/scala3#26231's abstraction half.
+A client's `new C(…)`, `C(…)`, `c.copy(…)` or `case C(a, b)` asks for the signature of a constructor or of a member the compiler synthesised. Zinc's key for it is a used name, checked against the name hashes of the classes the client depends on; a used name does not record which class it came from. Every constructor is called `<init>`, and synthetic members have shapes that need not follow the fields they stand for. BUG-MAP's cluster K-C1: [sbt/zinc#97](https://github.com/sbt/zinc/issues/97) (fixed by #288), #1324, [scala/scala3#12401](https://github.com/scala/scala3/issues/12401) (fixed by #12712), #12898, #19910 / [sbt/zinc#1334](https://github.com/sbt/zinc/issues/1334) (fixed by #19911), [sbt/zinc#572](https://github.com/sbt/zinc/issues/572), [scala/scala3#26231](https://github.com/scala/scala3/issues/26231)'s abstraction half.
 
 ## Model
 
 A class's members (constructors, default getters, the companion's `apply`, `unapply`, `copy`) with signatures. A mangling gives each member a name, separately on the definition side (the API's name hashes) and on the use side (the client's used names). The name hash of a name is the list of members with that name and their signatures. Zinc invalidates a client that depends on `C` when a name it used has a different hash in `C`'s new API; the client needs it when the signature it used changed.
 
-## Results (`Synthetic.lean`)
+## Results ([`Synthetic.lean`](../Zinc/Features/Synthetic.lean))
 
 | Result | Status |
 |---|---|
@@ -29,6 +29,6 @@ All pass on develop: `value-class-underlying`, `constructors-unrelated`, `constr
 
 ## Steps
 
-- [x] P20.1 `Synthetic.lean`: the name-level model, the theorems, a witness per bug.
+- [x] P20.1 [`Synthetic.lean`](../Zinc/Features/Synthetic.lean): the name-level model, the theorems, a witness per bug.
 - [x] P20.2 The cluster's scripted tests mapped.
-- [ ] Future: the name-level model as keys of a `TCompiler` instance (used names over classes), joining `Naming.lean`.
+- [ ] Future: the name-level model as keys of a `TCompiler` instance (used names over classes), joining [`Naming.lean`](../Zinc/Bridges/Naming.lean).

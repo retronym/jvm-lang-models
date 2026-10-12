@@ -1,8 +1,8 @@
-# Phase 23 — the extraHash lineage and the companion namespace (`ExtraHash.lean`)
+# Phase 23 — the extraHash lineage and the companion namespace ([`ExtraHash.lean`](../Zinc/Bridges/ExtraHash.lean))
 
 ## Question
 
-A class that mixes in a trait implements the trait's fields and private members, so its bytecode reads queries no public API answers. Zinc answers them with `extraHash`, a second hash on a trait's key that covers its private members and, since sbt/zinc#1289, its parents' `extraHash`. And Zinc keys a class by its name, so a companion pair (`trait A` / `object A`, `class A` / `object A`) shares one `AnalyzedClass`, one `extraHash`, one list of parents and one set of name hashes. BUG-MAP's cluster K-C2, a lineage of fixes: #542 → #662 / #1289 → #1794 / #1793 → #1799 / #1801 → #1795 / #1796 (open).
+A class that mixes in a trait implements the trait's fields and private members, so its bytecode reads queries no public API answers. Zinc answers them with `extraHash`, a second hash on a trait's key that covers its private members and, since [sbt/zinc#1289](https://github.com/sbt/zinc/issues/1289), its parents' `extraHash`. And Zinc keys a class by its name, so a companion pair (`trait A` / `object A`, `class A` / `object A`) shares one `AnalyzedClass`, one `extraHash`, one list of parents and one set of name hashes. BUG-MAP's cluster K-C2, a lineage of fixes: #542 → #662 / #1289 → #1794 / #1793 → #1799 / #1801 → #1795 / #1796 (open).
 
 | Bug | Shape | Obligation |
 |---|---|---|
@@ -17,7 +17,7 @@ A class that mixes in a trait implements the trait's fields and private members,
 
 Units carry a namespace (type or term), as the companion halves do. Zinc's key is the name alone; its hashes combine both halves. An inheritor's answer reads the type half's private members and those of its trait ancestors. The fix is keys qualified by namespace, and an `extraHash` folded from the current compilation.
 
-## Results (`ExtraHash.lean`)
+## Results ([`ExtraHash.lean`](../Zinc/Bridges/ExtraHash.lean))
 
 | Result | Status |
 |---|---|
@@ -33,12 +33,12 @@ So the lineage alternates between the two obligations: #542 and #662 are soundne
 
 On develop: `trait-private-object`, `-val`, `-val-local-inheritance`, `-val-member-ref`, `-val-mix-transitive-inheritance`, `-val-transitive-inheritance`, `-var` (#542, #662), `module-inheritance-extra-hash`, `companion-object-extra-hash` (#1793, #1795), `trait-extends-trait-extra-round`, `trait-local-change` (#1794), `empty-modified-names` pass. `module-inheritance-extra-hash-213-bin` is pending: scala2-sbt-bridge cannot report `object B` as a term (#1795's namespace on the callback).
 
-## Relevance to the Merkle PoC (retronym/zinc#24)
+## Relevance to the Merkle PoC ([retronym/zinc#24](https://github.com/retronym/zinc/issues/24))
 
 The Merkle hash composes a class's hash from its declarations and its ancestors': it is `extraHash`'s fold made total. The same two conditions apply: the fold must read the current compilation (`coldWarm_spurious`), and its inputs must carry the namespace (`merged_spurious`), or a companion's change moves every inheritor's hash.
 
 ## Steps
 
-- [x] P23.1 `ExtraHash.lean`: the theorems and a witness per bug.
+- [x] P23.1 [`ExtraHash.lean`](../Zinc/Bridges/ExtraHash.lean): the theorems and a witness per bug.
 - [x] P23.2 The cluster's scripted tests mapped.
-- [ ] Future: the namespace as a tag on `Flat.lean`'s units, so the fold and the namespaced keys run inside a `Compiler` instance with T3a.
+- [ ] Future: the namespace as a tag on [`Flat.lean`](../Zinc/Bridges/Flat.lean)'s units, so the fold and the namespaced keys run inside a `Compiler` instance with T3a.

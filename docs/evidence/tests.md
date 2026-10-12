@@ -206,7 +206,7 @@ Mechanism vocabulary (used in the last column and counted at the end): `memberRe
 | source-dependencies/annotations-in-java-params | test | Java annotation on a method parameter | annotation type gains an element | Foo recompiled in cycle 2 | Java, API hash |
 | source-dependencies/java-inner | test | Java inner (non-static) classes | none | checkProducts A.java: A, A$B; checkDependencies A: A.B; A.B: A D; C: A A.B | Java, products, harness |
 | source-dependencies/java-enum | test | Java enum with a constant-specific body | none | compiles (enum constant bodies are anonymous classes) | Java, products |
-| source-dependencies/java-anonymous | test | Java anonymous class | none | compiles (no checks, sbt/zinc#83) | Java |
+| source-dependencies/java-anonymous | test | Java anonymous class | none | compiles (no checks, [sbt/zinc#83](https://github.com/sbt/zinc/issues/83)) | Java |
 | source-dependencies/java-name-with-dollars | test | Java interface named with `$` | none | compiles | Java, products |
 | source-dependencies/java-lambda-typeparams | test | Java lambda in a generic static method, anonymous generic class | none | compiles (generic signatures parsed) | Java, API hash |
 | source-dependencies/java-generic-workaround | test | Java nested generic classes (JDK bug 6476261) | none | compiles (unparseable generic signature tolerated) | Java, API hash |
@@ -324,8 +324,8 @@ Compared against the Scala 2 and Scala 3 feature lists, the corpus on this branc
 - Scala 3 enums: none (java-enum covers only a Java enum). Scala 3 `derives` and type class derivation: none.
 - Match types: none. Union types: none. Intersection types: only the Scala 2 compound type `AnyRef with B` in compound-type-member-inheritance; no Scala 3 `&`.
 - Type lambdas: Scala 2 encoding only (type-lambda-refinement-owner, struct-projection); no Scala 3 `[X] =>> F[X]`. Polymorphic function types, dependent function types: none.
-- Java records: none. Java sealed interfaces and `permits`: none on the branch; `java-sealed-nested-permits` pending in retronym/zinc#42. Java `default` interface methods: none.
-- Java static imports and single-type imports: none on the branch; `java-static-import-member-added`, `java-on-demand-import-ambiguity`, `java-single-type-import-deleted` pending in retronym/zinc#42. Java on-demand (`import a.q.*`) imports with a Java client: none on the branch; `java-added-class-same-package` pending in #42. Scala tests cover package wildcard imports (added-class-wildcard-*, same-file-used-names, implicit-search).
+- Java records: none. Java sealed interfaces and `permits`: none on the branch; `java-sealed-nested-permits` pending in [retronym/zinc#42](https://github.com/retronym/zinc/issues/42). Java `default` interface methods: none.
+- Java static imports and single-type imports: none on the branch; `java-static-import-member-added`, `java-on-demand-import-ambiguity`, `java-single-type-import-deleted` pending in [retronym/zinc#42](https://github.com/retronym/zinc/issues/42). Java on-demand (`import a.q.*`) imports with a Java client: none on the branch; `java-added-class-same-package` pending in #42. Scala tests cover package wildcard imports (added-class-wildcard-*, same-file-used-names, implicit-search).
 - Scala 3 top-level definitions (vals and defs outside an object, `$package` classes): none on the branch; the given/export pending tests on origin/claude/name-resolution-pending touch them.
 - Scala 3 `@main` methods: none (main-discovery covers Scala 2 style mains and Java mains).
 - Self types, early initialisers and trait parameters: none. Trait initialisation order: `trait-initialiser-skipped-scala3` pending on origin/claude/name-resolution-pending.
@@ -337,7 +337,7 @@ Compared against the Scala 2 and Scala 3 feature lists, the corpus on this branc
 - Higher-kinded types: covered only through implicit-search-higher-kinded and abstract-type; no test of an HKT alias change.
 - Package-object members shadowing package members, and clashes between a package object member and a class of the package: none on the branch; `added-member-package-object`, `added-member-package-object-scala3`, `added-implicit-package-object`, `package-object-member-clashes-with-class-scala3` pending on origin/claude/name-resolution-pending.
 - Which class of a file a top-level import is charged to: none on the branch; `added-member-wildcard-import-second-class` and `added-member-wildcard-import-last-class-scala3` pending on origin/claude/name-resolution-pending.
-- `classOf` literals as used names: check-dependencies-class-of records the edge only; `classof-used-name` (the name filter skipping the client) pending in retronym/zinc#42.
+- `classOf` literals as used names: check-dependencies-class-of records the edge only; `classof-used-name` (the name filter skipping the client) pending in [retronym/zinc#42](https://github.com/retronym/zinc/issues/42).
 - Scala 3 specifics beyond the above: the Scala 3 tests on the branch are the four added-class-*-scala3 name-resolution tests, binary-3 (disabled), trait-java-parent-pipelining-3, trait-jdk-parent-release-3, bridge-3.x and seven pipelining tests. No Scala 3 test covers sealed hierarchies, implicits, macros (Scala 3 macros: none), value classes, structural types or abstract type members.
 - Specialization is tested only weakly (specialized: the script says the recompilation of B is not checked). Lazy vals: one test (lazy-val, an override conflict), nothing on the lazy val's own initialisation semantics. Trait fields: well covered by the trait-private-* family. Inner classes: covered (java-inner, class-based-inheritance, subproject-dependency-b pending). Path-dependent types: covered (as-seen-from-a/b, type-member-nested-object). By-name, varargs, default and named arguments: one test each. Structural types: three tests, Scala 2 only.
 
@@ -361,14 +361,14 @@ origin/claude/name-resolution-pending adds ten pending tests (it also marks the 
 - Import attribution: added-member-wildcard-import-second-class (Scala 2 charges a top-level import to the first class of the file), added-member-wildcard-import-last-class-scala3 (Scala 3 charges it to the last).
 - Trait initialisation (Scala 3): trait-initialiser-skipped-scala3 (a trait with only a lazy val gains a statement; its API is unchanged, so the subclass keeps omitting the `$init$` call).
 
-origin/claude/inline-opaque-pending (retronym/zinc#40) adds four pending tests. Family: Scala 3 inlining and opaque types, where the expansion or erasure in the client depends on something that is not in the inlined definition's API hash and that the client recorded no name for.
+origin/claude/inline-opaque-pending ([retronym/zinc#40](https://github.com/retronym/zinc/issues/40)) adds four pending tests. Family: Scala 3 inlining and opaque types, where the expansion or erasure in the client depends on something that is not in the inlined definition's API hash and that the client recorded no name for.
 
 - inline-constant-path-scala3 (an inline body reads a constant `D.K` through a path; the inliner folds it before dependencies are collected).
 - inline-constvalue-alias-scala3 (an inline body reads a literal type alias through `constValue`; the inline body hash does not hash types).
 - inline-transparent-reference-scala3 (a transparent inline expands in typer to a call of `h`; `h`'s result type changes; the expansion's references are not collected).
 - opaque-type-mixin-forwarder-scala3 (a mixin forwarder erases an opaque type to its right-hand side; the right-hand side changes; the subclass uses neither the object nor the type).
 
-retronym/zinc#42 (branch claude/java-names-pending) adds seven pending tests, run without pipelining (with pipelining every Java source is recompiled in every cycle and the Java-client cases disappear). Family: Java name resolution and sealed hierarchies, found by the Java spaces of the Lean model (packages/zinc/docs/12-java.md).
+[retronym/zinc#42](https://github.com/retronym/zinc/issues/42) (branch claude/java-names-pending) adds seven pending tests, run without pipelining (with pipelining every Java source is recompiled in every cycle and the Java-client cases disappear). Family: Java name resolution and sealed hierarchies, found by the Java spaces of the Lean model (packages/zinc/docs/12-java.md).
 
 - J1 java-added-class-same-package: a Java client resolves `Foo` through `import a.q.*`; `a.b.Foo` added to its own package shadows it (the classfile names only a.q.Foo; a Java class records no used names).
 - J2 java-static-import-member-added: `import static a.X.Foo` imported only a method; a member class `X.Foo` now shadows the package's Foo (an import leaves nothing in the classfile).

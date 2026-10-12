@@ -1,14 +1,14 @@
-# Phase 21 — derived API: export forwarders and used types' supertypes (`DerivedApi.lean`)
+# Phase 21 — derived API: export forwarders and used types' supertypes ([`DerivedApi.lean`](../Zinc/Features/DerivedApi.lean))
 
 ## Question
 
-Two gaps where a client's answer is derived through a unit it never names. An export forwarder `B.f` has the signature of the exported `A.f`: a client of `B.f` reads `A`'s signature through `B` (BUG-MAP K-EX: scala/scala3#18216, partially #10182 and #11841). A client of `val p: P = B.x` with `B.x : A1` asks whether `A1 <: P`, answered from `A1`'s parents, and names neither `A1` nor its parents (K-U1: sbt/zinc#87, scala/bug#2558 for a structural type's members). In both the obligation that fails is coverage on the derivation's inputs.
+Two gaps where a client's answer is derived through a unit it never names. An export forwarder `B.f` has the signature of the exported `A.f`: a client of `B.f` reads `A`'s signature through `B` (BUG-MAP K-EX: [scala/scala3#18216](https://github.com/scala/scala3/issues/18216), partially #10182 and #11841). A client of `val p: P = B.x` with `B.x : A1` asks whether `A1 <: P`, answered from `A1`'s parents, and names neither `A1` nor its parents (K-U1: [sbt/zinc#87](https://github.com/sbt/zinc/issues/87), [scala/bug#2558](https://github.com/scala/bug/issues/2558) for a structural type's members). In both the obligation that fails is coverage on the derivation's inputs.
 
 ## Model
 
 Units: holders of a typed value (`val x: V`), classes with parents, a holder of a member with a signature (`A.f`), an exporter (`B` with `export A.*`), and two clients: one of the exporter's forwarder, one assigning `B.x` to a `P`. Queries: `typeOf`, `parents`, `sig` (a forwarder's), `baseSig` (the exported member's). Keys: per-unit class keys. Bridges: `today` (the exporter records nothing on `A`, the client records only the units it names); `fix` (the exporter records `A`, as #10182's export edge does; the client records the type of the value it used, as #87's types-in-used-names does).
 
-## Results (`DerivedApi.lean`)
+## Results ([`DerivedApi.lean`](../Zinc/Features/DerivedApi.lean))
 
 | Result | Status |
 |---|---|
@@ -19,7 +19,7 @@ Units: holders of a typed value (`val x: V`), classes with parents, a holder of 
 
 Cost of the fix: an exporter now depends on everything it exports (a wildcard export is a dependency on the whole object, as an inheritance edge is), and a client depends on the type of every value it uses, which #87 already pays.
 
-What the single-project instance cannot show, stated rather than proved: scala/scala3#18216 fails with #10182's edge present, across subprojects. Since the in-project case is sound here, the failure must be on the external path (`Classpath.lean`): an upstream member's signature change must reach the downstream exporter as it reaches an inheritor. #87 records the first hop; the supertypes beyond it reach the client through Zinc's inheritance invalidation of the used type (its API changes when an ancestor's does), which the instance does not model. Export chains (an exporter of an exporter) are outside the two-stage group.
+What the single-project instance cannot show, stated rather than proved: [scala/scala3#18216](https://github.com/scala/scala3/issues/18216) fails with #10182's edge present, across subprojects. Since the in-project case is sound here, the failure must be on the external path ([`Classpath.lean`](../../inc-comp/IncComp/Classpath.lean)): an upstream member's signature change must reach the downstream exporter as it reaches an inheritor. #87 records the first hop; the supertypes beyond it reach the client through Zinc's inheritance invalidation of the used type (its API changes when an ancestor's does), which the instance does not model. Export chains (an exporter of an exporter) are outside the two-stage group.
 
 ## The clusters' scripted tests
 
@@ -27,6 +27,6 @@ On develop: `types-in-used-names-a`, `-b`, `struct`, `struct-usage`, `struct-pro
 
 ## Steps
 
-- [x] P21.1 `DerivedApi.lean`: the instance, obligations for the fix, the two counterexamples.
+- [x] P21.1 [`DerivedApi.lean`](../Zinc/Features/DerivedApi.lean): the instance, obligations for the fix, the two counterexamples.
 - [x] P21.2 The clusters' scripted tests mapped.
-- [ ] Future: #18216 on `Classpath.lean`'s external invalidation; export chains.
+- [ ] Future: #18216 on [`Classpath.lean`](../../inc-comp/IncComp/Classpath.lean)'s external invalidation; export chains.

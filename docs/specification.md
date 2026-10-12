@@ -2,9 +2,9 @@
 
 ## Problem
 
-`Model.lean` already states what Zinc needs from a compiler: a per-unit task that queries an oracle, and a bridge (`keys`, `π`, `covers`) that abstracts the task's trace into recorded keys. The obligations on the bridge and the policy, and the theorems T1–T5 they give, are stated once in README.md's "The theorems"; this document does not restate them. Phases 2 and 6 instantiated the framework (`Hier.lean`'s `D`, `W`, `Mk` compilers, each with an `_obligations` proof).
+`Model.lean` already states what Zinc needs from a compiler: a per-unit task that queries an oracle, and a bridge (`keys`, `π`, `covers`) that abstracts the task's trace into recorded keys. The obligations on the bridge and the policy, and the theorems T1–T5 they give, are stated once in README.md's "The theorems"; this document does not restate them. Phases 2 and 6 instantiated the framework ([`Hier.lean`](../packages/zinc/Zinc/Bridges/Hier.lean)'s `D`, `W`, `Mk` compilers, each with an `_obligations` proof).
 
-Phases 7 to 11 did not. `Names.lean`, `Givens.lean`, `InlineOpaque.lean`, `Split.lean` each define a standalone `verdict` and check it by `native_decide` over a bounded enumeration (at most two bindings, single edits). They say nothing about what the bridge must record, prove nothing beyond the enumerated bases, and cannot compose with the framework's external-invalidation results (`Classpath.lean`). The enumerations found real bugs, but as a method they are a test generator with a verdict oracle, not a specification.
+Phases 7 to 11 did not. [`Names.lean`](../packages/zinc/ZincNames/Names.lean), [`Givens.lean`](../packages/zinc/ZincNames/Givens.lean), [`InlineOpaque.lean`](../packages/zinc/Zinc/Features/InlineOpaque.lean), [`Split.lean`](../packages/zinc/Zinc/Features/Split.lean) each define a standalone `verdict` and check it by `native_decide` over a bounded enumeration (at most two bindings, single edits). They say nothing about what the bridge must record, prove nothing beyond the enumerated bases, and cannot compose with the framework's external-invalidation results ([`Classpath.lean`](../packages/inc-comp/IncComp/Classpath.lean)). The enumerations found real bugs, but as a method they are a test generator with a verdict oracle, not a specification.
 
 ## Decisions
 
@@ -15,7 +15,7 @@ Phases 7 to 11 did not. `Names.lean`, `Givens.lean`, `InlineOpaque.lean`, `Split
 **A fix is a key, with a proof of the three obligations.** Two shapes:
 
 - *Bridge-side, precise.* `searched`: a key per scope queried, hit or miss; this is what Kotlin's `LookupTracker` records (name, scope) for exactly this reason. Recording package wildcard imports is the same shape for one scope kind.
-- *Zinc-side, coarse.* retronym/zinc#34 is the key `anyTopLevelNamed Foo`, whose hash is the set of top-level classes with that simple name over the project, and which covers every `bound (s, Foo)` for a top-level scope `s`. Abstraction holds because adding a class changes that set. Coverage holds for in-project scopes only; the upstream case fails because the hash is computed over one project's analysis, which is the split-layout finding stated as a failed obligation rather than a failed run.
+- *Zinc-side, coarse.* [retronym/zinc#34](https://github.com/retronym/zinc/issues/34) is the key `anyTopLevelNamed Foo`, whose hash is the set of top-level classes with that simple name over the project, and which covers every `bound (s, Foo)` for a top-level scope `s`. Abstraction holds because adding a class changes that set. Coverage holds for in-project scopes only; the upstream case fails because the hash is computed over one project's analysis, which is the split-layout finding stated as a failed obligation rather than a failed run.
 
 Both prove `Obligations` and inherit T3a and the `Classpath` results. The narrowed rules (package, nested packages, importers) are keys whose `covers` is smaller; their soundness depends on the recorded-import key being present, which is now a hypothesis in the theorem, not a remark.
 
@@ -27,10 +27,10 @@ Both prove `Obligations` and inherit T3a and the `Classpath` results. The narrow
 
 ## Supporting changes
 
-- `Names.lean`, `Givens.lean`, `InlineOpaque.lean`, `Split.lean`, `JavaNames.lean`: a `Compiler` instance each (the search algorithm as the task, the bridge as `keys`), the violation theorems for today's bridge, and `Obligations` proofs for the fixes. The existing enumerations stay as checks of the instance against the compiler.
+- [`Names.lean`](../packages/zinc/ZincNames/Names.lean), [`Givens.lean`](../packages/zinc/ZincNames/Givens.lean), [`InlineOpaque.lean`](../packages/zinc/Zinc/Features/InlineOpaque.lean), [`Split.lean`](../packages/zinc/Zinc/Features/Split.lean), [`JavaNames.lean`](../packages/zinc/Zinc/Features/JavaNames.lean): a `Compiler` instance each (the search algorithm as the task, the bridge as `keys`), the violation theorems for today's bridge, and `Obligations` proofs for the fixes. The existing enumerations stay as checks of the instance against the compiler.
 - `Model.lean`: whatever generalisation the instances need. Likely: a key whose hash is computed over a set of units (the coarse key), so that the upstream failure is expressible; and `covers` as a relation that may depend on the unit, for package-relative keys.
-- `docs/status.md` and the phase files: a "proved generally / checked on a space" column per result.
-- Zinc PR descriptions (retronym/zinc#34 and the rule PRs): the key, hash and covering of each rule.
+- [`docs/status.md`](status.md) and the phase files: a "proved generally / checked on a space" column per result.
+- Zinc PR descriptions ([retronym/zinc#34](https://github.com/retronym/zinc/issues/34) and the rule PRs): the key, hash and covering of each rule.
 
 ## Prior art
 

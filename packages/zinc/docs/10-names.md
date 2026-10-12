@@ -1,18 +1,18 @@
-# Phase 10 — name resolution, mechanically (`packages/zinc/ZincNames/Names.lean`, `packages/zinc/ZincNames/Givens.lean`, `packages/zinc/Zinc/Features/NamesRules.lean`)
+# Phase 10 — name resolution, mechanically ([`packages/zinc/ZincNames/Names.lean`](../ZincNames/Names.lean), [`packages/zinc/ZincNames/Givens.lean`](../ZincNames/Givens.lean), [`packages/zinc/Zinc/Features/NamesRules.lean`](../Zinc/Features/NamesRules.lean))
 
 P9.3 found one way an edit changes what a name resolves to without Zinc noticing. This phase searches the family mechanically: a program space over Scala's scopes, the model's verdict per edit, the conformance harness on Zinc `develop`, and a pending scripted test per family.
 
 ## Model
 
-`Names.lean`: the client's simple name `Foo` (or `Option`, with `scala.Option` as the last resort) can be bound by a block's wildcard import, an inherited member, an explicit import, a wildcard import of an object or of a package, a class of the inner package, the inner package's package object, a class of the outer package, and `scala._`. Client factors: the package clause (`package a; package b`, `package a.b`, `package a`), which imports and `extends` are present, another class in the client's file, and (Scala 3) whether `W` and package `a.b` get their member through a wildcard `export`. Edits: add or delete a binding, rename a top-level class to or from `Bar`, move a class between packages. Resolution follows each compiler; the rules were probed with `scala-cli` and then checked on every case the harness ran (the client's classfile shows what it resolved to). Zinc's side is the edges its extractors record and the rules of `IncrementalCommon`: an import's edge goes to one class of the file (the first in Scala 2; the *last* in Scala 3, whose `responsibleForImports` keeps the last `TypeDef` it folds over), a package records nothing, an added source invalidates nothing.
+[`Names.lean`](../ZincNames/Names.lean): the client's simple name `Foo` (or `Option`, with `scala.Option` as the last resort) can be bound by a block's wildcard import, an inherited member, an explicit import, a wildcard import of an object or of a package, a class of the inner package, the inner package's package object, a class of the outer package, and `scala._`. Client factors: the package clause (`package a; package b`, `package a.b`, `package a`), which imports and `extends` are present, another class in the client's file, and (Scala 3) whether `W` and package `a.b` get their member through a wildcard `export`. Edits: add or delete a binding, rename a top-level class to or from `Bar`, move a class between packages. Resolution follows each compiler; the rules were probed with `scala-cli` and then checked on every case the harness ran (the client's classfile shows what it resolved to). Zinc's side is the edges its extractors record and the rules of `IncrementalCommon`: an import's edge goes to one class of the file (the first in Scala 2; the *last* in Scala 3, whose `responsibleForImports` keeps the last `TypeDef` it folds over), a package records nothing, an added source invalidates nothing.
 
-`Givens.lean`: the same with an instance found by type (`implicitly`/`summon`). Scala 2 calls any two instances in the lexical scope ambiguous and searches the companion only when there is none; Scala 3 prefers the innermost nesting level, with the file's imports and the client's own package at one level. A changed implicit invalidates every member-ref dependent of its class, so an import's edge to any class of the file is enough; what is left is the scopes with no edge at all.
+[`Givens.lean`](../ZincNames/Givens.lean): the same with an instance found by type (`implicitly`/`summon`). Scala 2 calls any two instances in the lexical scope ambiguous and searches the companion only when there is none; Scala 3 prefers the innermost nesting level, with the file's imports and the client's own package at one level. A changed implicit invalidates every member-ref dependent of its class, so an import's edge to any class of the file is enough; what is left is the scopes with no edge at all.
 
-Fixes, checked on the whole space (`NamesRules.lean`'s `searched_clean`, `names_clean` checks): recording every scope the lookup searched, misses included, or invalidating the users of a name whenever a binding of it is added or removed. Neither touches F4, F5 and F6, which are not about the client's resolution. F6's fix belongs in dotc: decide whether a class calls a trait's initialiser the same way from source and from TASTy (or always call it).
+Fixes, checked on the whole space ([`NamesRules.lean`](../Zinc/Features/NamesRules.lean)'s `searched_clean`, `names_clean` checks): recording every scope the lookup searched, misses included, or invalidating the users of a name whenever a binding of it is added or removed. Neither touches F4, F5 and F6, which are not about the client's resolution. F6's fix belongs in dotc: decide whether a class calls a trait's initialiser the same way from source and from TASTy (or always call it).
 
 ## Harness
 
-retronym/zinc branch `claude/names-conformance` (develop + the harness of retronym/zinc#25): base programs as source files, a probe of the client's constant pool, and two fixes for Scala 3 that the earlier spaces never needed. Scripted's `IncHandler` did not register `TastyFiles` as auxiliary class files (sbt does), so a deleted or restored classfile left its `.tasty` behind and later builds read it ("out of sync with its TASTy file"); and TASTy records source paths relative to the working directory, so the work and clean builds, in different directories, never had equal classfiles. `packages/harness/scripts/select.py` picks bases greedily until every signature (the edit, the model's resolution before and after, the package clause, `first`, and more) has a case.
+retronym/zinc branch `claude/names-conformance` (develop + the harness of [retronym/zinc#25](https://github.com/retronym/zinc/issues/25)): base programs as source files, a probe of the client's constant pool, and two fixes for Scala 3 that the earlier spaces never needed. Scripted's `IncHandler` did not register `TastyFiles` as auxiliary class files (sbt does), so a deleted or restored classfile left its `.tasty` behind and later builds read it ("out of sync with its TASTy file"); and TASTy records source paths relative to the working directory, so the work and clean builds, in different directories, never had equal classfiles. [`packages/harness/scripts/select.py`](../../harness/scripts/select.py) picks bases greedily until every signature (the edit, the model's resolution before and after, the package clause, `first`, and more) has a case.
 
 ## Families
 
@@ -20,7 +20,7 @@ Pending scripted tests on retronym/zinc branch `claude/name-resolution-pending` 
 
 | | Family | Lean | Scripted (pending) |
 |---|---|---|---|
-| F1 | A top-level class added (or renamed to, or moved) into a scope searched earlier: an inner package, a wildcard-imported package, the client's package over `scala._`. Zinc compiles only the added source. | `inner_added_today` (`Added.lean`: `added_today_wrong`) | `added-class-*` (P9.3) |
+| F1 | A top-level class added (or renamed to, or moved) into a scope searched earlier: an inner package, a wildcard-imported package, the client's package over `scala._`. Zinc compiles only the added source. | `inner_added_today` ([`Added.lean`](../Zinc/Features/Added.lean): `added_today_wrong`) | `added-class-*` (P9.3) |
 | F2 | A member added to a package object over an outer binding; in Scala 3 also a top-level `export` gaining a forwarder. The client reached the package object through no symbol. | `pobj_added_today`, `export_added_today` | `added-member-package-object`, `-scala3`, `added-member-top-level-export-scala3` |
 | F3 | A member added to a wildcard-imported object, the import charged to another class of the file (Scala 2: the first; Scala 3: the last) that does not use the name. | `wild_first_today` | `added-member-wildcard-import-second-class`, `added-member-wildcard-import-last-class-scala3` |
 | F4 | Scala 2 only: a package object member (declared or inherited) beside a class of the same name; scalac's joint compilation leaves the class's mirror without its `ScalaSignature`, the separate one keeps it, and Zinc never recompiles the class's file for an edit of the member. Adding the member: bytes only. Removing it (found with the inherited factor, P10.7): a client that now resolves the class fails to compile incrementally (`not found: value Foo`) where a clean build succeeds; a declared member fails the same way under plain scalac. Not an invalidation Zinc misses: the class's file would have to be recompiled for an edit of another file it does not depend on. | `staleMirror`; `SplitProof.Spec.joint_not_comp` | none (bytes; the removal is reachable only through the inherited factor in this space) |
@@ -41,9 +41,9 @@ Pending scripted tests on retronym/zinc branch `claude/name-resolution-pending` 
 
 Model unclean counts are over the whole space; the harness ran every edit of the givens spaces and a greedy selection of bases for the names spaces. These counts predate P10.7's inherited factors and bystanders, which enlarge the spaces. Resolution agreed with the compiler on every case run.
 
-## The cheap fix (retronym/zinc#34)
+## The cheap fix ([retronym/zinc#34](https://github.com/retronym/zinc/issues/34))
 
-#34 invalidates, after each cycle, the users of the simple name of every top-level class the cycle added (`invalidateByAddedClasses`). The model's `Mode.cheap` mirrors it: Zinc today, plus the client whenever an edit adds a top-level class named as the client's name (`add`, `unrename` or `move` into `wpkg`, `inner` or `outer`); in `Givens.lean` the only classes added are `Inner$package` and `Outer$package`, which no client names, so the mode is today's (`cheap_is_today`). `cheap_added_clean`: every edit that adds a class is clean under it, but for the divergences beside resolution and the trait initialiser. `lake exe conformance names|givens 2|3 cheap` dumps its verdicts.
+#34 invalidates, after each cycle, the users of the simple name of every top-level class the cycle added (`invalidateByAddedClasses`). The model's `Mode.cheap` mirrors it: Zinc today, plus the client whenever an edit adds a top-level class named as the client's name (`add`, `unrename` or `move` into `wpkg`, `inner` or `outer`); in [`Givens.lean`](../ZincNames/Givens.lean) the only classes added are `Inner$package` and `Outer$package`, which no client names, so the mode is today's (`cheap_is_today`). `cheap_added_clean`: every edit that adds a class is clean under it, but for the divergences beside resolution and the trait initialiser. `lake exe conformance names|givens 2|3 cheap` dumps its verdicts.
 
 The harness ran the same cases as on develop (the same base selection, identical sources) on a scratch branch of retronym/zinc: `claude/names-conformance` with #34 cherry-picked. Model and harness agree on every case, and resolution on every case.
 
@@ -61,7 +61,7 @@ F1 is gone, as predicted; F2, F3, G1 and G2 stay, because none adds a class: the
 
 ## Extending #34: a rule per family, as a specification (P10.7, P10.9, P10.10)
 
-Each remaining family gets a rule, run after every cycle as #34's is. `SplitProof.Spec` (names) and `SpecGivens.lean` (implicits) state the rules as keys of the framework's compiler (docs/specification.md) and prove what they guarantee for every program. `Names.lean`/`Givens.lean` check the same rules on the bounded spaces, against the harness, and measure their cost.
+Each remaining family gets a rule, run after every cycle as #34's is. `SplitProof.Spec` (names) and [`SpecGivens.lean`](../Zinc/Features/SpecGivens.lean) (implicits) state the rules as keys of the framework's compiler (docs/specification.md) and prove what they guarantee for every program. [`Names.lean`](../ZincNames/Names.lean)/[`Givens.lean`](../ZincNames/Givens.lean) check the same rules on the bounded spaces, against the harness, and measure their cost.
 
 The rules:
 
@@ -74,14 +74,14 @@ Each comes in two reaches. `global` covers every user of the name, or every clas
 
 Two new factors make the binding inherited rather than declared: `package object b extends a.PT` (`pinh`) and `object W extends a.WT` (`winh`). The givens space gets `pinh` and `wpkg` (an instance in `package object q` or a top-level given in `a.q`, imported with `import a.q._` / `import a.q.given`).
 
-### The specification (`SplitProof.Spec`, `SpecGivens.lean`)
+### The specification (`SplitProof.Spec`, [`SpecGivens.lean`](../Zinc/Features/SpecGivens.lean))
 
 Name resolution is one `NCompiler` instance, shared with Phase 13: `SplitProof.Spec`.
 
 - **The client and its scopes.** One client looks the name up in `n` scopes in search order and stops at the first hit. Each scope's binding is a unit, so any program of the slot language is an instance, with any number of bindings.
 - **The rules extend it in place.** `Ext` adds three kinds of scope: a package-object member (F2), a wildcard import charged to a class that does not use the name (F3), and a scope reached through a package import. The `rules` design records today's keys, F3's existence keys, and one `rule` key. That key's hash reads the scopes #34 and F2 reach (`global`, or `narrowed`).
 
-Implicit search is `SpecGivens.lean`: the same scopes, as an `XCompiler` (`General.lean`), because the search reads the whole level of its hit and its keys must read the resolved scope from the output.
+Implicit search is [`SpecGivens.lean`](../Zinc/Features/SpecGivens.lean): the same scopes, as an `XCompiler` ([`General.lean`](../../inc-comp/IncComp/General.lean)), because the search reads the whole level of its hit and its keys must read the resolved scope from the output.
 
 Because the oracle is arbitrary, the proofs hold for any number of bindings. T3a starts from any state satisfying the invariant, so it covers edit sequences. That answers the bound of the enumeration (at most two bindings, single edits).
 
@@ -93,9 +93,9 @@ Because the oracle is arbitrary, the proofs hold for any number of bindings. T3a
 | `f2_not_obligations` (#34 + F3), `f3_not_obligations` (#34 + F2), `narrowed_without_imports`; Phase 13's `today_not_obligations` (F1, upstream), `cheap_not_obligations` (#34 across subprojects) | proved, one witness each (kernel `decide`/`simp`) |
 | Precision: `Necessary`, `Invalidated`, `OverInvalidated` (after an edit `I → I'`); `necessary_invalidated` (sound keys invalidate every necessary unit); `searched_exact` (`searched` invalidates only necessary units); `narrowed_le_global`; `rules_over` (the rules over-invalidate when a scope searched after the hit gains a binding) | proved |
 | `joint_not_comp`: F4 (Scala 2's mirror without `ScalaSignature`) and F5 (Scala 3's missed clash) are failures of compositionality, not coverage, so no key fixes them | proved, one witness |
-| Givens (`SpecGivens.lean`): `g_global_obligations`, `g_narrowed_obligations` (given recorded imports), `g_searched_obligations`; `g12_today`, `g_narrowed_without_imports`; `g_decls_not_abstraction` (#24 without composition) | proved |
-| Resolution per version (Scala 2's precedence, ambiguities, the class-name alias), F6 and F7, the exact recompiled sets, the bystanders of other clients | checked: `Names.lean`/`Givens.lean` on the bounded space and the harness; `Split.check_abstract` checks the slot mapping on the bases |
-| Each rule closes its family and nothing else, today's families are F1–F3, the rules together are clean | checked: `NamesRules.lean` `example`s over the bounded spaces |
+| Givens ([`SpecGivens.lean`](../Zinc/Features/SpecGivens.lean)): `g_global_obligations`, `g_narrowed_obligations` (given recorded imports), `g_searched_obligations`; `g12_today`, `g_narrowed_without_imports`; `g_decls_not_abstraction` (#24 without composition) | proved |
+| Resolution per version (Scala 2's precedence, ambiguities, the class-name alias), F6 and F7, the exact recompiled sets, the bystanders of other clients | checked: [`Names.lean`](../ZincNames/Names.lean)/[`Givens.lean`](../ZincNames/Givens.lean) on the bounded space and the harness; `Split.check_abstract` checks the slot mapping on the bases |
+| Each rule closes its family and nothing else, today's families are F1–F3, the rules together are clean | checked: [`NamesRules.lean`](../Zinc/Features/NamesRules.lean) `example`s over the bounded spaces |
 
 Precision across clients is not in one client's view. `global` and `narrowed`-with-imports cover the same scopes of this client, but `global` also invalidates every other user of the name. The enumeration's bystanders measure that difference (`User`, `Far` below).
 
@@ -142,7 +142,7 @@ Every edit in the space touches a binding of the client's name, so these are wor
 
 Reading it:
 
-* **Narrowed means exactly the packages the lookup searches** (retronym/zinc#47's `sees`): a class's own package, and the packages its source records as `p._`, a wildcard import when recorded or the outer clause of a chained `package a; package b`. A class of a nested package does not see its parent unless the clause is chained, so a flat `package a.b` client is not reached by `a`'s changes. For Scala 2's implicits, the classes referring to a type under the package are added too, since Scala 2's implicit scope includes the package objects of a type's prefix (Scala 3 dropped this).
+* **Narrowed means exactly the packages the lookup searches** ([retronym/zinc#47](https://github.com/retronym/zinc/issues/47)'s `sees`): a class's own package, and the packages its source records as `p._`, a wildcard import when recorded or the outer clause of a chained `package a; package b`. A class of a nested package does not see its parent unless the clause is chained, so a flat `package a.b` client is not reached by `a`'s changes. For Scala 2's implicits, the classes referring to a type under the package are added too, since Scala 2's implicit scope includes the package objects of a type's prefix (Scala 3 dropped this).
 * **Narrowing with recorded package imports costs nothing in soundness and removes every bystander outside the searched packages.** `User` and `Far` drop to 0. The client's own count is unchanged, because the client searches those packages.
 * **Narrowing without the recorded import is unsound,** exactly on the wildcard-imported package. That is the spec's `narrowed_without_imports`; here it is 6,896 (2.13) and 11,288 (3) wrong edits.
 * **F3 is free.**
@@ -151,7 +151,7 @@ Reading it:
 * **Every extra recompilation grows F6 in Scala 3** (the dotc trait-initialiser bug).
 * **The per-cycle baseline is dropped.** Zinc diffs each cycle against the merged analysis, which still holds a not-yet-recompiled package object's old API, so it is sound on develop. With #24's composition, names must be composed against that same analysis.
 
-#### On a real build (Spark 4.0.1 `sql/catalyst`, from retronym/zinc#47)
+#### On a real build (Spark 4.0.1 `sql/catalyst`, from [retronym/zinc#47](https://github.com/retronym/zinc/issues/47))
 
 zinc-develop-names measured the rules on catalyst, 2,527 classes (241 Java), Scala 2.13, with IncBench. These are #47's numbers, quoted.
 
@@ -194,7 +194,7 @@ Case files for the Zinc sessions (develop: `all`, `all+narrowed+imports`; #24: `
 
 ### Coverage: the model's keys against the Analysis
 
-Each edit's `keys` names what the mode needs the client to have recorded before the edit (`Names.clientKeys`, `Givens.clientKeys`), in retronym/zinc#54's grammar:
+Each edit's `keys` names what the mode needs the client to have recorded before the edit (`Names.clientKeys`, `Givens.clientKeys`), in [retronym/zinc#54](https://github.com/retronym/zinc/issues/54)'s grammar:
 - the name it uses and the class it resolved to (`uses:Foo`, `ref:a.W.Foo`);
 - for each slot of its lookup that the edit changes, the record that carries the change: `inh:a.P`, `ref:a.V`, and `refFile:a.W` / `refFile:a.X` for imports, which are charged to one class of the file;
 - for the narrowed rules, `sees:p` for each package scope the lookup searches. The givens rule reads `ref:a.T` instead of `sees:a` for a flat client in Scala 2, where the prefix part of the implicit scope reaches it.
@@ -216,14 +216,14 @@ What the loop changed in the model: a binding to a library class (`scala.Option`
 
 ## Steps
 
-- [x] P10.1 `Names.lean`: scopes, resolution per version, Zinc's edges, verdict; families as checked examples; `searched_clean`, `names_clean`.
-- [x] P10.2 `Givens.lean`: instances by type.
+- [x] P10.1 [`Names.lean`](../ZincNames/Names.lean): scopes, resolution per version, Zinc's edges, verdict; families as checked examples; `searched_clean`, `names_clean`.
+- [x] P10.2 [`Givens.lean`](../ZincNames/Givens.lean): instances by type.
 - [x] P10.3 `conformance names|givens 2|3`; harness: source-file bases, a classfile probe, Scala 3's TASTy files and source paths.
 - [x] P10.4 Runs on develop, model and harness reconciled (Scala 2's block/explicit ambiguity, the package object searched before the package's classes, Scala 3's last-class import charge, the explicit selector's name charged to the import's class, the missed clash, the trait initialiser).
 - [x] P10.5 Pending scripted tests per family.
-- [x] P10.6 The cheap fix (retronym/zinc#34) in the model (`Mode.cheap`) and the harness: F1 gone, F6 grows, the rest unchanged.
+- [x] P10.6 The cheap fix ([retronym/zinc#34](https://github.com/retronym/zinc/issues/34)) in the model (`Mode.cheap`) and the harness: F1 gone, F6 grows, the rest unchanged.
 - [x] P10.7 #34's extensions as rules (F2, F3, G) with theorems per rule and combined; inherited bindings (`pinh`, `winh`); #24's declarations-only API, with and without composition; the cost per mode (`conformance cost`); a harness check of the new factors on #34, model and harness reconciled (Scala 2's inherited package-object member and class-name alias, F4 observable, F6 on `W`, F7).
 - [ ] P10.8 Harness runs of the rules: develop (`all`, `all+narrowed+imports`) and #24 (`all+decls`, `all+composed`), by the Zinc sessions.
 - [x] P10.9 `NamesSpec.lean`: names and implicit search as `TCompiler` instances; today's keys fail coverage per family; the rules (global, and narrowed given recorded package imports) and `searched` meet the obligations and inherit T3a; #24's declarations-only hash fails abstraction; tightness. Enumerations relabelled as checks; the per-cycle baseline dropped; global vs narrowed rules; the givens `wpkg` slot.
-- [x] P10.10 The names rules moved onto the shared instance `SplitProof.Spec` (talks#28): `Ext` kinds, the `rules` design, obligations global and narrowed (under the recorded-import hypothesis), witnesses, precision (`Necessary`, `OverInvalidated`, `searched_exact`, `narrowed_le_global`, `rules_over`), F4/F5 as `joint_not_comp`; givens in `GivensSpec.lean` until the framework merge.
+- [x] P10.10 The names rules moved onto the shared instance `SplitProof.Spec` ([talks#28](https://github.com/retronym/talks/issues/28)): `Ext` kinds, the `rules` design, obligations global and narrowed (under the recorded-import hypothesis), witnesses, precision (`Necessary`, `OverInvalidated`, `searched_exact`, `narrowed_le_global`, `rules_over`), F4/F5 as `joint_not_comp`; givens in `GivensSpec.lean` until the framework merge.
 - [ ] Future: a pending scripted test for F7 (and a dotc issue); count the declaring classes the name rules reach; a G that reaches only classes whose implicit search could see the instance (needs the extractor); the `split` layout is Phase 13; members renamed inside a container (the model has add and delete); F5's fix needs the definitions of a name in a package, not its users.

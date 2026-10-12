@@ -4,7 +4,7 @@
 
 In a mixed build a Java source is compiled twice, by different compilers, and each run produces a view of it. scalac parses it for symbols (no classfiles), and Scala units in the same run resolve against that **source view**. javac compiles it to classfiles, and Zinc reads that **classfile view** for the Java unit's keys (`JavaAnalyze`) and API (`ClassToAPI`); every later round, and every downstream project, reads it too. sbt's `compileOrder` and `pipelining` decide which view each reader gets, and when. The question is whether, per strategy, the incremental build still equals the clean one. Concretely: does the two-stage joint compilation meet `comp`, and does the hash Zinc stores for a Java unit, computed from one view, determine the answers of the other?
 
-Known instances of the views disagreeing: scala/scala#11292 (Java parents parsed from source) and scala/scala3#27264. Zinc already knows about one disagreement. Under pipelining, `IncrementalCommon` excludes the unchanged Java classes it passed to scalac from API change detection, because "their stored API was read from the compiled classes and never equals the one from scalac".
+Known instances of the views disagreeing: [scala/scala#11292](https://github.com/scala/scala/issues/11292) (Java parents parsed from source) and [scala/scala3#27264](https://github.com/scala/scala3/issues/27264). Zinc already knows about one disagreement. Under pipelining, `IncrementalCommon` excludes the unchanged Java classes it passed to scalac from API change detection, because "their stored API was read from the compiled classes and never equals the one from scalac".
 
 ## What Zinc does, read off the code (develop)
 
@@ -21,7 +21,7 @@ Downstream projects under pipelining compile against the early output: pickles, 
 
 ## Model
 
-Reuse `JavaSpec.lean`'s instance and add the second view, not a new compiler.
+Reuse [`JavaSpec.lean`](../Zinc/Features/JavaSpec.lean)'s instance and add the second view, not a new compiler.
 
 * **Units and sources.** As in `JavaSpec`, plus Scala units: a Scala client is the same lookup task with Scala's levels (Phase 10's rules), compiled by scalac. A Java unit's source has two readings: `srcView : Src → Iface` (scalac's Java parser) and `cfView : Src → Iface` (javac). They are equal except where a parser difference is modelled (a flag per difference: parents read from source vs from the classfile; the `permits` clause; a member type's staticness, …).
 * **Outputs and the interface.** A Java unit's output is javac's: `iface = cfView`, keys from the classfile. A Scala unit's output is scalac's.
@@ -34,7 +34,7 @@ Reuse `JavaSpec.lean`'s instance and add the second view, not a new compiler.
   - `comp` asks that the group's output be a fixed point of the per-unit tasks answered from the group's fresh interfaces, where those interfaces are the classfile views. Under `Mixed` it therefore holds exactly when, for every query a Scala member asks a Java member, the source view and the classfile view answer alike. **View agreement** is the obligation the parser differences break. Under `ScalaThenJava` and `JavaThenScala`, `comp` holds only under a hypothesis on dependency direction: no Scala unit of the project queries a Java unit (resp. the reverse). The clean build needs the same hypothesis, and the theorem states it.
   - `abstraction` between views: Zinc hashes a Java unit from its classfile view, but a Scala unit compiled in the same `Mixed` round read the source view. An edit that changes the source view and not the classfile view, or the reverse, can leave equal hashes and different answers. Under pipelining the stored hash flips between views across runs (bridge during cycles, `ClassToAPI` after `compileAllJava`), and Zinc's exclusion of unchanged Java classes is a policy that hides the flip; whether it also hides real changes is the question to check.
   - `coverage`: Java keys come from javac's classfile, but in `Mixed` the Scala units' queries to Java units go through the bridge (Scala keys), so coverage splits by reader. A Java unit's own queries against Scala units in stage 2 are answered from stage 1's classfiles and covered by its constant pool, as in `JavaSpec`.
-  - Pipelining's early output: downstream reads the source view (Java pickles) while the final jar holds the classfile view. With one interface this is just T1 (`Task.run_congr`; the deleted `Pipelining.lean` stated it as `early_agreement`); with two interfaces it holds only under view agreement, which is `early_view` below. The early output's agreement with the last successful build is Phase 19's (`PipelineLifecycle.lean`).
+  - Pipelining's early output: downstream reads the source view (Java pickles) while the final jar holds the classfile view. With one interface this is just T1 (`Task.run_congr`; the deleted `Pipelining.lean` stated it as `early_agreement`); with two interfaces it holds only under view agreement, which is `early_view` below. The early output's agreement with the last successful build is Phase 19's ([`PipelineLifecycle.lean`](../Zinc/Loop/PipelineLifecycle.lean)).
 
 ## Policies, existing and possible
 
@@ -51,7 +51,7 @@ Reuse `JavaSpec.lean`'s instance and add the second view, not a new compiler.
 
 The conformance harness writes `build.json` and `incOptions.properties` per layout. It needs per-base `compileOrder` (scripted's `build.json` already accepts `compileOrder` per project), per-base `pipelining` (today a run-wide `--inc-option`), and per-base `javacOptions` (scripted passes `javacOptions = Array()`; needed for `--release`, `-parameters`, preview features). The dump gains these fields; no other harness code.
 
-## Results: Zinc's exclusion of passed-in Java classes (`JavaOrder.lean`, first section)
+## Results: Zinc's exclusion of passed-in Java classes ([`JavaOrder.lean`](../Zinc/Features/JavaOrder.lean), first section)
 
 Under pipelining `IncrementalCommon` drops from API change detection the Java classes it passed to scalac without scheduling them (`unchangedJavaClasses`, added by 9a0ae03b1 "Don't recompile dependents of unchanged Java sources when pipelining"), because their stored API (`ClassToAPI`, classfile) never equals the fresh one (bridge, source). Settled:
 
@@ -70,9 +70,9 @@ So neither single view dominates: each moves the view-agreement hypothesis to th
 
 ## Results: compile orders
 
-`JavaSpec`'s instance with a second view: a Java class `java sv cv` has the member types `sv` in scalac's source view and `cv` in javac's classfile view; a query that tells them apart stands for whichever detail the parsers disagree on (the `Object` parent of scala/scala#11292, the `throws` clauses and constant expressions of scala/scala3#27264). Scala clients run the same lookup task, compiled by scalac. `group` per order is the two-stage composition above (`stageEnv`: the round's units answered from a chosen view where a predicate holds, the rest from the state); keys and hashes are `JavaSpec`'s fix. Pipelining's cycles are `Mixed` with every Java source in the round, so the early-output statement is the pipelining-specific one.
+`JavaSpec`'s instance with a second view: a Java class `java sv cv` has the member types `sv` in scalac's source view and `cv` in javac's classfile view; a query that tells them apart stands for whichever detail the parsers disagree on (the `Object` parent of [scala/scala#11292](https://github.com/scala/scala/issues/11292), the `throws` clauses and constant expressions of [scala/scala3#27264](https://github.com/scala/scala3/issues/27264)). Scala clients run the same lookup task, compiled by scalac. `group` per order is the two-stage composition above (`stageEnv`: the round's units answered from a chosen view where a predicate holds, the rest from the state); keys and hashes are `JavaSpec`'s fix. Pipelining's cycles are `Mixed` with every Java source in the round, so the early-output statement is the pipelining-specific one.
 
-Family IDs carry a `JO-` prefix (`JavaOrder.lean`'s docstrings say V1, V2, O1, O2) to keep them apart from `InlineOpaque`'s O1 and Track V's V1–V3 (`packages/java/docs/track-java.md`).
+Family IDs carry a `JO-` prefix ([`JavaOrder.lean`](../Zinc/Features/JavaOrder.lean)'s docstrings say V1, V2, O1, O2) to keep them apart from `InlineOpaque`'s O1 and Track V's V1–V3 ([`packages/java/docs/track-java.md`](../../java/docs/track-java.md)).
 
 | Result | Status |
 |---|---|
@@ -82,13 +82,13 @@ Family IDs carry a `JO-` prefix (`JavaOrder.lean`'s docstrings say V1, V2, O1, O
 | **JO-V2** `early_view_differs`: otherwise it differs | proved, one witness |
 | **JO-O1** `scalaThenJava_not_comp`, **JO-O2** `javaThenScala_not_comp`: under a fixed order a unit of the first stage that asks a unit of the second stage of the same round reads last round's classfile; this fails even with agreeing views | proved, one witness each |
 
-So the two views are an obligation on the compilers, not on Zinc: view agreement is what `Mixed`, and pipelining's early output, need, and each parser difference fixed in scalac or dotc (scala/scala#11292, scala/scala3#27264) discharges an instance of it. On Zinc's side, the options are those under "Policies": a check of view agreement after a `Mixed` round (compare a recompiled Java class's source view with its classfile, and recompile its Scala readers on a difference) would turn JO-V1 into a further round; the fixed orders need the direction hypothesis or a rejection.
+So the two views are an obligation on the compilers, not on Zinc: view agreement is what `Mixed`, and pipelining's early output, need, and each parser difference fixed in scalac or dotc ([scala/scala#11292](https://github.com/scala/scala/issues/11292), [scala/scala3#27264](https://github.com/scala/scala3/issues/27264)) discharges an instance of it. On Zinc's side, the options are those under "Policies": a check of view agreement after a `Mixed` round (compare a recompiled Java class's source view with its classfile, and recompile its Scala readers on a difference) would turn JO-V1 into a further round; the fixed orders need the direction hypothesis or a rejection.
 
 
 ## Steps
 
 - [x] P14.1 This design (approved by the coordinating session).
-- [x] P14.2 `JavaOrder.lean`: two views per Java class, Scala clients, `group` per order; `Obligations` and T3a for `Mixed` under view agreement; counterexamples JO-V1, JO-O1, JO-O2.
+- [x] P14.2 [`JavaOrder.lean`](../Zinc/Features/JavaOrder.lean): two views per Java class, Scala clients, `group` per order; `Obligations` and T3a for `Mixed` under view agreement; counterexamples JO-V1, JO-O1, JO-O2.
 - [x] P14.3a Pipelining's early output: `early_view`, JO-V2.
 - [x] P14.3b Pipelining's hash flip and Zinc's exclusion: `exclusion_exact`, `flip_spurious`, the view policies compared.
 - [ ] P14.4 Harness only for a predicted divergence, with the per-base fields above (none needed so far: `java-comment-change` already shows the flip).

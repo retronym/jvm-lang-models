@@ -1,6 +1,6 @@
 # asSeenFrom, formalized
 
-A small Lean 4 model (no Mathlib) of how scalac and the IntelliJ Scala plugin compute the type of a selected member, and a proof of the conditions under which they agree. Its consumer is `SubstitutorInvariants` in retronym/intellij-scala#5, which turns each theorem below into a runtime check.
+A small Lean 4 model (no Mathlib) of how scalac and the IntelliJ Scala plugin compute the type of a selected member, and a proof of the conditions under which they agree. Its consumer is `SubstitutorInvariants` in [retronym/intellij-scala#5](https://github.com/retronym/intellij-scala/issues/5), which turns each theorem below into a runtime check.
 
 ## Why
 
@@ -52,12 +52,12 @@ What is not proved: that `BaseTypes.baseType` satisfies lockstep (an assumption 
 | File | Content |
 |---|---|
 | `Model.lean` | classes as owner paths, types with this-leaves, a `World` of base-type facts |
-| `Scalac.lean` | scalac's `thisTypeAsSeen` and `asSeenFrom` as structural recursion, so termination is the checker's; `inView` |
-| `Port.lean` | `Ty` as an instance of `ScalaTypes.AsSeenFrom` (the same walk for any type language with this-type and class-parameter leaves, with the composition law proved once; shared with the Scala layer's lowering) (this-leaves only); `asf_eq`: `Scalac.asf` is the shared map; lockstep carries over. `Chain.compose` is proved from the shared theorem through it |
-| `Chain.lean` | lockstep; `compose`, `chain_is_single`, `idempotent`; then the checkable conditions `wellAnchored`, `fixedTarget`, `stateSafe` and their theorems; last, self-rooted links and `once_is_scalac` |
-| `Relaxations.lean` | three shapes of link that fail A1's arms and are admitted by a relaxation: compound self-rooted, outer-rooted, respelled; and a checkable condition for `once_is_scalac` |
-| `Plugin.lean` | the plugin's walk with its narrow-against-target fallback; `agrees` |
-| `Cases.lean` | three cases from scala/scala, decided by computation: a mis-anchored chain (`MatchWarnings`), the fallback firing where scalac's walk stops (`Importers`), a self-rooted link applied once and twice (`Scanners`), and the shapes of `Relaxations` (D, E) |
+| [`Scalac.lean`](IntelliJ/Scalac.lean) | scalac's `thisTypeAsSeen` and `asSeenFrom` as structural recursion, so termination is the checker's; `inView` |
+| [`Port.lean`](IntelliJ/Port.lean) | `Ty` as an instance of `ScalaTypes.AsSeenFrom` (the same walk for any type language with this-type and class-parameter leaves, with the composition law proved once; shared with the Scala layer's lowering) (this-leaves only); `asf_eq`: `Scalac.asf` is the shared map; lockstep carries over. `Chain.compose` is proved from the shared theorem through it |
+| [`Chain.lean`](IntelliJ/Chain.lean) | lockstep; `compose`, `chain_is_single`, `idempotent`; then the checkable conditions `wellAnchored`, `fixedTarget`, `stateSafe` and their theorems; last, self-rooted links and `once_is_scalac` |
+| [`Relaxations.lean`](IntelliJ/Relaxations.lean) | three shapes of link that fail A1's arms and are admitted by a relaxation: compound self-rooted, outer-rooted, respelled; and a checkable condition for `once_is_scalac` |
+| [`Plugin.lean`](IntelliJ/Plugin.lean) | the plugin's walk with its narrow-against-target fallback; `agrees` |
+| [`Cases.lean`](IntelliJ/Cases.lean) | three cases from scala/scala, decided by computation: a mis-anchored chain (`MatchWarnings`), the fallback firing where scalac's walk stops (`Importers`), a self-rooted link applied once and twice (`Scanners`), and the shapes of `Relaxations` (D, E) |
 
 ```
 elan default stable   # Lean 4.34
