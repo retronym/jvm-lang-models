@@ -1,5 +1,6 @@
 import IncComp.General
 import Scala.Catalogue
+import Query.Interp
 /-!
 # Track B4: Zinc-clean implies binary compatible
 
@@ -169,29 +170,33 @@ abbrev FQ := String × Bool
 
 abbrev FAns : FQ → Type := fun _ => Option View
 
-/-- Rename lowering's queries into the framework's shape. -/
-def tr {α : Type} : Query.Task Scala.Q Scala.Ans α → Query.Task FQ FAns α
-  | .pure a => .pure a
-  | .ask (.decl n o) k => .ask (n, o) fun v => tr (k v)
-
-/-- An environment in the framework's shape, read by lowering. -/
-def back (e : (q : FQ) → FAns q) : (q : Scala.Q) → Scala.Ans q
-  | .decl n o => e (n, o)
-
-theorem run_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Query.Task Scala.Q Scala.Ans α,
-    (tr t).run e = t.run (back e)
-  | .pure _ => rfl
-  | .ask (.decl n o) k => by simp only [tr, Query.Task.run_ask]; exact run_tr e (k (e (n, o)))
-
+/-- A query of the shared layer as the framework's: `decl n o` asks unit `n` for one side;
+`header n` and `member n m` are projections of `n`'s class side, so they ask for it. -/
 def fq : Scala.Q → FQ
   | .decl n o => (n, o)
+  | .header n => (n, false)
+  | .member n _ => (n, false)
 
-theorem trace_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Query.Task Scala.Q Scala.Ans α,
-    (tr t).trace e = (t.trace (back e)).map fq
-  | .pure _ => rfl
-  | .ask (.decl n o) k => by
-    simp only [tr, Query.Task.trace_ask, List.map_cons]
-    exact congrArg _ (trace_tr e (k (e (n, o))))
+/-- The answer to `q`, from the side `fq q` reads. -/
+def fromSide : (q : Scala.Q) → FAns (fq q) → Scala.Ans q
+  | .decl .., v => v
+  | .header _, v => v.map (·.decl.header)
+  | .member _ m, v => v.bind (·.decl.member m)
+
+/-- Rename lowering's queries into the framework's shape. -/
+def tr {α : Type} : Query.Task Scala.Q Scala.Ans α → Query.Task FQ FAns α :=
+  Query.Task.rename fq fromSide
+
+/-- An environment in the framework's shape, read by lowering. -/
+def back (e : (q : FQ) → FAns q) : (q : Scala.Q) → Scala.Ans q := fun q => fromSide q (e (fq q))
+
+theorem run_tr {α : Type} (e : (q : FQ) → FAns q) (t : Query.Task Scala.Q Scala.Ans α) :
+    (tr t).run e = t.run (back e) :=
+  Query.Task.run_rename _ _ e t
+
+theorem trace_tr {α : Type} (e : (q : FQ) → FAns q) (t : Query.Task Scala.Q Scala.Ans α) :
+    (tr t).trace e = (t.trace (back e)).map fq :=
+  Query.Task.trace_rename _ _ e t
 
 /-- A unit's interface: its class and object declarations, if it exists. -/
 abbrev Iface := Option (Option Decl × Option Decl)
