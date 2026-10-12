@@ -108,5 +108,54 @@ Expected, from the catalogue (to be confirmed in step 2, not assumed):
 ## Steps
 
 1. This design. **(DONE)**
-2. **The catalogue**, before any Lean. The Amin–Tate programs (`unsound.scala`, `legacy.scala`), [scala/bug#9633](https://github.com/scala/bug/issues/9633)'s programs, [scala/scala3#50](https://github.com/scala/scala3/issues/50) and #1050 with their Scala 3 forms, and the dotc test cases of the realizability fixes, as Scala sources in `packages/scala/probes/soundness/`. Each is compiled with 2.12.21, 2.13.18 and 3.9.0 (plus `-source future` and `-Yexplicit-nulls`) through the server and run where accepted. The result is a table per compiler: rejected (which error), accepted and runs, accepted and throws. That table is a finding on its own, and the first entry of a ledger like the JVM probe's.
+2. **(DONE, below)** **The catalogue**, before any Lean. The Amin–Tate programs (`unsound.scala`, `legacy.scala`), [scala/bug#9633](https://github.com/scala/bug/issues/9633)'s programs, [scala/scala3#50](https://github.com/scala/scala3/issues/50) and #1050 with their Scala 3 forms, and the dotc test cases of the realizability fixes, as Scala sources in [`packages/scala/probes/soundness/`](../../scala/probes/soundness). Each is compiled with 2.12.21, 2.13.18 and 3.9.0 (plus `-source future` and `-Yexplicit-nulls`) through the server and run where accepted. The result is a table per compiler: rejected (which error), accepted and runs, accepted and throws. That table is a finding on its own, and the first entry of a ledger like the JVM probe's.
 3. **The space.** Extend `ScalaTypes` as above; encode dotc's realizability and bounds checks and scalac's volatility as `Task`s; generate the first space (a `lake exe` in the harness, the only harness change), calibrate the model's verdicts against the compilers, run the accepted programs, and state the per-compiler theorems. Every accepted program that throws a cast-free `ClassCastException` is reported with its source.
+
+## Step 2: the catalogue
+
+The known cases are Scala sources in [`packages/scala/probes/soundness/`](../../scala/probes/soundness). They are written once, with `AND` for the intersection operator; the driver writes `with` for Scala 2 and `&` for Scala 3. [`soundness.py`](../../scala/probes/soundness.py) compiles each with the five settings through the compile server and runs `Main` where accepted, in about 15 seconds for all 90. The ledger is [`catalogue.jsonl`](../../scala/probes/soundness/catalogue.jsonl) (13 October 2026, JDK 21).
+
+The cases:
+
+- `at_unsound`, `at_legacy`: the Amin–Tate artifact.
+- `bug9633_nothing`, `bug9633_cast`: [scala/bug#9633](https://github.com/scala/bug/issues/9633).
+- `s3_50_lazy`: [scala/scala3#50](https://github.com/scala/scala3/issues/50).
+- `s3_50_null` and `s3_50_bounds_lazy`: #50 with a strict `null` val, and with bounds instead of aliases.
+- `s3_1050_proj`: [scala/scala3#1050](https://github.com/scala/scala3/issues/1050).
+- `param_null`, `field_null`, `new_conflict`: one path seen through the intersection (a parameter, a field, a `new`).
+- `views_val`, `views_lazy`, `views_param`, `views_field`, `views_new`: the same path seen through each trait separately, `up(a: A)(x: Int): a.L` then `down(b: B)(l: b.L): String`.
+- `ok_consistent`, `views_ok`: controls with consistent bounds.
+
+| case | 2.12.21 | 2.13.18 | 3.9.0 | 3.9.0 -source future | 3.9.0 -Yexplicit-nulls |
+|---|---|---|---|---|---|
+| `at_legacy` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `at_unsound` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `bug9633_cast` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `bug9633_nothing` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `field_null` | rejected: type mismatch | rejected: type mismatch | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `new_conflict` | rejected: type mismatch | rejected: type mismatch | rejected: conflicting bounds | rejected: conflicting bounds | rejected: conflicting bounds |
+| `ok_consistent` | rejected: type mismatch | rejected: type mismatch | ok | ok | rejected: `Null` not a subtype |
+| `param_null` | rejected: type mismatch | rejected: type mismatch | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `s3_1050_proj` | rejected: type mismatch | rejected: type mismatch | rejected: not a legal path | rejected: not a legal path | rejected: not a legal path |
+| `s3_50_bounds_lazy` | rejected: type mismatch | rejected: type mismatch | rejected: not a legal path | rejected: not a legal path | rejected: not a legal path |
+| `s3_50_lazy` | rejected: type mismatch | rejected: type mismatch | rejected: not a legal path | rejected: not a legal path | rejected: not a legal path |
+| `s3_50_null` | rejected: type mismatch | rejected: type mismatch | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `views_field` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `views_lazy` | throws NotImplementedError | throws NotImplementedError | throws NotImplementedError | throws NotImplementedError | throws NotImplementedError |
+| `views_new` | rejected: incompatible override | rejected: incompatible override | rejected: conflicting bounds | rejected: conflicting bounds | rejected: conflicting bounds |
+| `views_ok` | ok | ok | ok | ok | rejected: `Null` not a subtype |
+| `views_param` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+| `views_val` | **throws CCE** | **throws CCE** | **throws CCE** | **throws CCE** | rejected: `Null` not a subtype |
+
+Out of 18 programs, 10 are accepted and throw a cast-free `ClassCastException` under 3.9.0, and the same 10 under `-source future`. Under 2.12.21 and 2.13.18 the count is 7, and under `-Yexplicit-nulls` it is none.
+
+Against the predictions of the first space:
+
+- **"Every compiler accepts the `null` local and parameter paths, and they throw."** This holds for 3.9.0. For Scala 2 it holds only when the path is seen through each trait separately (`at_unsound`, `bug9633_*`, `views_val`, `views_param`, `views_field`).
+  - *Difference:* scalac rejects every program that sees `L` through the intersection itself, even the consistent control `ok_consistent`, with a type mismatch. A member of `A with B` in Scala 2 is the last parent's (`B`'s `L <: String`, lower bound `Nothing`); its bounds are not the intersection of the parents'. That is scalac's member semantics, not a soundness check: the same bounds are unsound through two views.
+- **"dotc rejects the `lazy val` path ([scala/scala3#50](https://github.com/scala/scala3/issues/50)) and the conflicting `new`."** Both hold: "not a legal path" for `s3_50_lazy` and `s3_50_bounds_lazy`, and "cannot be instantiated since it has a member L with possibly conflicting bounds" for `new_conflict` and `views_new`. scalac rejects the conflicting `new` too, in `RefChecks`' override check ("incompatible type in overriding").
+  - *Difference:* dotc and scalac accept `views_lazy`. The lazy path is passed as an argument, which forces it, so the program throws `NotImplementedError` before any cast. That is not an unsoundness.
+- **"The field path is accepted by dotc unless `-source future`."** *Wrong:* `-source future` accepts `field_null` and `views_field`, and both throw. `CheckRealizable` examines the fields of a path's underlying type only when the path itself needs checking (a `lazy val` or an overridable member). In `h.f`, the prefix `h` is a stable `val` of a class built by `new`, and `f` is itself a stable `val`, so neither is examined. On this catalogue `-source future` changes no verdict.
+- **"`-Yexplicit-nulls` rejects the `null` paths."** This holds: every program that throws under another setting is rejected ("Found: Null, Required: A & B"), and so is every control that uses `null`.
+
+The first space (step 3) therefore takes the two-views shape as its core, since it is the one all three compilers can express. It keeps the intersection view for Scala 3.
