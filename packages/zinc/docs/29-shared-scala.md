@@ -104,3 +104,7 @@ Results unchanged: every scenario report and the per-name witnesses, [`Er_obliga
 - **The companion search stays local**, as decided: `cscT`, `select` and `bases` are this file's. The shared implicit-scope search is listed in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 Results unchanged: every scenario, [`is_obligations`](../Zinc/Features/ImplicitScope.lean#L675), [`is_sound`](../Zinc/Features/ImplicitScope.lean#L731), [`stored_eq_recomputed`](../Zinc/Features/ImplicitScope.lean#L835) (now for heights below five) and [`consistent_of_upToDate`](../Zinc/Features/ImplicitScope.lean#L850).
+
+## Calibration after steps 4 to 6
+
+The compiled checks, run before (at `1dcabf2`) and after the ports, give identical output: `lake exe exhaustive` over the first 20,000 of `FlatRules`' bases (540,000 edits, every rule set), `exhaustive v` (69,120 edits), `exhaustive flatshared` for 2.12, 2.13 and 3 (linearization and selections agree on all 216,000 programs; refchecks 171,392 / 103,824 / 184,064 of the 192,000 without a `var`), `exhaustive erasure` (the 189,888-pair table above, unchanged), `exhaustive implicit`, and the conformance dumps (`lake exe conformance`, `conformance v`) byte for byte.
