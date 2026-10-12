@@ -1,5 +1,4 @@
 import Java.Catalogue
-
 /-!
 # JLS chapter 13, checked against `Jvm` linkage
 

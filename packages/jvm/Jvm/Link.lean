@@ -1,6 +1,5 @@
 import Query.Basic
 import Query.Task
-
 /-!
 # JVM linkage as a query tree
 

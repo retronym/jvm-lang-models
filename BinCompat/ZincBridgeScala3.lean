@@ -1,5 +1,4 @@
 import BinCompat.ZincBridge
-
 /-!
 # Track B4 for Scala 3: separate compilation
 

@@ -1,0 +1,17 @@
+name = "inc-comp"
+version = "0.1.0"
+defaultTargets = ["IncComp"]
+
+# Incremental compilation in general: a compiler as per-unit tasks plus a bridge (keys, hashes,
+# covers), the obligations on it, invalidation policies, and T2–T5. Nothing here is specific to Zinc.
+[[require]]
+name = "query"
+path = "../query"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_lib]]
+name = "IncComp"

@@ -2,7 +2,6 @@ import BinCompat
 import Jvm.Dump
 import Scala.Catalogue
 import Scala.Space
-
 /-! `lake exe bincompat`, for `probes/mima`.
 
 * `edits`: the edit space (`BinCompat/Edits.lean`) as `Jvm` case JSON lines (no client), for

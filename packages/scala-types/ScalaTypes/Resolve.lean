@@ -1,7 +1,6 @@
 import Query.Basic
 import Query.Task
 import ScalaTypes.Syntax
-
 /-!
 # Resolution over interfaces, as a `Task`
 

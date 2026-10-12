@@ -1,7 +1,6 @@
 import Query.Task
 import Jvm.Link
 import Java.Syntax
-
 /-!
 # Lowering a Java subset to classfiles, as a `Task`
 

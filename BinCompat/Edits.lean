@@ -1,6 +1,5 @@
 import BinCompat.Mima
 import Jvm.Clients
-
 /-!
 # A space of library edits, and the clients they could break
 

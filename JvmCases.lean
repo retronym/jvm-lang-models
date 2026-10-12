@@ -1,6 +1,5 @@
 import Jvm.Dump
 import Jvm.Clients
-
 /-! `lake exe jvmcases`: the catalogue (`Jvm/Catalogue.lean`) as JSON lines for `probes/jvm`.
 
 `lake exe jvmcases space`: every catalogue edit with every well-typed client of `Jvm/Clients.lean`'s

@@ -1,5 +1,4 @@
 import BinCompat.Fixed
-
 /-!
 # The corrected rules are sound on the space
 

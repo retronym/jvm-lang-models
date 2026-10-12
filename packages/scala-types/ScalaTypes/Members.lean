@@ -1,6 +1,5 @@
 import ScalaTypes.Resolve
 import ScalaTypes.Desugar
-
 /-!
 # Membership and overriding: Scala's refchecks, as a `Task`
 

@@ -1,5 +1,4 @@
 import ScalaTypes.AsSeenFrom
-
 /-!
 # A typed Scala subset, as the back end sees it
 

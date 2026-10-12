@@ -1,10 +1,9 @@
-import Zinc.FlatRules
+import Zinc.Bridges.FlatRules
 import ZincNames.Names
 import ZincNames.Givens
-import Zinc.InlineOpaque
-import Zinc.Companions
-import Zinc.Split
-
+import Zinc.Features.InlineOpaque
+import Zinc.Bridges.Companions
+import Zinc.Features.Split
 /-! Dumps the program space of `Zinc/FlatRules.lean` as JSON lines, one line per base program
 with all of its single-class edits, for the Zinc conformance harness (`Conformance` in Zinc's
 `zincScripted` tests). The harness renders each program as Scala, builds the base, applies each

@@ -1,6 +1,5 @@
-import Zinc.General
+import IncComp.General
 import Scala.Catalogue
-
 /-!
 # Track B4: Zinc-clean implies binary compatible
 

@@ -1,5 +1,4 @@
 import ScalaTypes.Syntax
-
 /-!
 # Desugaring onto a library prelude
 

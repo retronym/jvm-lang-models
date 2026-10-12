@@ -1,5 +1,4 @@
 import Jvm.Catalogue
-
 /-!
 # Client spaces: does an edit break *some* client?
 

@@ -1,5 +1,4 @@
 import Jvm.Catalogue
-
 /-!
 # JSON dump of catalogue cases, for the HotSpot probe
 

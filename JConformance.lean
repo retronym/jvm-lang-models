@@ -1,7 +1,6 @@
-import Zinc.JavaNames
-import Zinc.JavaSealed
-import Zinc.Cycles
-
+import Zinc.Features.JavaNames
+import Zinc.Features.JavaSealed
+import Zinc.Loop.Cycles
 /-! Dumps the Java spaces (`Zinc/JavaNames.lean`, `Zinc/JavaSealed.lean`) as JSON lines of source
 files for the Zinc conformance harness, as `conformance names` does for Scala.
 

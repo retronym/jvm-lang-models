@@ -1,5 +1,4 @@
 import Scala.Space
-
 /-!
 # Facts about lowering, checked by kernel `decide`
 

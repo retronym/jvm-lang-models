@@ -1,5 +1,4 @@
 import Java.Space
-
 /-! `javaprobe OUT`: write each case of `Java.space` as Java sources under `OUT/src/pN/` (one file
 per compilation unit, named after its first type), the model's classfiles as `OUT/expected.txt`,
 and each program's family as `OUT/index.txt`. -/

@@ -2,7 +2,6 @@ import Query.Task
 import Jvm.Link
 import ScalaTypes.Resolve
 import ScalaTypes.Desugar
-
 /-!
 # Lowering a Scala subset to classfiles, as a `Task`
 

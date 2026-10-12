@@ -1,8 +1,7 @@
-import Zinc.FlatRules
-import Zinc.Erasure
-import Zinc.ImplicitScope
-import Zinc.PingPong
-
+import Zinc.Bridges.FlatRules
+import Zinc.Features.Erasure
+import Zinc.Features.ImplicitScope
+import Zinc.Loop.PingPong
 /-! Runs the bounded exhaustive checks as native code.
 
 * `exhaustive [N]`: `Zinc/FlatRules.lean`, for every rule set the number of unclean (base, edit)

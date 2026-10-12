@@ -1,5 +1,4 @@
 import Scala.Lower
-
 /-!
 # A catalogue of Scala library edits, lowered and linked
 

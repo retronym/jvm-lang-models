@@ -1,5 +1,4 @@
 import BinCompat.ZincBridge
-
 /-!
 # Track B4 for a client of a library JAR
 

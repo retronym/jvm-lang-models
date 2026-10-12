@@ -1,0 +1,10 @@
+import IncComp.Model
+import IncComp.General
+import IncComp.Soundness
+import IncComp.Tree
+import IncComp.Uniqueness
+import IncComp.Termination
+import IncComp.NonLocal
+import IncComp.NonLocalAns
+import IncComp.Stale
+import IncComp.Classpath
