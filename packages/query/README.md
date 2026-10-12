@@ -1,6 +1,6 @@
 # `Query`
 
-A computation that asks questions: a query tree (`Task`) that either returns or asks a query and continues with a function of the answer; running it against an oracle gives the output and the *trace*. T1 (`Task.run_eq_of_trace`): two oracles that agree on the trace give the same output. Every model in this repository is built on it. No Mathlib.
+A computation that asks questions: a query tree (`Task`) that either returns or asks a query and continues with a function of the answer; running it against an oracle gives the output and the *trace*. T1 ([`Task.run_eq_of_trace`](Query/Task.lean#L40)): two oracles that agree on the trace give the same output. Every model in this repository is built on it. No Mathlib.
 
 **Start here.** [`Query/Task.lean`](Query/Task.lean).
 
@@ -12,5 +12,5 @@ A computation that asks questions: a query tree (`Task`) that either returns or 
 
 | File | Contents |
 |---|---|
-| [`Task.lean`](Query/Task.lean) | Free monad of query trees; `run`, `trace`; T1 `run_eq_of_trace`, `run_congr` |
+| [`Task.lean`](Query/Task.lean) | Free monad of query trees; `run`, `trace`; T1 [`run_eq_of_trace`](Query/Task.lean#L40), [`run_congr`](Query/Task.lean#L79) |
 | [`Basic.lean`](Query/Basic.lean) | What the Mathlib-free layers took from Mathlib: decidable equality of `Except`, a low-priority `List` monad, `dedupLast` (Mathlib's `dedup`, structural) |

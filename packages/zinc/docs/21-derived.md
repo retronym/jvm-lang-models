@@ -14,8 +14,8 @@ Units: holders of a typed value (`val x: V`), classes with parents, a holder of 
 |---|---|
 | `obligations_comp`: the two-stage joint compile (forwarders and clients read the round's fresh signatures) is a fixed point | proved, every program |
 | `obligations_fix`, `fix_sound`: the exporter's edge to the exported object (#10182) and the used value's type (#87) meet the obligations, so T3a | proved, every program |
-| `export_not_coverage`: before #10182 the exporter's `baseSig` query has no key | proved, one witness |
-| `usedType_not_coverage`: before #87, `val p: P = B.x`'s `parents` query on `B.x`'s type has no key | proved, one witness |
+| [`export_not_coverage`](../Zinc/Features/DerivedApi.lean#L231): before #10182 the exporter's `baseSig` query has no key | proved, one witness |
+| [`usedType_not_coverage`](../Zinc/Features/DerivedApi.lean#L239): before #87, `val p: P = B.x`'s `parents` query on `B.x`'s type has no key | proved, one witness |
 
 Cost of the fix: an exporter now depends on everything it exports (a wildcard export is a dependency on the whole object, as an inheritance edge is), and a client depends on the type of every value it uses, which #87 already pays.
 

@@ -16,7 +16,7 @@ Phase 23 ([`ExtraHash.lean`](../Zinc/Bridges/ExtraHash.lean)) models a pair as t
 30 programs, 135 edits. The loop is [`InlineOpaque.lean`](../Zinc/Features/InlineOpaque.lean)'s key loop, with the pair as one Zinc class whose keys are both halves' names. Three bridges:
 
 - `today`: develop, both halves stored, every descendant of a changed class recompiles;
-- `merkle`: the Merkle PoC since #56: both halves stored, a descendant recompiles when its compilation reads the change (descendant rules), plus where a rule fires through the merged pair (`mergedFires`: `mirror` on an object with a companion class, `exports` through the pair's merged parents, #1795, and `traitDirect` when the object half of a trait's pair changes, `ExtraHash.merged_spurious`);
+- `merkle`: the Merkle PoC since #56: both halves stored, a descendant recompiles when its compilation reads the change (descendant rules), plus where a rule fires through the merged pair (`mergedFires`: `mirror` on an object with a companion class, `exports` through the pair's merged parents, #1795, and `traitDirect` when the object half of a trait's pair changes, [`ExtraHash.merged_spurious`](../Zinc/Bridges/ExtraHash.lean#L38));
 - `pre56`: the PoC before #56: the half extracted first is lost (the class half for a synthetic companion or an object written after the class; the object half for an object written first). Its keys never move, `exports` misfires on `A` and `D` when `P` changes, and `traitDirect` sees no trait.
 
 ## Results
@@ -25,12 +25,12 @@ Checked by kernel `decide` ([`Companions.lean`](../Zinc/Bridges/Companions.lean)
 
 | check | statement |
 |---|---|
-| `check_today_clean` | under `today` every edit is clean |
-| `check_merkle_clean` | under `merkle` every edit is clean |
-| `check_merkle_subset` | `merkle` recompiles a subset of `today`, and what it recompiles without reading the change is exactly what the merged pair makes fire |
-| `check_pre56_exact` | under `pre56` an edit is unclean exactly when it changes a member of the lost half that a class reads: `m` (read by `UseM`, `D`), `x` (`UseX`), or a member added to a trait (`D`'s mixin forwarders) |
+| [`check_today_clean`](../Zinc/Bridges/Companions.lean#L264) | under `today` every edit is clean |
+| [`check_merkle_clean`](../Zinc/Bridges/Companions.lean#L267) | under `merkle` every edit is clean |
+| [`check_merkle_subset`](../Zinc/Bridges/Companions.lean#L272) | `merkle` recompiles a subset of `today`, and what it recompiles without reading the change is exactly what the merged pair makes fire |
+| [`check_pre56_exact`](../Zinc/Bridges/Companions.lean#L278) | under `pre56` an edit is unclean exactly when it changes a member of the lost half that a class reads: `m` (read by `UseM`, `D`), `x` (`UseX`), or a member added to a trait (`D`'s mixin forwarders) |
 
-This is `ExtraHash.qualified_sound` with its hypothesis failing for the lost half: a constant hash determines nothing.
+This is [`ExtraHash.qualified_sound`](../Zinc/Bridges/ExtraHash.lean#L50) with its hypothesis failing for the lost half: a constant hash determines nothing.
 
 Against the harness (`lake exe conformance companions today|merkle|pre56`, Scala 2.13, single layout):
 

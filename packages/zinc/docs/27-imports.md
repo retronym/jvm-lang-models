@@ -47,10 +47,10 @@ Givens: `trait A`, `class B extends A`; `summon[A]` (`implicitly[A]` in 2.13).
 
 ## Proved, for every program of the slot language (no `native_decide`)
 
-* `Spec.sel_check_covered`: with selector checks, a pinned check (a selector the bridge records, as both do) is covered by today's keys (and #34's, the cross-subproject key's); `Spec.sel_cross_obligations`: the cross-subproject key meets the obligations with any checks.
-* `Spec.hide_unrecorded_not_obligations` (kernel `decide` on the trace): a hiding selector whose check no key covers, in a client resolving `a.Foo`, fails coverage under #34's key; it is the case neither bridge leaves open.
-* `SpecGivens.gP_rule_obligations`, `gP_global_obligations`, `gP_searched_obligations`: the G rule (global, or narrowed with recorded package imports) and `searched` meet the obligations under either prioritisation rule, with today's keys reading the scope the rule picks.
-* `SpecGivens.prio_differs` (g1), `general_added_stale`, `type_widened_stale` (kernel `decide`, on the search's own output): under 3.7+ a more general instance added to a package object, or a package object's instance retyped to a more general type, moves the choice while no key today's bridge recorded moves; under the old rule the first edit does not move it.
+* [`Spec.sel_check_covered`](../Zinc/Features/SplitProof.lean#L1132): with selector checks, a pinned check (a selector the bridge records, as both do) is covered by today's keys (and #34's, the cross-subproject key's); [`Spec.sel_cross_obligations`](../Zinc/Features/SplitProof.lean#L1117): the cross-subproject key meets the obligations with any checks.
+* [`Spec.hide_unrecorded_not_obligations`](../Zinc/Features/SplitProof.lean#L1155) (kernel `decide` on the trace): a hiding selector whose check no key covers, in a client resolving `a.Foo`, fails coverage under #34's key; it is the case neither bridge leaves open.
+* `SpecGivens.gP_rule_obligations`, [`gP_global_obligations`](../Zinc/Features/SpecGivens.lean#L379), [`gP_searched_obligations`](../Zinc/Features/SpecGivens.lean#L386): the G rule (global, or narrowed with recorded package imports) and `searched` meet the obligations under either prioritisation rule, with today's keys reading the scope the rule picks.
+* `SpecGivens.prio_differs` (g1), [`general_added_stale`](../Zinc/Features/SpecGivens.lean#L419), [`type_widened_stale`](../Zinc/Features/SpecGivens.lean#L429) (kernel `decide`, on the search's own output): under 3.7+ a more general instance added to a package object, or a package object's instance retyped to a more general type, moves the choice while no key today's bridge recorded moves; under the old rule the first edit does not move it.
 
 ## Checked, on a bounded space
 
@@ -61,8 +61,8 @@ Not modelled: a selector's rename in the scopes searched for the new name is any
 
 ## Pending tests (predicted, then run: [retronym/zinc#58](https://github.com/retronym/zinc/issues/58), open)
 
-* `added-general-given-package-object-scala3`: the client in `package a.b` imports `a.X.given` (`given B`); `package object b` gains `given A` (`B <: A`). Scala 3.7+ picks `A`; Zinc recompiles the package object only; the client keeps `B` (behavioural: print the choice). Under `-source:3.6` the choice stays `B`. (`general_added_stale`.)
-* `given-type-widened-package-object-scala3`: as above, with `package object b`'s `given g: C` (`C <: B`) retyped to `given g: A`: the choice moves from `B` to `A` under 3.7+, and Zinc keeps `B`. (`type_widened_stale`.)
+* `added-general-given-package-object-scala3`: the client in `package a.b` imports `a.X.given` (`given B`); `package object b` gains `given A` (`B <: A`). Scala 3.7+ picks `A`; Zinc recompiles the package object only; the client keeps `B` (behavioural: print the choice). Under `-source:3.6` the choice stays `B`. ([`general_added_stale`](../Zinc/Features/SpecGivens.lean#L419).)
+* `given-type-widened-package-object-scala3`: as above, with `package object b`'s `given g: C` (`C <: B`) retyped to `given g: A`: the choice moves from `B` to `A` under 3.7+, and Zinc keeps `B`. ([`type_widened_stale`](../Zinc/Features/SpecGivens.lean#L429).)
 
 Both are G1 (an instance in a package object, reached through no edge) under a new trigger; [retronym/zinc#47](https://github.com/retronym/zinc/issues/47)'s G rule covers them.
 

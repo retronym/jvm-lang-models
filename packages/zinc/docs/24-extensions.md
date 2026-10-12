@@ -6,7 +6,7 @@
 
 ## Model
 
-`SpecGivens`' level-wise search (`gsearch`, an `XCompiler` whose keys read output and trace) with the extension's scope kinds. A layout is a list of scopes, each a kind and a nesting level:
+`SpecGivens`' level-wise search (`gsearch`, an [`XCompiler`](../../inc-comp/IncComp/General.lean#L20) whose keys read output and trace) with the extension's scope kinds. A layout is a list of scopes, each a kind and a nesting level:
 
 | Kind | Pinned today | Package-level container |
 |---|---|---|
@@ -23,10 +23,10 @@ Keys: `today` (the pinned scopes and the one the search resolved to); the G rule
 
 | Result | Status |
 |---|---|
-| `ext_rule_obligations`: with the G rule, global or narrowed with recorded imports, the obligations hold for every layout without an ancestor companion, so T3a (`SpecGivens.g_global_obligations`, `g_narrowed_obligations` instantiated) | proved, every layout |
-| `ext_today_pkgObject` (F2/G1 shape), `ext_today_topLevel` (G2): today's keys miss an extension added in a package object, or top-level in a new file, over the companion's | witnesses, kernel `decide` |
-| `ext_narrowed_without_imports`: the narrowed rule misses a wildcard-imported package's extension unless the bridge records the import | witness |
-| `ext_rule_ancestorCompanion`: even the global G rule misses an extension added to an ancestor's companion; that needs Phase 7's key (the ancestor companions, pinned) | witness |
+| [`ext_rule_obligations`](../Zinc/Features/Extensions.lean#L76): with the G rule, global or narrowed with recorded imports, the obligations hold for every layout without an ancestor companion, so T3a (`SpecGivens.g_global_obligations`, [`g_narrowed_obligations`](../Zinc/Features/SpecGivens.lean#L256) instantiated) | proved, every layout |
+| [`ext_today_pkgObject`](../Zinc/Features/Extensions.lean#L88) (F2/G1 shape), [`ext_today_topLevel`](../Zinc/Features/Extensions.lean#L98) (G2): today's keys miss an extension added in a package object, or top-level in a new file, over the companion's | witnesses, kernel `decide` |
+| [`ext_narrowed_without_imports`](../Zinc/Features/Extensions.lean#L108): the narrowed rule misses a wildcard-imported package's extension unless the bridge records the import | witness |
+| [`ext_rule_ancestorCompanion`](../Zinc/Features/Extensions.lean#L118): even the global G rule misses an extension added to an ancestor's companion; that needs Phase 7's key (the ancestor companions, pinned) | witness |
 
 So extensions add no new failure shape: they are names (`Names`' F1–F3) searched like instances (`Givens`' level-wise rule), and they meet the same keys. Precision is the G rule's: global invalidates every user of a package-level container on any change of its extensions; narrowed only those whose search reached the package, given recorded package imports. A member added to `T` shadows the extensions and is caught today (pinned, used name `m`).
 
@@ -45,7 +45,7 @@ The result type of `t.m` inferred in `C` and checked from another object (an asc
 | `T`'s companion vs an ancestor's companion | own companion | own companion |
 | an ancestor's companion alone | ancestor | ancestor |
 
-The model's layout agrees with all but two rows, neither of which changes a result. Scala 2's block import is not an inner level for implicit views: its whole lexical scope is one level, as `SpecGivens` already has it for Scala 2. And within the implicit scope, `T`'s own companion beats an ancestor's by specificity, where the level-wise search would report both as hits at one level. Coverage depends on the scopes asked (both are), not on which wins, so `ext_rule_obligations` and the witnesses are unaffected; only `today`'s resolved key differs, and `T`'s companion is pinned anyway.
+The model's layout agrees with all but two rows, neither of which changes a result. Scala 2's block import is not an inner level for implicit views: its whole lexical scope is one level, as `SpecGivens` already has it for Scala 2. And within the implicit scope, `T`'s own companion beats an ancestor's by specificity, where the level-wise search would report both as hits at one level. Coverage depends on the scopes asked (both are), not on which wins, so [`ext_rule_obligations`](../Zinc/Features/Extensions.lean#L76) and the witnesses are unaffected; only `today`'s resolved key differs, and `T`'s companion is pinned anyway.
 
 The ancestor-companion witness is about keys alone. Inside one subproject Zinc's policy compensates: an implicit added to `P`'s companion changes `P`'s API in the implicit scope, `T` is invalidated as `P`'s inheritor, and its member-ref dependents are invalidated unconditionally (an implicit change). So the miss needs the split layout, where `T`'s API does not change and the downstream client depends on `T` and `Q`, not `P`. That is Phase 7's [sbt/zinc#1845](https://github.com/sbt/zinc/issues/1845), and the pending test is written that way.
 

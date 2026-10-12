@@ -10,7 +10,12 @@ Checks every `.md` file outside `.lake/` and fails on:
     without a directory only when it is in the document's own directory;
   - a backticked Lean file name that names exactly one file in the repository (`Erasure.lean`);
   - a GitHub reference `owner/repo#N`, or one of the short forms the documents use
-    (`talks#N`, `scala3#N`, `rz#N` for retronym/zinc, `sz#N` for sbt/zinc).
+    (`talks#N`, `scala3#N`, `rz#N` for retronym/zinc, `sz#N` for sbt/zinc);
+  - a backticked Lean declaration (`zinc_diverges`, `XCompiler.round_preserves`) that names
+    exactly one `theorem`, `lemma`, `def`, `abbrev`, `structure`, `inductive` or `class` by a
+    suffix of its full name; it is linked to its line. The name must contain `_` or `.`, or be
+    CamelCase with two capitals (`XCompiler`), so that ordinary words are left alone;
+* a link to a Lean declaration whose line anchor is out of date (the declaration moved).
 
 With `--fix` it rewrites those mentions into links in place, relative to the file, and reports
 what it could not fix. Fenced code blocks, inline code that is not a path, and existing links are
@@ -92,6 +97,50 @@ def rel(md, path):
     return r
 
 
+DECL = re.compile(
+    r'^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|nonrec|unsafe)\s+)*'
+    r'(theorem|lemma|def|abbrev|structure|inductive|class)\s+([^\s:({\[]+)')
+NS_OPEN = re.compile(r'^\s*namespace\s+(\S+)')
+NS_END = re.compile(r'^\s*end\s+(\S+)\s*$')
+
+
+def lean_decls():
+    """Each declaration's dotted suffixes, to the set of (file, line) that define it."""
+    by_suffix = {}
+    for f in FILES:
+        if not f.endswith('.lean'):
+            continue
+        ns = []
+        for n, line in enumerate(open(os.path.join(ROOT, f), encoding='utf-8'), 1):
+            m = NS_OPEN.match(line)
+            if m:
+                ns += m.group(1).split('.')
+                continue
+            m = NS_END.match(line)
+            if m:
+                k = len(m.group(1).split('.'))
+                if ns[-k:] == m.group(1).split('.'):
+                    del ns[-k:]
+                continue
+            m = DECL.match(line)
+            if m:
+                parts = ns + m.group(2).split('.')
+                for i in range(len(parts)):
+                    by_suffix.setdefault('.'.join(parts[i:]), set()).add((f, n))
+    return by_suffix
+
+
+DECLS = lean_decls()
+IDENT = re.compile(r"`([A-Za-z_][A-Za-z0-9_'.]*)`")
+
+
+def decl_target(name):
+    if not ('_' in name or '.' in name or re.fullmatch(r'[A-Z][a-z0-9]*[A-Z][A-Za-z0-9]*', name)):
+        return None
+    hits = DECLS.get(name)
+    return next(iter(hits)) if hits and len(hits) == 1 else None
+
+
 CODE_PATH = re.compile(r'`([A-Za-z0-9_./-]+?\.(?:lean|md|py|sh|java|scala|toml|yml)|[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+/?)(?::(\d+))?`')
 GH_FULL = re.compile(r'(?<![\w/\[.-])([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#(\d+)\b')
 GH_SHORT = re.compile(r'(?<![\w/\[.-])(' + '|'.join(SHORT) + r')#(\d+)\b')
@@ -158,6 +207,32 @@ def process(md, text, fix):
         spans = protected_spans(line2)
         codes = [m.span() for m in INLINE_CODE.finditer(line2)]
         line2 = GH_SHORT.sub(lambda m: gh(m, SHORT[m.group(1)]), line2)
+
+        # Lean declarations: stale anchors on existing links, then unlinked names
+        def anchor(m):
+            name, href = m.group(1), m.group(2)
+            t = decl_target(name)
+            if t is None or not href.split('#')[0].endswith('.lean'):
+                return m.group(0)
+            want = f'{rel(md, t[0])}#L{t[1]}'
+            if href != want:
+                problems.append(f'{md}:{n}: stale link to {name} ({href}, now {want})')
+                return f'[`{name}`]({want})'
+            return m.group(0)
+
+        line2 = re.sub(r'\[`([A-Za-z_][A-Za-z0-9_\'.]*)`\]\(([^)]+)\)', anchor, line2)
+        spans = protected_spans(line2)
+
+        def decl(m):
+            if inside(m.start(), spans) or (m.start() > 0 and line2[m.start() - 1] == '['):
+                return m.group(0)
+            t = decl_target(m.group(1))
+            if t is None:
+                return m.group(0)
+            problems.append(f'{md}:{n}: unlinked declaration {m.group(0)}')
+            return f'[{m.group(0)}]({rel(md, t[0])}#L{t[1]})'
+
+        line2 = IDENT.sub(decl, line2)
         out.append(line2 if fix else line)
     return '\n'.join(out), problems
 

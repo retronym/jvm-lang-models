@@ -13,7 +13,7 @@ The bridge extracts a unit's API from whichever form the compiler holds: the typ
 | [scala/scala3#9730](https://github.com/scala/scala3/issues/9730) | an identity hash in a `toString` inside the API | one run vs the next |
 | [sbt/zinc#237](https://github.com/sbt/zinc/issues/237) | annotations read at the wrong phase (phase travel) | the phase that drops them vs the one that keeps them |
 
-[`JavaOrder.lean`](../Zinc/Features/JavaOrder.lean)'s `flip_spurious` is the two-form Java case (classfile view stored, source view fresh).
+[`JavaOrder.lean`](../Zinc/Features/JavaOrder.lean)'s [`flip_spurious`](../Zinc/Features/JavaOrder.lean#L276) is the two-form Java case (classfile view stored, source view fresh).
 
 ## Model
 
@@ -26,22 +26,22 @@ Forms `F`; a unit's interface `i`; the bridge sees `view f i` and hashes it, `π
 
 | Result | Status |
 |---|---|
-| `abstraction_formed_iff`: abstraction for the formed interface `(f, i)` holds exactly when no form masks a difference | proved |
-| `stable_precise`, `stable_not_spurious`: with form stability a change reported across forms means the interface changed | proved |
-| `unstable_spurious`: without it some unchanged interface reports a change (`Spurious`, precision as a definition) | proved |
-| `canonical_stable`, `canonical_noMasking`: hashing a canonical form through a normalisation of each view is stable and inherits abstraction from the canonical view | proved |
-| `skip_unsound`, `conservative_sound`, `conservative_spurious`: with the form in the key, skipping a cross-form comparison misses a real change; reporting it is sound and spurious whenever the interface did not change | proved |
-| `artefact_bugs`: #1782, #88, [scala3#18080](https://github.com/scala/scala3/issues/18080), #9133, #9730, each a form artefact, each a spurious invalidation | proved, kernel `decide` |
-| `masking_237`: annotations dropped in one form mask an annotation change, so abstraction fails | proved |
+| [`abstraction_formed_iff`](../Zinc/Bridges/HashForms.lean#L52): abstraction for the formed interface `(f, i)` holds exactly when no form masks a difference | proved |
+| [`stable_precise`](../Zinc/Bridges/HashForms.lean#L57), [`stable_not_spurious`](../Zinc/Bridges/HashForms.lean#L60): with form stability a change reported across forms means the interface changed | proved |
+| [`unstable_spurious`](../Zinc/Bridges/HashForms.lean#L64): without it some unchanged interface reports a change (`Spurious`, precision as a definition) | proved |
+| [`canonical_stable`](../Zinc/Bridges/HashForms.lean#L72), [`canonical_noMasking`](../Zinc/Bridges/HashForms.lean#L78): hashing a canonical form through a normalisation of each view is stable and inherits abstraction from the canonical view | proved |
+| [`skip_unsound`](../Zinc/Bridges/HashForms.lean#L89), [`conservative_sound`](../Zinc/Bridges/HashForms.lean#L98), [`conservative_spurious`](../Zinc/Bridges/HashForms.lean#L104): with the form in the key, skipping a cross-form comparison misses a real change; reporting it is sound and spurious whenever the interface did not change | proved |
+| [`artefact_bugs`](../Zinc/Bridges/HashForms.lean#L129): #1782, #88, [scala3#18080](https://github.com/scala/scala3/issues/18080), #9133, #9730, each a form artefact, each a spurious invalidation | proved, kernel `decide` |
+| [`masking_237`](../Zinc/Bridges/HashForms.lean#L144): annotations dropped in one form mask an annotation change, so abstraction fails | proved |
 
 So the cluster splits by obligation: five bugs are precision (an artefact makes an unchanged interface report a change, every run the forms alternate), and #237 is soundness (a form drops a detail, masking a change). The fix is the same shape for both: hash a canonical form, i.e. normalise each view before hashing (the fixes of #1782 and [scala3#18080](https://github.com/scala/scala3/issues/18080) did this for one artefact each: ids not from `fullName`, stable synthetic names). Carrying the form in the key is not a fix: it turns every cross-form comparison into a conservative invalidation.
 
 ## The cluster's scripted tests
 
-On develop: `abstract-type-override`, `type-lambda-refinement-owner`, `unstable-existential-names` (apiinfo), `trait-extends-trait-extra-round`, `trait-local-change`, `fbounded-existentials` pass, each a regression test of one artefact normalised (`canonical_stable` for that artefact). `pipelining/java-comment-change` is pending: the Java instance of `unstable_spurious` (`JavaOrder.flip_spurious`).
+On develop: `abstract-type-override`, `type-lambda-refinement-owner`, `unstable-existential-names` (apiinfo), `trait-extends-trait-extra-round`, `trait-local-change`, `fbounded-existentials` pass, each a regression test of one artefact normalised ([`canonical_stable`](../Zinc/Bridges/HashForms.lean#L72) for that artefact). `pipelining/java-comment-change` is pending: the Java instance of [`unstable_spurious`](../Zinc/Bridges/HashForms.lean#L64) ([`JavaOrder.flip_spurious`](../Zinc/Features/JavaOrder.lean#L276)).
 
 ## Steps
 
 - [x] P17.1 [`HashForms.lean`](../Zinc/Bridges/HashForms.lean): the formed interface, the obligations across forms, precision as a definition, witnesses.
 - [x] P17.2 The cluster's scripted tests mapped (above).
-- [ ] Future: `Spurious` lifted into `Model.lean` as the precision definition (REVIEW finding 4), and the formed interface as a `TCompiler` construction like [`Naming.lean`](../Zinc/Bridges/Naming.lean)'s.
+- [ ] Future: `Spurious` lifted into `Model.lean` as the precision definition (REVIEW finding 4), and the formed interface as a [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L24) construction like [`Naming.lean`](../Zinc/Bridges/Naming.lean)'s.

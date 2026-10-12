@@ -21,13 +21,13 @@ Units carry a namespace (type or term), as the companion halves do. Zinc's key i
 
 | Result | Status |
 |---|---|
-| `merged_spurious`: a key combining the halves moves with the term half while the type half's answers stay | proved, every hash and view |
-| `qualified_precise`, `qualified_sound`: per-namespace keys are not moved by the other half, and are sound when each half's hash determines its answers | proved |
-| `noFold_misses` (#542, #662): a key on the intermediate trait that does not fold the ancestor's private members misses the ancestor's private change | proved |
-| `coldWarm_spurious` (#1794): the fold from the previous analysis, as `HashForms.unstable_spurious` with forms cold and warm | proved |
-| #1793, #1795, #1796 as instances of `merged_spurious` / `qualified_precise` | witnesses, kernel `decide` |
+| [`merged_spurious`](../Zinc/Bridges/ExtraHash.lean#L38): a key combining the halves moves with the term half while the type half's answers stay | proved, every hash and view |
+| [`qualified_precise`](../Zinc/Bridges/ExtraHash.lean#L45), [`qualified_sound`](../Zinc/Bridges/ExtraHash.lean#L50): per-namespace keys are not moved by the other half, and are sound when each half's hash determines its answers | proved |
+| [`noFold_misses`](../Zinc/Bridges/ExtraHash.lean#L57) (#542, #662): a key on the intermediate trait that does not fold the ancestor's private members misses the ancestor's private change | proved |
+| [`coldWarm_spurious`](../Zinc/Bridges/ExtraHash.lean#L71) (#1794): the fold from the previous analysis, as [`HashForms.unstable_spurious`](../Zinc/Bridges/HashForms.lean#L64) with forms cold and warm | proved |
+| #1793, #1795, #1796 as instances of [`merged_spurious`](../Zinc/Bridges/ExtraHash.lean#L38) / [`qualified_precise`](../Zinc/Bridges/ExtraHash.lean#L45) | witnesses, kernel `decide` |
 
-So the lineage alternates between the two obligations: #542 and #662 are soundness (abstraction: the key did not cover what the inheritor reads), fixed by adding a hash and then folding it; each fix then over-reached in precision, because the fold read the wrong compilation (#1794) or the key was the name, not the namespace (#1793, #1795, #1796). The remaining one, #1796, needs the namespace on used names and name hashes, the analysis-format change its issue describes; `qualified_sound` is the condition it must meet.
+So the lineage alternates between the two obligations: #542 and #662 are soundness (abstraction: the key did not cover what the inheritor reads), fixed by adding a hash and then folding it; each fix then over-reached in precision, because the fold read the wrong compilation (#1794) or the key was the name, not the namespace (#1793, #1795, #1796). The remaining one, #1796, needs the namespace on used names and name hashes, the analysis-format change its issue describes; [`qualified_sound`](../Zinc/Bridges/ExtraHash.lean#L50) is the condition it must meet.
 
 ## The cluster's scripted tests
 
@@ -35,7 +35,7 @@ On develop: `trait-private-object`, `-val`, `-val-local-inheritance`, `-val-memb
 
 ## Relevance to the Merkle PoC ([retronym/zinc#24](https://github.com/retronym/zinc/issues/24))
 
-The Merkle hash composes a class's hash from its declarations and its ancestors': it is `extraHash`'s fold made total. The same two conditions apply: the fold must read the current compilation (`coldWarm_spurious`), and its inputs must carry the namespace (`merged_spurious`), or a companion's change moves every inheritor's hash.
+The Merkle hash composes a class's hash from its declarations and its ancestors': it is `extraHash`'s fold made total. The same two conditions apply: the fold must read the current compilation ([`coldWarm_spurious`](../Zinc/Bridges/ExtraHash.lean#L71)), and its inputs must carry the namespace ([`merged_spurious`](../Zinc/Bridges/ExtraHash.lean#L38)), or a companion's change moves every inheritor's hash.
 
 ## Steps
 

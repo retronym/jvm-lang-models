@@ -32,29 +32,29 @@ What an edge stands for: `invalidateClassesInternally` invalidates, for a class 
 
 | Bug or prediction | Use | Failed obligation | Witness |
 |---|---|---|---|
-| [sbt/zinc#830](https://github.com/sbt/zinc/issues/830) (Scala 2 before #1288) | lambda | coverage: the walk of `t` has only `(t, present)` | `w830_pre` |
-| [sbt/zinc#192](https://github.com/sbt/zinc/issues/192) (Java before #217) | anonymous class | coverage: no key at all | `w192_pre` |
-| **P1** (Java today): a lambda passed to `O.run(F)`, `F`'s abstract method changes | lambda argument | coverage: `F`'s walk has no key; `J`'s constant pool names `O` and `J` only (checked with javac 21; clean v1: "incompatible parameter types in lambda expression") | `p1_today` |
-| **P2** (Scala 2.13, Scala 3, Java today): `run(F1)` and `run(F2)`, `F1` not functional; `F1` gains a default and becomes functional | lambda argument | coverage: the unchosen alternative's parameter type is walked with no key (checked: v0 compiles, v1 ambiguous on scalac 2.13.16, Scala 3.7.3 and javac 21) | `p2_today` |
+| [sbt/zinc#830](https://github.com/sbt/zinc/issues/830) (Scala 2 before #1288) | lambda | coverage: the walk of `t` has only `(t, present)` | [`w830_pre`](../Zinc/Features/Sam.lean#L548) |
+| [sbt/zinc#192](https://github.com/sbt/zinc/issues/192) (Java before #217) | anonymous class | coverage: no key at all | [`w192_pre`](../Zinc/Features/Sam.lean#L557) |
+| **P1** (Java today): a lambda passed to `O.run(F)`, `F`'s abstract method changes | lambda argument | coverage: `F`'s walk has no key; `J`'s constant pool names `O` and `J` only (checked with javac 21; clean v1: "incompatible parameter types in lambda expression") | [`p1_today`](../Zinc/Features/Sam.lean#L563) |
+| **P2** (Scala 2.13, Scala 3, Java today): `run(F1)` and `run(F2)`, `F1` not functional; `F1` gains a default and becomes functional | lambda argument | coverage: the unchosen alternative's parameter type is walked with no key (checked: v0 compiles, v1 ambiguous on scalac 2.13.16, Scala 3.7.3 and javac 21) | [`p2_today`](../Zinc/Features/Sam.lean#L569) |
 | [sbt/zinc#1528](https://github.com/sbt/zinc/issues/1528) | same-source classes | not coverage: a policy obligation of the files layer. Zinc drops same-source `memberRef` edges and relies on recompiling the whole source, so every class of a recompiled source must be compared after the round (the fix adds `invalidatedSources`' classes to `recompiledClasses`). With a class compiled but not compared, `changed` misses its change and its dependents | stated for [`Files.lean`](../Zinc/Loop/Files.lean) (the files layer, coded in parallel); not in [`Sam.lean`](../Zinc/Features/Sam.lean) |
 
 ## The fix, as keys with cost
 
-`fix`: for a lambda in argument position, a local-inheritance edge (the walk's `api` keys) on the parameter type of **every** alternative considered, not only the chosen one; Java's extractor reads the SAM types from the `invokedynamic` and `Methodref` descriptors (or javac's tree) and records the same. Cost: one edge per SAM-typed parameter of each alternative of each overloaded method called with a lambda; nothing outside lambdas in argument position (`fix_eq_today` there). Precision: the edge has the whole API as hash, so any change to an alternative's parameter type recompiles the client, as today's edge on the chosen type does.
+`fix`: for a lambda in argument position, a local-inheritance edge (the walk's `api` keys) on the parameter type of **every** alternative considered, not only the chosen one; Java's extractor reads the SAM types from the `invokedynamic` and `Methodref` descriptors (or javac's tree) and records the same. Cost: one edge per SAM-typed parameter of each alternative of each overloaded method called with a lambda; nothing outside lambdas in argument position ([`fix_eq_today`](../Zinc/Features/Sam.lean#L495) there). Precision: the edge has the whole API as hash, so any change to an alternative's parameter type recompiles the client, as today's edge on the chosen type does.
 
 ## Results ([`packages/zinc/Zinc/Features/Sam.lean`](../Zinc/Features/Sam.lean))
 
-A `TCompiler` over an arbitrary finite set of names, for top-level clients whose bodies hold lambdas (target named, or in argument position) and anonymous or local classes; types declare interface-ness, parents and methods. Keys per design are read off the output (`recKeys`).
+A [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L24) over an arbitrary finite set of names, for top-level clients whose bodies hold lambdas (target named, or in argument position) and anonymous or local classes; types declare interface-ness, parents and methods. Keys per design are read off the output (`recKeys`).
 
 | Result | Status |
 |---|---|
 | `obligations_fix`, `fix_sound`: the fix meets `comp`, coverage and abstraction, and T3a holds | proved, every program |
-| `obligations_today_argFree`, `today_sound_argFree`: today's bridges (Scala 2.13.13+, Scala 3, Java after #217) meet the obligations on the sources without a lambda in argument position | proved, every program |
-| `today_sub_fix`, `fix_eq_today`: the fix records everything today does, and exactly that on outputs without a lambda in argument position | proved, every output |
-| `w830_pre` ([sbt/zinc#830](https://github.com/sbt/zinc/issues/830)): Scala 2 before #1288, a lambda's walk has only `(t, present)`; the lowering changes with the SAM's result (`example`) | proved, one witness |
-| `w192_pre` ([sbt/zinc#192](https://github.com/sbt/zinc/issues/192)): Java before #217, an anonymous class records nothing | proved, one witness |
-| **P1** `p1_today`: Java today, `O.run(() -> 1)`, the SAM type has no key | proved, one witness; checked with javac 21 (constant pool, clean v1 fails) |
-| **P2** `p2_today`: Scala today, the unchosen alternative `run(F1)` has no key; making `F1` functional makes the call ambiguous (`example`) | proved, one witness; checked with scalac 2.13.16, Scala 3.7.3 and javac 21 |
+| [`obligations_today_argFree`](../Zinc/Features/Sam.lean#L453), [`today_sound_argFree`](../Zinc/Features/Sam.lean#L466): today's bridges (Scala 2.13.13+, Scala 3, Java after #217) meet the obligations on the sources without a lambda in argument position | proved, every program |
+| [`today_sub_fix`](../Zinc/Features/Sam.lean#L477), [`fix_eq_today`](../Zinc/Features/Sam.lean#L495): the fix records everything today does, and exactly that on outputs without a lambda in argument position | proved, every output |
+| [`w830_pre`](../Zinc/Features/Sam.lean#L548) ([sbt/zinc#830](https://github.com/sbt/zinc/issues/830)): Scala 2 before #1288, a lambda's walk has only `(t, present)`; the lowering changes with the SAM's result (`example`) | proved, one witness |
+| [`w192_pre`](../Zinc/Features/Sam.lean#L557) ([sbt/zinc#192](https://github.com/sbt/zinc/issues/192)): Java before #217, an anonymous class records nothing | proved, one witness |
+| **P1** [`p1_today`](../Zinc/Features/Sam.lean#L563): Java today, `O.run(() -> 1)`, the SAM type has no key | proved, one witness; checked with javac 21 (constant pool, clean v1 fails) |
+| **P2** [`p2_today`](../Zinc/Features/Sam.lean#L569): Scala today, the unchosen alternative `run(F1)` has no key; making `F1` functional makes the call ambiguous (`example`) | proved, one witness; checked with scalac 2.13.16, Scala 3.7.3 and javac 21 |
 
 Proved for every program: the four obligations-and-soundness results and the cost. Checked: the witnesses (kernel `decide` on one program each) and the compiler behaviour behind P1 and P2 (javac, scalac, dotc on the probes in this file's table). Checked against Zinc: the pending tests below ([retronym/zinc#58](https://github.com/retronym/zinc/issues/58)) fail on develop as predicted, P2 on Scala 2.13, Scala 3 and Java.
 
@@ -62,8 +62,8 @@ Simplifications: one lambda arity and no parameter types for the lambda; members
 
 ### Pending tests (predicted misses)
 
-- `sam-java-lambda-argument` (Java client): `F.java` `interface F { int apply(); }`, `O.java` `class O { static void run(F f) {} }`, `J.java` `class J { void go() { O.run(() -> 1); } }`; change `F.apply` to take an `int`. Expected: `J` fails to compile. Predicted with Zinc today: `J` is not recompiled (`p1_today`).
-- `sam-overload-becomes-functional` (Scala client, and a Java variant): `trait F1 { def apply(): Int; def other(): Int }`, `trait F2 { def apply(): Int }`, `object P { def run(f: F1) = (); def run(f: F2) = () }`, `class K { def go = P.run(() => 1) }`; give `F1.other` a default. Expected: ambiguity error. Predicted with Zinc today: `K` is not recompiled (`p2_today`).
+- `sam-java-lambda-argument` (Java client): `F.java` `interface F { int apply(); }`, `O.java` `class O { static void run(F f) {} }`, `J.java` `class J { void go() { O.run(() -> 1); } }`; change `F.apply` to take an `int`. Expected: `J` fails to compile. Predicted with Zinc today: `J` is not recompiled ([`p1_today`](../Zinc/Features/Sam.lean#L563)).
+- `sam-overload-becomes-functional` (Scala client, and a Java variant): `trait F1 { def apply(): Int; def other(): Int }`, `trait F2 { def apply(): Int }`, `object P { def run(f: F1) = (); def run(f: F2) = () }`, `class K { def go = P.run(() => 1) }`; give `F1.other` a default. Expected: ambiguity error. Predicted with Zinc today: `K` is not recompiled ([`p2_today`](../Zinc/Features/Sam.lean#L569)).
 
 ### [sbt/zinc#1528](https://github.com/sbt/zinc/issues/1528)
 
