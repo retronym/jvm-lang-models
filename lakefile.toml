@@ -49,7 +49,7 @@ path = "packages/harness"
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.34.1"
+rev = "v4.34.0"
 
 [[lean_lib]]
 name = "All"

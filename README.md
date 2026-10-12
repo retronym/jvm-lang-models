@@ -17,7 +17,7 @@ History: the Zinc model started in retronym/talks (`zinc-incrementality/lean/`, 
 lake exe cache get && lake build
 ```
 
-Lean `v4.34.1`, Mathlib `v4.34.1`, one toolchain for the workspace. `lake build` at the root builds `All`, which imports every library. `MiMa.Sound` is outside it: `lake build MiMa.Sound` (about half an hour).
+Lean `v4.34.0`, Mathlib `v4.34.0`, one toolchain for the workspace and its doc builds (doc-gen4 and Verso `v4.34.0`). `lake build` at the root builds `All`, which imports every library. `MiMa.Sound` is outside it: `lake build MiMa.Sound` (about half an hour).
 
 ## Packages
 

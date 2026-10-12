@@ -18,7 +18,7 @@ path = "../scala-types"
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.34.1"
+rev = "v4.34.0"
 
 # The name-resolution spaces, compiled to native code so that `native_decide` over them (in
 # `Zinc.Features.NamesRules`) does not run in the interpreter.
