@@ -664,6 +664,38 @@ def j4 : List Case :=
   [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate, ifaceHookPackagePrivate, nestMemberRemoved,
    nestHostChanged]
 
+/-! ## JVMS §5.3.5's order of loading checks
+
+§5.3.5 resolves the superclass by §5.4.3.1, whose last step is access control, and then checks it (step
+3: not an interface, not final, sealed), and only then resolves and checks the superinterfaces (step
+4). Each case breaks two of these at once, so the exception says which check ran first. HotSpot 21, 25
+and 27 check in another order, and the model follows HotSpot (`Jvm.loadK`). -/
+
+/-- The superclass is final and, from the client's package, inaccessible. By §5.3.5 step 3 the
+superclass's resolution fails its access check first, an `IllegalAccessError`; HotSpot reports the
+final superclass ("cannot inherit from final class"), an `IncompatibleClassChangeError`. -/
+def finalSuperInaccessible : Case where
+  name := "finalSuperInaccessible"
+  mima := none
+  v0 := [(.A, { header := { p1 with isFinal := true, isPublic := false } })]
+  v1 := [(.A, { header := { p1 with isFinal := true, isPublic := false } })]
+  client := [(.X, { header := { super := some .A } })]
+  prog := { loads := [.X] }
+
+/-- A superinterface that is a class, and an inaccessible superclass. §5.3.5 resolves the superclass in
+step 3, before the superinterfaces in step 4, so an `IllegalAccessError`; HotSpot checks the
+superinterfaces first ("can not implement B, because it is not an interface"), an
+`IncompatibleClassChangeError`. -/
+def ifaceNotIfaceSuperInaccessible : Case where
+  name := "ifaceNotIfaceSuperInaccessible"
+  mima := none
+  v0 := [(.A, { header := { p1 with isPublic := false } }), (.B, {})]
+  v1 := [(.A, { header := { p1 with isPublic := false } }), (.B, {})]
+  client := [(.X, { header := { super := some .A, ifaces := [.B] } })]
+  prog := { loads := [.X] }
+
+def jSpec : List Case := [finalSuperInaccessible, ifaceNotIfaceSuperInaccessible]
+
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
    becomesFinal, methodBecomesFinal, superclassRemoved, defaultRemoved, defaultConflict,
@@ -743,5 +775,9 @@ example : ifaceHookPackagePrivate.before = .ok [.J] ∧
     ifaceHookPackagePrivate.after = .error .illegalAccess := by decide
 example : nestMemberRemoved.before = .ok [.B, .A] ∧ nestMemberRemoved.after = .error .illegalAccess := by decide
 example : nestHostChanged.before = .ok [.B, .A] ∧ nestHostChanged.after = .error .illegalAccess := by decide
+
+/-- The model follows HotSpot, not the order of §5.3.5. -/
+example : finalSuperInaccessible.before = .error .finalSuper ∧
+    ifaceNotIfaceSuperInaccessible.before = .error .incompatibleClassChange := by decide
 
 end Jvm.Catalogue

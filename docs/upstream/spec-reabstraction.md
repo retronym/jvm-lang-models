@@ -35,7 +35,7 @@ trait T { val m: String = "" }
 abstract class D extends T { def m: String }   // 2.13: ok; 3.9: "needs to be a stable, immutable value"
 ```
 
-Over the 4,704 hierarchies of [`Scala.Members.membersSpace`](../../packages/scala-types/ScalaTypes/Members.lean#L466) and the 192,000 of `FlatRules`, this rule and the trait re-abstraction above are the only programs one compiler accepts and the other rejects.
+Over the 4,704 hierarchies of [`Scala.Members.membersSpace`](../../packages/scala-types/ScalaTypes/Members.lean#L497) and the 192,000 of `FlatRules`, this rule and the trait re-abstraction above are the only programs one compiler accepts and the other rejects.
 
 Java and the JVM take the other extreme: an abstract redeclaration always hides an inherited concrete one (JLS §9.4.1, JVMS §5.4.6).
 

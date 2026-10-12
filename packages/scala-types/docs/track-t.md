@@ -180,7 +180,7 @@ The first space (step 3) therefore takes the two-views shape as its core, since 
 - **dotc's `checkRealizable`:** a type selection written on a `lazy val` whose type has conflicting bounds.
 - **scalac's override check on `new A with B {}`.**
 
-**The space.** [`Paths.space`](../ScalaTypes/Paths.lean#L117) has 2,430 programs:
+**The space.** [`Paths.space`](../ScalaTypes/Paths.lean#L125) has 2,430 programs:
 
 - `A`'s and `B`'s `L` bounded below by `Nothing`, `Int` or `String`, and above by `Any`, `Int` or `String`;
 - five paths: a `null` val, a `lazy val` of `???`, a parameter passed `null`, a `null` field, and `new`;
