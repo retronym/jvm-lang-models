@@ -19,8 +19,7 @@ the new library. Both are questions about a task's trace against an edited envir
 The model is generic in class, method-name and descriptor types. Calibrated against HotSpot 21, 25
 and 27 by `packages/jvm/probes`. Not modelled: nestmates (private access is same-class only), method bodies
 (a library method's own calls), signature-polymorphic methods, `Object`'s methods in interface
-resolution, loader constraints, class initialisation, protected constructors, modules (all classes are in one), and transitive overriding through an
-intermediate package-private method (§5.4.5's second case). Linking is lazy, as on the JVM: an error is raised by
+resolution, loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
 the first site that hits it; a class is loaded, with its loading checks, when it is first referred
 to, and each site is verified just before it runs (as if each site were its own method).
 -/
@@ -189,12 +188,36 @@ def chain (inst : Bool) (n : N) (d : D) : Nat → C → M C N D (Option (C × Me
       | none => pure none
       | some s => chain inst n d k s
 
-/-- Does `(x, mi)` override `(a, ma)` (§5.4.5, without the transitive case)? Private and static
-methods neither override nor are overridden; a package-private method only from its package. -/
-def overrides (x : C) (mi : MethodInfo) (a : C) (ma : MethodInfo) : M C N D Bool := do
-  if mi.isStatic || mi.access = .priv || ma.isStatic || ma.access = .priv then return false
-  if ma.access = .pkg then return (← hdr x).pkg = (← hdr a).pkg
-  pure true
+/-- The superclasses of `c` (from `c` itself) before `a`, if `a` is one of them. -/
+def below (a : C) : Nat → C → M C N D (Option (List C))
+  | 0, _ => pure none
+  | k + 1, c => do
+    if c = a then return some []
+    match (← hdr c).super with
+    | none => pure none
+    | some s => pure ((← below a k s).map (c :: ·))
+
+/-- Can `(x, mi)` override `(a, ma)`, both named `n` with descriptor `d` (§5.4.5)? Private and
+static methods neither override nor are overridden. A package-private `ma` is overridden from its
+own run-time package, or (case (b)) through a method `mb` of a class between them that `mi` can
+override and that can override `ma`. -/
+def overridesK (n : N) (d : D) : Nat → C → MethodInfo → C → MethodInfo → M C N D Bool
+  | 0, _, _, _, _ => pure false
+  | k + 1, x, mi, a, ma => do
+    if mi.isStatic || mi.access = .priv || ma.isStatic || ma.access = .priv then return false
+    if ma.access != .pkg then return true
+    if (← hdr x).pkg = (← hdr a).pkg then return true
+    let some s := (← hdr x).super | return false
+    let some bs ← below a depth s | return false
+    for b in bs do
+      if let some mb ← askMethod b n d then
+        if (← overridesK n d k x mi b mb) && (← overridesK n d k b mb a ma) then return true
+    return false
+
+/-- `overridesK` with the hierarchy's depth bound. -/
+def overrides (n : N) (d : D) (x : C) (mi : MethodInfo) (a : C) (ma : MethodInfo) :
+    M C N D Bool :=
+  overridesK n d depth x mi a ma
 
 /-- Selection's walk (§5.4.6 step 2): the first declaration in `c` or a superclass that overrides
 the resolved method `(a, ma)`. -/
@@ -205,7 +228,7 @@ def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo) :
     let h ← hdr c
     let here ← match ← askMethod c n d with
       | some i => if c = a then pure (some (c, i))
-                  else if ← overrides c i a ma then pure (some (c, i)) else pure none
+                  else if ← overrides n d c i a ma then pure (some (c, i)) else pure none
       | none => pure none
     match here with
     | some r => pure (some r)
@@ -251,7 +274,7 @@ def loadK : Nat → C → M C N D Unit
         if !hi.isPublic && hi.pkg != h.pkg then throw .illegalAccess
       for (n, d, mi) in ← askDeclared x do
         if let some (a, si) ← chain true n d depth s then
-          if si.isFinal && (← overrides x mi a si) then throw .finalOverride
+          if si.isFinal && (← overrides n d x mi a si) then throw .finalOverride
 
 def load (x : C) : M C N D Unit := loadK depth x
 
@@ -511,8 +534,9 @@ def runSiteK (cur : Cur C) : Site C N D → M C N D C
     runSiteK (some x) s
   | .construct c n d => do
     instantiate cur c
-    -- Resolution walks the superclasses as for any method; HotSpot then requires a constructor to
-    -- be declared by `c` itself (`linktime_resolve_special_method`).
+    -- Resolution walks the superclasses as for any method, with its access check; then the
+    -- constructor must be declared by `c` itself (JVMS §6.5 `invokespecial`, linking exceptions;
+    -- HotSpot's `linktime_resolve_special_method`).
     let (a, _) ← resolveClass cur c n d
     if a != c then throw .noSuchMethod
     pure c

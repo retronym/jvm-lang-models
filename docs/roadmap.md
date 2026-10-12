@@ -4,13 +4,13 @@
 
 The Lean model was built to answer one question: is Zinc's invalidation sound, relative to obligations on the compiler bridge? To answer it, each feature file (`Erasure`, `Hier`, `Flat`, `Inline`, `Names`, …) has its own toy language, sized to what Zinc hashes. The toys found real bugs, but they are private to one consumer. Factored out, the same knowledge answers other questions:
 
-- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L542)).
+- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L566)).
 - **IDE type systems.** The TCK (`retronym/scala-type-system-tck`) checks IntelliJ against an `asSeenFrom` model that now shares its core with the Scala layer.
 - **Scala 2 → 3 migration.** The name-resolution calibration in [talks#21](https://github.com/retronym/talks/issues/21) is already a list of differences between the two compilers.
 
 ## Architecture
 
-The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L72), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L523) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L373) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
+The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L71), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L547) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L396) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
 
 ## Done
 
@@ -37,7 +37,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Why.** These are what [`packages/jvm/Jvm/Link.lean`](../packages/jvm/Jvm/Link.lean) still says it doesn't model, and each can hide a MiMa gap.
 
-**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; a space over two client classes; protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
+**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); `Object`'s methods in interface resolution; clients in the library's package; a space over two client classes; protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
 
 ### Track B3: source-level spaces
 

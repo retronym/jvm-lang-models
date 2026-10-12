@@ -6,8 +6,8 @@ Zinc asks whether a client must be *recompiled*; binary compatibility asks wheth
 
 ## What was built
 
-- **[`packages/jvm/Jvm/Link.lean`](../Jvm/Link.lean).** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: [`link_congr`](../Jvm/Link.lean#L542). `Compatible` and [`compatible_of_footprint`](../Jvm/Link.lean#L552) state binary compatibility and prove it where the edit misses the footprint.
-- **The contract.** [`Jvm.World`](../Jvm/Link.lean#L72) (classfiles), [`Jvm.Program`](../Jvm/Link.lean#L523) (what a client loads and executes) and [`Jvm.Site`](../Jvm/Link.lean#L373). Front ends produce a `World`; consumers read one. These types were changed only additively.
+- **[`packages/jvm/Jvm/Link.lean`](../Jvm/Link.lean).** Linking as a `Task` over the class table: loading checks, resolution (JVMS §5.4.3.2–4), selection (§5.4.6) and access (§5.4.4, plus the verifier's receiver, `invokespecial` and protected rules). Its trace is the client's *linkage footprint*, so T1 applies unchanged: [`link_congr`](../Jvm/Link.lean#L566). `Compatible` and [`compatible_of_footprint`](../Jvm/Link.lean#L576) state binary compatibility and prove it where the edit misses the footprint.
+- **The contract.** [`Jvm.World`](../Jvm/Link.lean#L71) (classfiles), [`Jvm.Program`](../Jvm/Link.lean#L547) (what a client loads and executes) and [`Jvm.Site`](../Jvm/Link.lean#L396). Front ends produce a `World`; consumers read one. These types were changed only additively.
 - **Sites as javac emits them.** `C c = new R(); c.m()` is `new R; invokespecial R.<init>; invokevirtual C.m`, so the verifier's upcast check, instantiation and load-on-reference are part of `Site` semantics. `Site.construct c n d` is `new c(…)`.
 - **[`packages/jvm/Jvm/Catalogue.lean`](../Jvm/Catalogue.lean).** 45 library edits, each with MiMa's expected problem, linked before and after by kernel `decide`.
 - **[`packages/jvm/Jvm/Clients.lean`](../Jvm/Clients.lean).** `breaksSomeClient k`: some client in a bounded space links on `v0` and fails on `v1`. `changesSomeClient k`: some client links on both and runs a different method (the first form of "links, but runs different code"). Clients must be well-typed against `v0`. Three spaces: `space` (15,652 programs; an optional client class `X` and one call site of any kind), `space3` (44,144; adds fields, `invokespecial`, interface statics, sites inside `X`), `space5` (14,256; constructors and `new`).
@@ -25,14 +25,15 @@ Steps:
 
 **Calibration.** On Temurin 21.0.12, 25.0.4 and 27, the probe agrees with the model on every catalogue case and on every program of `space`, `space3` and `space5` (58,400 programs in the full run), apart from two known HotSpot bugs on JDK 21, below.
 
-**[`LinkError`](../Jvm/Link.lean#L112) to the JVM's exceptions**, the same on all three JDKs: `noClassDef` → `NoClassDefFoundError`, `incompatibleClassChange` → `IncompatibleClassChangeError`, `noSuchMethod` → `NoSuchMethodError`, `noSuchField` → `NoSuchFieldError`, `abstractMethod` → `AbstractMethodError`, `instantiation` → `InstantiationError`, `illegalAccess` → `IllegalAccessError`, `verify` → `VerifyError`. `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`, not `VerifyError`.
+**[`LinkError`](../Jvm/Link.lean#L111) to the JVM's exceptions**, the same on all three JDKs: `noClassDef` → `NoClassDefFoundError`, `incompatibleClassChange` → `IncompatibleClassChangeError`, `noSuchMethod` → `NoSuchMethodError`, `noSuchField` → `NoSuchFieldError`, `abstractMethod` → `AbstractMethodError`, `instantiation` → `InstantiationError`, `illegalAccess` → `IllegalAccessError`, `verify` → `VerifyError`. `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`, not `VerifyError`.
 
 **What calibration added to the model.** Each of these was a disagreement first, and is now a rule:
 - Loading a class checks that its superclass and superinterfaces are accessible (`IllegalAccessError`).
 - The verifier's `invokespecial` rule turns on whether the referenced class is an interface, not on the constant's tag. An `InterfaceMethodref` to a class passes the verifier and fails resolution with ICCE; a reference to an interface that is not a direct superinterface is a `VerifyError`.
 - The protected-receiver check (§4.10.1.8), predicted by `methodBecomesProtectedOther`.
 - `PermittedSubclasses` (JVMS §5.3.5) is checked after the final-superclass check and before the access check, as HotSpot's class file parser does: the class must be listed and, unless public, in the sealed type's run-time package.
-- A constructor resolves like any method, walking superclasses with an access check, but HotSpot then requires it to be declared by `c` itself, so an inherited match is `noSuchMethod` (`ctorPulledUp`).
+- A constructor resolves like any method, walking superclasses with an access check, and must then be declared by `c` itself (JVMS §6.5 `invokespecial`, linking exceptions), so an inherited match is `noSuchMethod` (`ctorPulledUp`). The access check comes first: an inherited private match is `illegalAccess` (`ctorPulledUpPrivate`).
+- Transitive overriding (§5.4.5 (b)): a package-private method is also overridden from another package through an intermediate method that overrides it and is overridden in turn. Found by encoding the JVMS's own example as `transitiveOverride`: the model, without (b), predicted `I.m` after the intermediate method became public, and HotSpot 21, 25 and 27 run `X.m`. The calibration spaces had not found it: no client of `space3` declares a package-private method in another package below two library classes.
 
 **Known JDK bugs hit by the probe**, both fixed in JDK 25. The model follows the JVMS; the probe reports the JDK 21 results as known deviations.
 - [JDK-8356942](https://bugs.openjdk.org/browse/JDK-8356942): `invokeinterface` on a receiver with two maximally-specific defaults throws `AbstractMethodError` instead of ICCE (`defaultConflict`). Regressed in JDK 10.
@@ -77,6 +78,7 @@ Steps:
 | `fieldShadowed` | — | links, runs `B` | same | no | yes (42/165) |
 | `fieldIfaceBeforeSuper` | — | links, runs `I` | same | yes (37/224) | yes (37/224) |
 | `putstaticBecomesFinal` | — | `illegalAccess` | `IllegalAccessError` | yes (13/49) | no |
+| `transitiveOverride` | — | links, runs `X` | same | no (0/60) | no (0/60); the case's own client changes, but no client of `space3` has the shape |
 | `classBecomesSealed` | — | `incompatibleClassChange` | `IncompatibleClassChangeError` | yes (15/32) | no |
 | `classBecomesSealedPermitting` | — | links | same | no | no |
 | `ifaceBecomesSealed` | — | `incompatibleClassChange` | `IncompatibleClassChangeError` | yes (7/14) | no |
@@ -86,13 +88,14 @@ Steps:
 | `ctorBecomesPrivate` | DirectMissingMethodProblem | `illegalAccess` | `IllegalAccessError` | yes (9/41) | no |
 | `ctorBecomesPackagePrivate` | InaccessibleMethodProblem | `illegalAccess` | `IllegalAccessError` | yes (9/41) | no |
 | `ctorPulledUp` | DirectMissingMethodProblem | `noSuchMethod` | `NoSuchMethodError` | yes (13/86) | no |
+| `ctorPulledUpPrivate` | DirectMissingMethodProblem | `illegalAccess` | `IllegalAccessError` | yes (13/86) | no |
 | `ctorClassBecomesAbstract` | AbstractClassProblem | `instantiation` | `InstantiationError` | yes (27/41) | no |
 
 MiMa 1.2.1 is silent on five cases that break some client: `defaultConflict`, `overrideBecomesPrivate`, `fieldIfaceBeforeSuper`, `fieldBecomesFinal` and `putstaticBecomesFinal`. Track B explains each as a gap.
 
 ## Not modelled
 
-Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; transitive overriding through an intermediate package-private method (§5.4.5); clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in [`docs/roadmap.md`](../../../docs/roadmap.md).
+Nestmates (private access is same-class only); method bodies, so a library method's own calls and constants folded into the client (Track J4); `Object`'s methods in interface resolution; clients in the library's package; spaces over two client classes; protected constructors and constructor chaining between library classes; signature-polymorphic methods, loader constraints, class initialisation, modules. The open ones are in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## PRs
 

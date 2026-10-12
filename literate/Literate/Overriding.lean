@@ -45,9 +45,50 @@ On the rule that decides most binary-compatibility questions, package access, th
 The JLS compares signatures after substitution, the JVMS compares erased descriptors.
 Where they differ, for example an override that narrows a generic method's parameter type, javac
 emits a bridge method so that the JVM's relation holds as well.
-The model of the JVM states §5.4.5 without the transitive case (b):
+The model of the JVM states §5.4.5 with both of its package cases:
 
 {docstring Jvm.overrides}
+
+# Transitive overriding
+
+Case (b) lets a package-private method be overridden from another package, through a method in
+between. The JVMS gives an example with four classes:
+
+```
+package P;
+public class A { void m() {} }
+public class B extends A { public void m() {} }
+public class C extends B { void m() {} }
+
+// in another package
+public class D extends P.C { void m() {} }
+```
+
+> Part (b) of the final case allows for "transitive overriding" of methods with default access.
+
+  then: B.m can override A.m. C.m can override B.m and A.m. D.m can override B.m and, transitively, A.m, but it cannot override C.m.
+
+— [JVMS §5.4.5](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-5.html#jvms-5.4.5), Java SE 21.
+
+Until this page was written the model left (b) out, and the JVM documentation listed it as not
+modelled. Encoding the example as an edit showed that the omission changes a prediction.
+The catalogue's `transitiveOverride` starts with `B.m` package-private, so that nothing overrides
+`A.m` transitively, and makes it public. `I` plays the JVMS's `C`, the client's `X` plays `D`, and a
+class in package 1 calls `A.m` on an `X`:
+
+```lean
+open Jvm.Catalogue
+
+example : transitiveOverride.before = .ok [.I] ∧
+    transitiveOverride.after = .ok [.X] := by
+  decide
+```
+
+After the edit `X.m` overrides `A.m` through `B.m`, so the call runs `X.m`. Without (b) the model
+said `I.m`. HotSpot 21, 25 and 27 run `X.m`. The edit only widens access, which JLS §13.4.7 does not
+expect to break anything, and MiMa 1.2.1 reports nothing, yet a pre-existing client now runs
+different code. The calibration spaces vary the clients of the catalogue's edits, and no edit had a method between
+the overridden one and the client's, so calibration had not found the gap.
 
 # Selection
 

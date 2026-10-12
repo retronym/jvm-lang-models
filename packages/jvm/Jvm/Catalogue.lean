@@ -352,6 +352,24 @@ def putstaticBecomesFinal : Case where
   v1 := [(.A, { fields := [(.m, .s, { isStatic := true, isFinal := true })] })]
   prog := { sites := [putstatic .A .m .s] }
 
+/-- JVMS §5.4.5's own example of transitive overriding, as an edit. In package 1, `A.m` is
+package-private, `B extends A` and `I extends B` (`I` is a class here) redeclare `m`; the client's
+`X extends I` in another package declares a package-private `m`, and its class `J` in package 1 calls
+`A.m` on an `X`. The edit makes `B.m` public: by (b) of §5.4.5, `X.m` then overrides `A.m` through
+`B.m`, so selection picks `X.m`. Until the model had (b), it still picked `I.m`; HotSpot 21, 25 and 27 pick `X.m`. -/
+def transitiveOverride : Case where
+  name := "transitiveOverride"
+  mima := none
+  v0 := [(.A, { header := p1, methods := [(.m, .v, { access := .pkg })] }),
+         (.B, { header := { p1 with super := some .A }, methods := [(.m, .v, { access := .pkg })] }),
+         (.I, { header := { p1 with super := some .B }, methods := [(.m, .v, { access := .pkg })] })]
+  v1 := [(.A, { header := p1, methods := [(.m, .v, { access := .pkg })] }),
+         (.B, { header := { p1 with super := some .A }, methods := [(.m, .v, inst)] }),
+         (.I, { header := { p1 with super := some .B }, methods := [(.m, .v, { access := .pkg })] })]
+  client := [(.X, { header := { super := some .I }, methods := [(.m, .v, { access := .pkg })] }),
+             (.J, { header := p1 })]
+  prog := { sites := [within .J (invokevirtual .A .m .v .X)] }
+
 def j3 : List Case :=
   [methodBecomesPrivate, methodBecomesPackagePrivate, classBecomesPackagePrivate,
    methodBecomesProtected, methodBecomesProtectedSub, methodBecomesProtectedOther,
@@ -359,7 +377,7 @@ def j3 : List Case :=
    superCallAbstract, defaultSuperCallAbstract, staticIfaceMethodRemoved, staticMovedToIface,
    defaultBecomesStatic, defaultBecomesPrivate, fieldRemoved, fieldBecomesStatic,
    fieldBecomesFinal, fieldBecomesPrivate, fieldShadowed, fieldIfaceBeforeSuper,
-   putstaticBecomesFinal]
+   putstaticBecomesFinal, transitiveOverride]
 
 /-! ## Track J5: sealed classes and constructors
 
@@ -447,6 +465,17 @@ def ctorPulledUp : Case where
   v1 := [(.A, { methods := [ctor0, ctorI] }), (.B, { header := { super := some .A }, methods := [ctor0] })]
   prog := { sites := [construct .B .init .iv] }
 
+/-- The constructor moves up as in `ctorPulledUp`, but becomes private there. Resolution finds
+`A.<init>(I)V` and its access check fails before `invokespecial`'s check that the constructor is
+declared by `B` (JVMS §6.5 `invokespecial`, linking exceptions), so the error is `IllegalAccessError`
+rather than `NoSuchMethodError`. -/
+def ctorPulledUpPrivate : Case where
+  name := "ctorPulledUpPrivate"
+  mima := some "DirectMissingMethodProblem"
+  v0 := [(.A, { methods := [ctor0] }), (.B, { header := { super := some .A }, methods := [ctor0, ctorI] })]
+  v1 := [(.A, { methods := [ctor0, ctorI .priv] }), (.B, { header := { super := some .A }, methods := [ctor0] })]
+  prog := { sites := [construct .B .init .iv] }
+
 /-- The class becomes abstract: `new` fails before the constructor resolves. -/
 def ctorClassBecomesAbstract : Case where
   name := "ctorClassBecomesAbstract"
@@ -458,7 +487,7 @@ def ctorClassBecomesAbstract : Case where
 def j5 : List Case :=
   [classBecomesSealed, classBecomesSealedPermitting, ifaceBecomesSealed,
    sealedPermitsNonPublicElsewhere, sealedPermitsPublicElsewhere, ctorRemoved, ctorBecomesPrivate,
-   ctorBecomesPackagePrivate, ctorPulledUp, ctorClassBecomesAbstract]
+   ctorBecomesPackagePrivate, ctorPulledUp, ctorPulledUpPrivate, ctorClassBecomesAbstract]
 
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
@@ -512,6 +541,7 @@ example : fieldBecomesPrivate.before = .ok [.A] ∧ fieldBecomesPrivate.after = 
 example : fieldShadowed.before = .ok [.A] ∧ fieldShadowed.after = .ok [.B] := by decide
 example : fieldIfaceBeforeSuper.before = .ok [.A] ∧ fieldIfaceBeforeSuper.after = .ok [.I] := by decide
 example : putstaticBecomesFinal.before = .ok [.A] ∧ putstaticBecomesFinal.after = .error .illegalAccess := by decide
+example : transitiveOverride.before = .ok [.I] ∧ transitiveOverride.after = .ok [.X] := by decide
 
 example : classBecomesSealed.before = .ok [] ∧ classBecomesSealed.after = .error .incompatibleClassChange := by decide
 example : classBecomesSealedPermitting.after = .ok [] := by decide

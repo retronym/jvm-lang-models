@@ -4,6 +4,7 @@ import Literate.Overriding
 import Literate.BinaryCompat
 import Literate.Defaults
 import Literate.Access
+import Literate.Constructors
 import Literate.Sealed
 import Literate.Linearization
 import Literate.ScalaOverriding
@@ -30,6 +31,8 @@ The [API documentation](https://retronym.github.io/jvm-lang-models/api/) lists e
 {include 1 Literate.Defaults}
 
 {include 1 Literate.Access}
+
+{include 1 Literate.Constructors}
 
 {include 1 Literate.Sealed}
 
