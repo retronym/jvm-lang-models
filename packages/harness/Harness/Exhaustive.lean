@@ -3,6 +3,7 @@ import Zinc.Features.Erasure
 import Zinc.Features.ImplicitScope
 import Zinc.Loop.PingPong
 import Zinc.Bridges.HierShared
+import Zinc.Bridges.FlatShared
 /-! Runs the bounded exhaustive checks as native code.
 
 * `exhaustive [N]`: `packages/zinc/Zinc/Bridges/FlatRules.lean`, for every rule set the number of unclean (base, edit)
@@ -11,6 +12,8 @@ import Zinc.Bridges.HierShared
 * `exhaustive v`: the value-class space of `packages/zinc/Zinc/Bridges/FlatRules.lean`.
 * `exhaustive hiershared`: `packages/zinc/Zinc/Bridges/HierShared.lean`, where `Hier`'s toy member
   lookup agrees with the shared Scala semantics, by the shape and depth of the hierarchy.
+* `exhaustive flatshared`: `packages/zinc/Zinc/Bridges/FlatShared.lean`, where `Flat`'s linearization,
+  selections and refchecks agree with the shared Scala semantics, over `FlatRules`' programs.
 * `exhaustive erasure [N]`: `packages/zinc/Zinc/Features/Erasure.lean`, for every rendering the unclean runs and the
   wasted recompiles, per class.
 * `exhaustive implicit`: `packages/zinc/Zinc/Features/ImplicitScope.lean`, for every variant the unclean runs, the
@@ -451,6 +454,43 @@ def mainHierShared : IO Unit := do
     | some d => IO.println s!"first disagreement, {names[i]!}: {render d}"
     | none => pure ()
 
+open Zinc.Flat Zinc.Flat.Shared in
+/-- `Flat` against the shared semantics, over `FlatRules.cfgs`, in parallel chunks; refchecks per
+dialect, and the commonest disagreements under the given one. -/
+def mainFlatShared (args : List String) : IO Unit := do
+  let dl : Scala.Dialect := match args.head? with
+    | some "2.12" => .s212 | some "3" => .s3 | _ => .s213
+  let sp := cfgs
+  let chunk := 5000
+  let parts := (List.range ((sp.length + chunk - 1) / chunk)).map fun i => (sp.drop (i * chunk)).take chunk
+  let tasks := parts.map fun part => Task.spawn fun _ =>
+    part.foldl (init := (List.replicate 2 (0, 0, 0, 0))) fun acc k =>
+      let (l, sl, e) := check k dl
+      let i := if k.oM == .var then 1 else 0
+      acc.modify i fun (n, a, b, c) =>
+        (n + 1, a + (if l then 1 else 0), b + (if sl then 1 else 0), c + (if e then 1 else 0))
+  let rs := tasks.map Task.get
+  let sum := rs.foldl (fun a r => (a.zip r).map fun ((n, x, y, z), (n', x', y', z')) =>
+    (n + n', x + x', y + y', z + z')) (List.replicate 2 (0, 0, 0, 0))
+  IO.println s!"refchecks against {repr dl}"
+  for (nm, (n, l, sl, e)) in ["without a var", "the trait declares a var"].zip sum do
+    IO.println s!"{nm}: {n} programs; linearization agrees {l}, selections {sl}, refchecks {e}"
+  -- the commonest disagreement patterns, without a var
+  let nv := sp.filter (·.oM != .var)
+  let verdicts := (parts.map fun part => Task.spawn fun _ =>
+    (part.filter fun k => k.oM != .var && verdictAgrees k.src dl).length).map Task.get
+  IO.println s!"without a var: every class compiles under both, or fails under both, in {verdicts.foldl (· + ·) 0} of {nv.length}"
+  let bad := (nv.filter fun k => !verdictAgrees k.src dl).map fun k => (errPattern k dl, k)
+  let mut counts : List (String × Nat × Cfg) := []
+  for (p, k) in bad do
+    match counts.findIdx? (·.1 == p) with
+    | some i => counts := counts.modify i fun (p, n, k) => (p, n + 1, k)
+    | none => counts := counts ++ [(p, 1, k)]
+  let top := (counts.toArray.qsort (fun a b => a.2.1 > b.2.1)).toList.take 12
+  for (p, n, k) in top do
+    IO.println s!"{n}× {p}"
+    IO.println s!"    e.g. {repr k}"
+
 def main (args : List String) : IO Unit :=
   match args with
   | "erasure" :: rest => mainErasure rest
@@ -458,5 +498,6 @@ def main (args : List String) : IO Unit :=
   | "composed" :: _ => mainComposed
   | "pingpong" :: _ => PP.mainPingPong
   | "hiershared" :: _ => mainHierShared
+  | "flatshared" :: rest => mainFlatShared rest
   | "v" :: _ => mainV
   | _ => mainRules args

@@ -63,6 +63,12 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Done looks like.** Membership: type members, `var`, `protected` and qualified access, `abstract override`, objects as overriders, and a probe of the Java rules. Lowering: case classes with type parameters or several parameter lists, enums with type parameters, objects nested in classes, local classes, constructor parameters of plain classes, `lazy val` and `var` in classes, overloading, Java-defined parents. Tracks: [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md), [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md).
 
+### Drive the compilers from a long-lived harness
+
+**Why.** The calibration probes start a fresh JVM for every compiler invocation. [`packages/scala/probes/members.py`](../packages/scala/probes/members.py) batches a space into one `scala-cli compile --server=false` per round per compiler, and needs rounds only because an error in one program stops refchecks for the whole batch; [`packages/mima/probes/scala.sh`](../packages/mima/probes/scala.sh) launches `scala.tools.nsc.Main` once per case; ad-hoc checks of a single shape (as for `Flat`'s refchecks against scalac and dotc) pay JVM start-up and a cold JIT per program. That caps the spaces we calibrate on at a few thousand programs, where the exhaustive checks run over hundreds of thousands (`Flat`'s 216,000), and it makes per-program results depend on batching.
+
+**Done looks like.** One server per compiler version (scalac 2.12, 2.13, dotc 3; javac through `javax.tools`), started once and kept warm: it reads a program (sources, options, optional classpath of earlier outputs, for separate compilation) on stdin, compiles it in a fresh run of a reused `Global` or `Driver`, and answers with the diagnostics (file, line, kind) and the classfiles' digests or bytes, so each program is compiled on its own and an error in one cannot hide another's. The probes then talk to the servers instead of spawning compilers, and the shared semantics can be checked against the compilers on the same spaces the exhaustive checks use (`FlatRules.cfgs`, `HierShared.space`). Prior art: the TCK's reference engine (retronym/scala-type-system-tck `reference/`) keeps an `nsc.Global` in process; Bloop and scala-cli's build server do the same for builds. Track: [`packages/harness`](../packages/harness).
+
 ### Upstream reports
 
 **Why.** Findings help no one until filed.

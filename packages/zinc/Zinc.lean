@@ -13,6 +13,7 @@ import Zinc.Bridges.HierShared
 import IncComp.NonLocalAns
 import Zinc.Bridges.Flat
 import Zinc.Bridges.FlatRules
+import Zinc.Bridges.FlatShared
 import Zinc.Features.Erasure
 import Zinc.Features.ImplicitScope
 import IncComp.Classpath

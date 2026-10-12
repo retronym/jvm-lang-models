@@ -93,6 +93,29 @@ def effWinner (self : String) (g : List Hit) : M (Option Hit) := do
     seen := seen ++ [h]
   pure none
 
+/-- Scala 3: is member `n` of `d` concrete? dotc computes a class's member from its own
+declaration, else from the members of its direct parents, and a parent's member is concrete if any
+of them is. So a trait's abstract declaration re-abstracts a concrete member of its own parent,
+unless the class also has that parent directly (`class B extends A`, with
+`trait A extends M { def m: String }` and a concrete `M.m`, needs to be abstract;
+`class B extends M with A` does not). A class's abstract declaration re-abstracts either way
+(`effWinner`), in both compilers.
+
+Neither is in the specification, which says a concrete definition always overrides an abstract
+one (SLS §5.1.4, and the Scala 3 spec's copy of it): by the text, all of these compile. Scala 2
+follows it for traits (and emits a mixin forwarder to the concrete member); javac, by contrast,
+always lets an abstract redeclaration win (JLS §9.4.1, §8.4.8), as JVM selection does. -/
+def concreteS3 (n : String) : Nat → Decl → M Bool
+  | 0, _ => pure false
+  | k + 1, d => do
+    match d.members.find? fun mm => mm.name == n && !mm.fieldOnly with
+    | some mm => pure (!mm.abs)
+    | none =>
+      let mut r := false
+      for (p, _) in d.parents do
+        if ← concreteS3 n k (← need p) then r := true
+      pure r
+
 /-- The refchecks errors of definition `d` (a class, trait or object). -/
 def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   let l ← lin fuel d
@@ -128,9 +151,14 @@ def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
         -- a pair a parent has was checked there (2.13 checks it again)
         if dl != .s213 && pls.any fun pl => isBase pl mo.name && isBase pl oo.name then continue
         let loo ← lin fuel oo
-        -- an abstract member forms no pair with a concrete one; Scala 3 checks it when it
-        -- re-abstracts a member of a base class
-        if m.abs && !o.abs && (dl != .s3 || !isBase lmo oo.name) then continue
+        -- an abstract member and a concrete one through different paths: the concrete one
+        -- implements it, so its type must conform (scalac and dotc: "incompatible type"); no other
+        -- check applies. Scala 3 checks the pair in full when the abstract one re-abstracts a
+        -- member of a base class.
+        if m.abs && !o.abs && (dl != .s3 || !isBase lmo oo.name) then
+          if !conforms (seenFrom d.name l oo.name o.res) (seenFrom d.name l mo.name m.res) then
+            found := some .resultType
+          continue
         let third := g.any fun x => x.1.1.name != mo.name && x.1.1.name != oo.name &&
           isBase lmo x.1.1.name && isBase loo x.1.1.name
         let both := !o.abs && !m.abs
@@ -151,8 +179,18 @@ def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   -- an abstract member left in a concrete class
   if d.kind != .trt && !d.abs then
     for g in sigGroups d.name l do
-      if g.any (fun h => h.2.abs && !h.2.priv) && (← effWinner d.name g).isNone then
-        ks := ks ++ [.needsAbstract]
+      if g.any (fun h => h.2.abs && !h.2.priv) then
+        -- both compilers: a class's abstract declaration re-abstracts an inherited concrete
+        -- member (`effWinner`); Scala 3 also: a trait's, unless a direct parent supplies the
+        -- concrete member (`concreteS3`)
+        let byClass := (← effWinner d.name g).isNone
+        let byTrait ← if dl == .s3 then
+            match g.head? with
+            | some h => do pure !(← concreteS3 h.2.name fuel d)
+            | none => pure false
+          else pure false
+        let missing := byClass || byTrait
+        if missing then ks := ks ++ [.needsAbstract]
   pure (ks.eraseDups.map fun k => { cls := d.name, kind := k })
 
 /-- The errors the compiler reports for a program: those of the earliest phase that has any. -/
@@ -261,7 +299,8 @@ example : errors .s213 recheck =
     .ok [{ cls := "B", kind := .needsOverride }, { cls := "C", kind := .conflicting }] := by decide +kernel
 
 /-- An abstract `m` in class `B extends T` re-abstracts `T`'s concrete `m`; in trait `U extends T`
-it does not. -/
+it does not, here because `C` also mixes `T` in directly (in Scala 3 a trait's re-abstraction
+holds otherwise: `reabsTraitOnly`). -/
 def reabsClass : Program := program .conc .none false .abs true .none
 def reabsTrait : Program := program .conc .abs true .none false .none
 
@@ -284,5 +323,67 @@ example : errors .s213 (caseOver { name := "productPrefix", res := .str, nullary
 -- (written without `override`: the model has no `Any`, so `override` would override nothing)
 example : errors .s213 (caseOver { name := "toString", res := .str, nullary := true, final := true }) =
     .ok [] := by decide +kernel
+
+
+/-! ### Re-abstraction and incompatible implementations
+
+Checked against scalac 2.13.18 and dotc 3.9.0 (compiled one by one), each with the verdict both
+give; `concreteS3`'s comment has the rule and how it departs from the specification and from Java. -/
+
+/-- A member `m` of type `t`, concrete or abstract. -/
+def mem (t : Ty) (abs : Bool) : Mem := { name := "m", res := t, nullary := true, abs := abs }
+
+def decl (n : String) (k : Scala.Kind) (ps : List String) (ms : List Mem) (abs := false) : Src :=
+  { name := n, cls := some { name := n, kind := k, abs := abs, members := ms,
+                             super := (ps.head?).map (·, []), traits := ps.tail.map (·, []) } }
+
+/-- `class B { def m: String = "" }; trait M { def m: Int }; class C extends B with M`: the
+concrete `B.m` implements `M.m` with an incompatible type. Both compilers reject `C`. -/
+def implIncompatible : Program :=
+  [decl "B" .cls [] [mem .str false], decl "M" .trt [] [mem .int true], decl "C" .cls ["B", "M"] []]
+
+example : errors .s213 implIncompatible = .ok [{ cls := "C", kind := .resultType }] := by decide +kernel
+example : errors .s3 implIncompatible = .ok [{ cls := "C", kind := .resultType }] := by decide +kernel
+
+/-- `trait M { def m: String = "" }; trait A extends M { def m: String }; class B extends A`: Scala
+2 lets `M.m` implement `m` (as the specification says); Scala 3 rejects `B`. -/
+def reabsTraitOnly : Program :=
+  [decl "M" .trt [] [mem .str false], decl "A" .trt ["M"] [mem .str true], decl "B" .cls ["A"] []]
+
+example : errors .s213 reabsTraitOnly = .ok [] := by decide +kernel
+example : errors .s3 reabsTraitOnly = .ok [{ cls := "B", kind := .needsAbstract }] := by decide +kernel
+
+/-- `class B extends M with A`: with `M` a direct parent, Scala 3 accepts it too. -/
+def reabsTraitDirect : Program :=
+  [decl "M" .trt [] [mem .str false], decl "A" .trt ["M"] [mem .str true], decl "B" .cls ["M", "A"] []]
+
+example : errors .s213 reabsTraitDirect = .ok [] := by decide +kernel
+example : errors .s3 reabsTraitDirect = .ok [] := by decide +kernel
+
+/-- `abstract class A extends M { def m: String }; class B extends A`: a class re-abstracts in both. -/
+def reabsAbstractClass : Program :=
+  [decl "M" .trt [] [mem .str false], decl "A" .cls ["M"] [mem .str true] (abs := true),
+   decl "B" .cls ["A"] []]
+
+example : errors .s213 reabsAbstractClass = .ok [{ cls := "B", kind := .needsAbstract }] := by decide +kernel
+example : errors .s3 reabsAbstractClass = .ok [{ cls := "B", kind := .needsAbstract }] := by decide +kernel
+
+/-- `abstract class B extends M { def m: Int }; class C extends B with M`: a class's re-abstraction
+holds even with `M` mixed in directly, in both. -/
+def reabsClassDirect : Program :=
+  [decl "M" .trt [] [mem .int false], decl "B" .cls ["M"] [mem .int true] (abs := true),
+   decl "C" .cls ["B", "M"] []]
+
+example : errors .s213 reabsClassDirect = .ok [{ cls := "C", kind := .needsAbstract }] := by decide +kernel
+example : errors .s3 reabsClassDirect = .ok [{ cls := "C", kind := .needsAbstract }] := by decide +kernel
+
+/-- `trait A extends M { def m: Int }; abstract class B extends A; class C extends B with M`: a
+trait's re-abstraction is undone by a direct parent; both accept `C`. -/
+def reabsTraitViaClass : Program :=
+  [decl "M" .trt [] [mem .int false], decl "A" .trt ["M"] [mem .int true],
+   decl "B" .cls ["A"] [] (abs := true), decl "C" .cls ["B", "M"] []]
+
+example : errors .s213 reabsTraitViaClass = .ok [] := by decide +kernel
+example : errors .s3 reabsTraitViaClass = .ok [] := by decide +kernel
 
 end Scala.Members

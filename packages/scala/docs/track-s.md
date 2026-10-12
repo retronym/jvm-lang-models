@@ -76,6 +76,14 @@ The rules the probe forced, beyond the textbook:
 - **Access and statics.** A package-private method is not overridden from another package, and the JVM's selection agrees (Track J3). Statics hide, they don't override.
 - **Re-abstraction** is allowed in both; Java also checks `throws`.
 
+
+**Two gaps found from `Flat` (12 October).** Comparing `Flat`'s refchecks with `Members` over `FlatRules`' 216,000 programs ([`packages/zinc/Zinc/Bridges/FlatShared.lean`](../../zinc/Zinc/Bridges/FlatShared.lean)) showed shapes the calibration space never reached, since all its members have result type `String` and `T` is always mixed into `C` directly. Checked one by one against scalac 2.13.18 and dotc 3.9.0, both now in `Members`, each pinned by a witness (`implIncompatible`, `reabsTraitOnly`, `reabsTraitDirect`, `reabsAbstractClass`, `reabsClassDirect`, `reabsTraitViaClass`):
+
+- An abstract member and a concrete one of an incompatible type, through different parents (`class C extends B with M`, `B.m: String`, abstract `M.m: Int`): both compilers reject `C` ("incompatible type"). `Members` had skipped every abstract/concrete pair.
+- Re-abstraction. Both compilers let a class's abstract declaration re-abstract an inherited concrete member, even when the class also mixes the concrete trait in directly. A trait's does so only in Scala 3, and only when no direct parent supplies the concrete member (`concreteS3`). The specification says neither: a concrete definition always overrides an abstract one (SLS §5.1.4). javac always lets the abstract redeclaration win (JLS §9.4.1, §8.4.8), as JVM selection does; Scala 2.13 follows the specification for traits and emits a mixin forwarder.
+
+The calibration is unchanged with the fixes: 4,700/4,704 on 2.12.21 and 2.13.18, 4,704/4,704 on 3.9.0.
+
 ### Case classes, enums, inline and opaque, nested classes (Track S6)
 
 **Desugaring plus a library prelude, not new lowering rules.** Each feature is a desugaring into the existing AST. What the compiler inherits from the library (`Product`, `Equals`, `AbstractFunctionN`, `Mirror`, `scala.reflect.Enum`) enters as declarations in a prelude, read through `Q.decl` like any parent. The calibrated forwarder and bridge rules do the rest, so the probe tests the desugaring and the prelude together.
