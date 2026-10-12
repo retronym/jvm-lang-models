@@ -20,7 +20,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J3, J5 | JVM linkage, calibrated on HotSpot 21/25/27 over ~58k client programs | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks J1–J3, J5 | JVM linkage, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |

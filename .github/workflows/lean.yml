@@ -23,8 +23,6 @@ jobs:
         run: python3 -I scripts/lint_native_decide.py
       - name: Documents are cross-linked, and no link is broken
         run: python3 -I scripts/lint_links.py
-      - name: docs/stats.md is current
-        run: python3 -I scripts/model_stats.py --check
       - uses: leanprover/lean-action@v1
         with:
           use-mathlib-cache: true
@@ -33,6 +31,8 @@ jobs:
           lint: false
       - name: Core theorems use only the standard axioms
         run: python3 -I scripts/check_axioms.py
+      - name: docs/stats.md is current
+        run: python3 -I scripts/model_stats.py --check
 
   standalone:
     name: Standalone ${{ matrix.package }}
