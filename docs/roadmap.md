@@ -4,13 +4,13 @@
 
 The Lean model was built to answer one question: is Zinc's invalidation sound, relative to obligations on the compiler bridge? To answer it, each feature file (`Erasure`, `Hier`, `Flat`, `Inline`, `Names`, …) has its own toy language, sized to what Zinc hashes. The toys found real bugs, but they are private to one consumer. Factored out, the same knowledge answers other questions:
 
-- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L578)).
+- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L591)).
 - **IDE type systems.** The TCK (`retronym/scala-type-system-tck`) checks IntelliJ against an `asSeenFrom` model that now shares its core with the Scala layer.
 - **Scala 2 → 3 migration.** The name-resolution calibration in [talks#21](https://github.com/retronym/talks/issues/21) is already a list of differences between the two compilers.
 
 ## Architecture
 
-The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L71), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L559) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L408) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
+The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L74), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L572) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L421) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
 
 ## Done
 
@@ -20,7 +20,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J3, J5, J6 | JVM linkage, overriding along library chains, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks J1–J3, J5–J8 | JVM linkage, overriding along library chains, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
@@ -43,9 +43,6 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 Each is one shape, one space and one probe run, as Track J6 was.
 
-- **Track J7: default methods along superinterface chains.** `I1 ← I2 ← I3` with `m` default, abstract, static, private or absent, a library class implementing some of them, `invokeinterface` and `invokevirtual` sites: maximally-specific selection (JVMS §5.4.3.3, §5.4.6) and the JDK-8356942 region.
-- **Track J8: field resolution through superinterfaces at depth.** Fields named `m` at several levels of classes and interfaces, any flags, all four field instructions: JVMS §5.4.3.2's order as a space, where it has one witness today ([scala-garden/mima#995](https://github.com/scala-garden/mima/issues/995)).
-- **`Object`'s methods in interface resolution.** JVMS §5.4.3.4 step 2: an interface method reference to `hashCode` or `toString` resolves to `Object`'s; needs `Object` in the class table, a few catalogue cases and a column in Track J7's space.
 - **`var` and constructor parameters in the source models.** Scala setters (where scalac 2's trait-setter `AbstractMethodError` lives) and constructor parameters, `var` in Java; they widen Track B3 directly (see the layer remainders below).
 
 ### Track B3: source-level spaces

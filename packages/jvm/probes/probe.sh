@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renders the catalogue with the Classfile API (JDK 24+) and runs it on every JDK given.
-# Usage: packages/jvm/probes/probe.sh [catalogue|space|chain|cases.jsonl] -- JAVA_HOME...   (run from the repository root)
+# Usage: packages/jvm/probes/probe.sh [catalogue|space|chain|defaults|fields|object|cases.jsonl] -- JAVA_HOME...   (run from the repository root)
 # A space name is dumped with `lake exe jvmcases <name>` (`catalogue`, the default, is plain `jvmcases`).
 # With OUT=dir, the rendered classfiles are kept in dir/<case>/{v0,v1,client,sites} (for MiMa, Track B).
 # With RUNS=ledger.jsonl, the run is appended to the ledger as one JSON line, and the per-program
@@ -15,11 +15,11 @@ trap 'rm -rf "$work"' EXIT
 out=${OUT:-$work/out}
 case "$arg" in
   catalogue) space=catalogue; cases=$work/cases.jsonl; lake exe jvmcases > "$cases" ;;
-  space|chain) space=$arg; cases=$work/cases.jsonl; lake exe jvmcases "$arg" > "$cases" ;;
+  space|chain|defaults|fields|object) space=$arg; cases=$work/cases.jsonl; lake exe jvmcases "$arg" > "$cases" ;;
   *) space=$(basename "$arg" .jsonl); cases=$arg ;;
 esac
 commit=$(git rev-parse HEAD)
-dirty=false; git diff --quiet HEAD -- . ':(exclude)packages/*/probes/runs' || dirty=true
+dirty=false; git diff --quiet HEAD -- . ':(exclude,glob)packages/*/probes/runs/**' || dirty=true
 render=${RENDER_JAVA_HOME:-$HOME/.sdkman/candidates/java/25.0.4-tem}
 "$render/bin/javac" -d "$work/render" "$here/Render.java" "$here/Json.java"
 "$render/bin/java" -cp "$work/render" Render "$cases" "$out"
@@ -27,7 +27,8 @@ render=${RENDER_JAVA_HOME:-$HOME/.sdkman/candidates/java/25.0.4-tem}
 status=0
 i=0
 for jh in "$@"; do
-  "$jh/bin/java" -cp "$work/run" Run "$cases" "$out" > "$work/run-$i.tsv" || status=1
+  # Finalizers would run `finalize` methods of earlier cases' objects, and log them, during later sites.
+  "$jh/bin/java" --finalization=disabled -cp "$work/run" Run "$cases" "$out" > "$work/run-$i.tsv" || status=1
   grep -v '^#json ' "$work/run-$i.tsv"
   i=$((i + 1))
 done
