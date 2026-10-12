@@ -61,9 +61,9 @@ Consumers:
 | 3.9.0 | 4704/4704 | 672 |
 
 The rules the probe forced, beyond the textbook:
-- **One error per member,** in the order access, `final`, missing `override`, accidental override, `def` over `val`, lazy against strict, result type.
-- **Which pairs.** A pair a parent has was checked there; **2.13 checks it again** in each subclass (2.12 and 3 don't).
-- **Private.** A private member isn't inherited and implements nothing. Scala 2 stops at it; Scala 3 also checks the inherited member it fails to hide. `override private` is a refchecks error in Scala 2 and an earlier-phase error in Scala 3, which hides every other program's refchecks errors, so the probe recompiles in rounds.
+- **One error per position,** in the order access, `final`, missing `override`, accidental override, `def` over `val`, lazy against strict, result type; errors of inherited pairs and abstract members are at the class, where only the first is printed.
+- **Which pairs.** A pair a parent has is left there by 2.12; **2.13 checks it again** in each subclass, and dotc does when the parent has the two owners in the other order ([scala/bug#11136](https://github.com/scala/bug/issues/11136), `recheck11136`).
+- **Private.** A private member isn't inherited and implements nothing. Scala 2 stops at it; Scala 3 also checks the inherited member it fails to hide. `override private` is a refchecks error in Scala 2 and an earlier-phase error in Scala 3; each program now compiles on its own in the compile server, so it hides nothing else.
 - **Accidental override needs a real override;** otherwise it is "inherits conflicting members".
 - **Re-abstraction.** An abstract member of a *class* re-abstracts the concrete one it extends; one in a *trait* does not. Scala 3 forms a pair there; Scala 2 doesn't.
 
@@ -111,6 +111,25 @@ What the probe corrected:
 And from Track S6: `caseFieldAdded` (accessor links; constructor, `apply`, `copy` don't), `nestedClassMoved` (`NoClassDefFoundError`), `enumCaseAdded` (links), `enumCaseRemoved` (`NoSuchFieldError`), and `inlineBodyChanged`: the library's classfiles are *equal* before and after while every client holds the old body. Binary compatibility can't see it; Phase 11's `InlineOpaqueSpec` gives Zinc the keys for it.
 
 **Synthesized bodies run (Track J4).** `ClassOut.toJvm` keeps the invokes of synthesized bodies as the methods' bodies: a mixin forwarder runs `T.m$`, which runs `T.m`; a constructor runs its traits' `$init$`, which now carries the setter calls of the trait's `val`s (calibrated: 1,929 `$init$` bodies agree with scalac 2.12, 2.13 and 3 in the space above); a static forwarder reads `MODULE$` and calls the module. A new instance runs its `()V` constructor's body. So `valAddedToTrait` fails at `new X`, as on HotSpot: `X.<init>` runs `T.$init$`, which calls the setter the old `X` lacks. The outcomes now list the methods each site enters.
+
+**At scale: `FlatRules`' programs (13 October).** `lake exe scalaprobe OUT flat` prints `FlatRules`' 216,000 configurations through `FlatShared`'s embedding: 48,000 distinct programs for the 192,000 without a `var` (bodies, which the embedding drops, are what tell the rest apart); the 24,000 with a `var` are `FlatShared`'s known exclusion. [`members.py OUT --space flat --pool 4`](../probes/members.py) compiles each on its own and runs the accepted ones. The first run agreed on about 10,500 programs per compiler; every disagreement shape was a `Members` gap, fixed from the compilers' sources, none a compiler bug or a known `FlatShared` exclusion:
+
+| shape | fix in `Members` |
+|---|---|
+| a `final` parent; two instances of `M` (`A extends M[String]`, `C … with M[Int]`): typer errors, which stop refchecks | `typerDecl`, `reported` |
+| which of a class's errors is printed | the compilers' `OverridingPairs.Cursor` order (`pairs2`), one error per position |
+| `object X extends C`, `C` concrete and re-abstracting: no error in `X` | re-abstraction only through abstract superclasses (`missingS2`) |
+| dotc: "not a legal implementation" in `C` for a pair `B` already rejected | `checkMemberTypesOK` |
+| dotc: a trait's private `val` counted as implementing | `concreteS3` skips private members |
+
+| date | commit | space | compiler | programs | agree | wall (K=4) |
+|---|---|---|---|---|---|---|
+| 13 Oct | 7a9e2a0 | FlatRules | 2.12.21 | 48,000 (192,000 configurations) | 48,000 | 34 s |
+| 13 Oct | 7a9e2a0 | FlatRules | 2.13.18 | 48,000 | 48,000 | 36 s (64 s at K=1) |
+| 13 Oct | 7a9e2a0 | FlatRules | 3.9.0 | 48,000 | 48,000 | 53 s |
+| 13 Oct | 7a9e2a0 | members | 2.12.21, 2.13.18, 3.9.0 | 4,704 | 4,700, 4,700, 4,704 | 14–17 s |
+
+**Against the specification.** Each rule above was taken from a compiler's source, so each was checked against SLS §5.1.3–5.1.4 rather than accepted. The specification says which member overrides which and what an override must satisfy, not which errors are printed. Over both spaces, scalac 2.12 and 2.13 accept the same programs; dotc rejects 124 that they accept, in two families, both an abstract declaration meeting a concrete member, which §5.1.3 says the concrete one overrides: a trait's re-abstraction (`reabsTraitOnly`, 24 programs), and dotc checking the abstract declaration as an override of the concrete one (`abstractOverFinal` for `final`, and stability; 108), 8 programs in both. scalac follows the text in both; both are in [`docs/upstream/spec-reabstraction.md`](../../../docs/upstream/spec-reabstraction.md), with the `final` case new. Every other compiler-specific rule (the cursor's order, the first error per position, the abstract-superclass chain, dotc's private split and member-type re-check) only moves errors between the classes of a program that is rejected anyway; the member a call runs agrees across all three compilers on every accepted program. 2.12's leaving a pair to a parent is unsound, and fixed in 2.13 ([`mixin-final-override-recheck.md`](../../../docs/upstream/mixin-final-override-recheck.md)).
 
 **The catalogue on HotSpot.** [`packages/scala/probes/run.py`](../probes/run.py) compiles each case with scalac 2.13.18 in the compile server (`v0`, the client against `v0`, `v1`), instruments the classfiles to log each method entered ([`Instrument.java`](../../jvm/probes/Instrument.java)), and runs the sites through [`packages/jvm/probes`](../../jvm/probes) on HotSpot 21, 25 and 27. The 9 cases that compile with Scala 2 agree on every `Throwable` and on the sequence of methods entered, with one exception: `caseFieldAdded` on `v0`, where HotSpot also enters `P.<init>` from `copy` and from the companion's `apply`. Those bodies come from the case-class desugaring as user members, which lowering does not synthesize; the linkage outcome agrees. Class initialisation is not modelled, so the probe mutes static initialisers, as it mutes building a receiver.
 
