@@ -213,4 +213,65 @@ def chainSpace : List Case :=
            prog := { sites := [.within .J (.invokevirtual owner .m .v .X)] } }
   cases
 
+/-- The Track J4 body space: a library method's own call of `m`. `A` in package 1, `B extends A` in
+package 1 or 2; `run()V` is declared in `A` or in `B`, and its body is one site: `this.m()`, a static
+`m()`, `new B().m()`, `super.m()` or `new A().m()` (from `B`; the latter meets the verifier's protected
+check), or a read or write of the field `this.m`. `A`'s `m` is
+absent or any well-formed method (any access, `static`, `abstract`, `final`), or, for the field sites,
+absent or any field; `B` declares a public `m()V` or not. The client calls `run` on a `B`, or on its
+`X extends B` in the unnamed package, which declares `m()V` with any access, `static`, or not at all.
+Each program is a case with `v1 = v0`, as `chainSpace`'s are: an edit of `A.m` breaks a client iff the
+client links with `A.m` in one state and not in the other, so the states calibrate every edit. -/
+def bodySpace : List Case :=
+  let accs : List Access := [.pub, .prot, .pkg, .priv]
+  let mInfos : List (MethodInfo C N D) := do
+    let s ← [false, true]
+    let a ← [false, true]
+    let f ← [false, true]
+    let acc ← accs
+    if a && (s || f || acc == .priv) then [] else pure { isStatic := s, isAbstract := a, isFinal := f, access := acc }
+  let fInfos : List FieldInfo := do
+    let s ← [false, true]
+    let f ← [false, true]
+    let acc ← accs
+    pure { isStatic := s, isFinal := f, access := acc }
+  let accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg" | .priv => "priv"
+  let flags (s a f : Bool) : String :=
+    (if s then "+static" else "") ++ (if a then "+abstract" else "") ++ (if f then "+final" else "")
+  let mTag : Option (MethodInfo C N D) → String
+    | none => "-" | some i => accTag i.access ++ flags i.isStatic i.isAbstract i.isFinal
+  let fTag : Option FieldInfo → String
+    | none => "-" | some i => accTag i.access ++ flags i.isStatic false i.isFinal
+  let cn : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+  -- (where `run` is, the body site's name, the site, whether it is a field site)
+  let kinds : List (C × String × Site C N D × Bool) :=
+    [C.A, .B].flatMap (fun w =>
+      [(w, "this.m()", .invokevirtualThis w .m .v, false), (w, "static", .invokestatic w .m .v, false),
+       (w, "new B().m()", .invokevirtual .B .m .v .B, false),
+       (w, "getfield", .getfieldThis w .m .s, true), (w, "putfield", .putfieldThis w .m .s, true)]) ++
+    [(C.B, "super.m()", .invokespecial .A .m .v false, false),
+     (C.B, "new A().m()", .invokevirtual .A .m .v .A, false)]
+  let xMs : List (Option (MethodInfo C N D)) :=
+    none :: (accs.map fun a => some { access := a }) ++ [some { isStatic := true }]
+  let cases : List Case := do
+    let (w, kn, site, isField) ← kinds
+    let runM : N × D × MethodInfo C N D := (.run, .v, { body := [site] })
+    let (aM, aF) ← if isField then (fInfos.map some ++ [none]).map fun f => (none, f)
+                   else (mInfos.map some ++ [none]).map fun m => (m, none)
+    let bM ← if isField then [false] else [false, true]
+    let bPkg ← [1, 2]
+    let (recv, xM) ← (C.B, none) :: if isField then [(C.X, none)] else xMs.map (C.X, ·)
+    let lib : List (C × Classfile C N D) :=
+      [(.A, { header := p1,
+              methods := (if w = .A then [runM] else []) ++ (aM.map fun i => (N.m, D.v, i)).toList,
+              fields := (aF.map fun i => (N.m, D.s, i)).toList }),
+       (.B, { header := { pkg := bPkg, super := some .A },
+              methods := (if w = .B then [runM] else []) ++ (if bM then [(.m, .v, inst)] else []) })]
+    let name := s!"body/{cn w}.run:{kn},A.m={if isField then fTag aF else mTag aM}," ++
+      s!"B=p{bPkg}{if bM then ".m" else ""},X.m={mTag xM},recv={cn recv}"
+    pure { name, mima := none, v0 := lib, v1 := lib,
+           client := if recv = .X then [(.X, { header := { super := some .B }, methods := (xM.map fun i => (N.m, D.v, i)).toList })] else [],
+           prog := { sites := [.invokevirtual w .run .v recv] } }
+  cases
+
 end Jvm.Clients

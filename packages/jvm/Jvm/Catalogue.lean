@@ -16,8 +16,8 @@ namespace Jvm.Catalogue
 inductive C | A | B | I | J | X
   deriving DecidableEq, Repr
 
-/-- `init` is `<init>`, a constructor. -/
-inductive N | m | init
+/-- `init` is `<init>`, a constructor; `run` is a library method whose body calls `m` (Track J4). -/
+inductive N | m | init | run
   deriving DecidableEq, Repr
 
 /-- `v` is `()V`, `i` is `()I`; `s` is a field of type `String`; `iv` is `(I)V`. -/
@@ -525,8 +525,28 @@ def selfCall : Case where
   v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
   prog := { sites := [invokevirtual .A .m .v .A] }
 
+/-- A template method: `A.run()` calls `this.m()`, and `m` becomes abstract. The client's
+`X extends A` never calls `m`; it fails inside the library's `run` (`AbstractMethodError`). -/
+def hookBecomesAbstract : Case where
+  name := "hookBecomesAbstract"
+  mima := some "DirectAbstractMethodProblem"
+  v0 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, inst)] })]
+  v1 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, abs)] })]
+  client := [(.X, { header := { super := some .A } })]
+  prog := { sites := [invokevirtual .A .run .v .X] }
+
+/-- The hook becomes private: the library's `this.m()` now runs `A.m` itself, not the client's
+override (a private method is not overridden). Links, and runs different code. -/
+def hookBecomesPrivate : Case where
+  name := "hookBecomesPrivate"
+  mima := some "DirectMissingMethodProblem"
+  v0 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, inst)] })]
+  v1 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, { access := .priv })] })]
+  client := [(.X, { header := { super := some .A }, methods := [(.m, .v, inst)] })]
+  prog := { sites := [invokevirtual .A .run .v .X] }
+
 /-- The Track J4 cases the probe runs (`selfCall` overflows the JVM's stack instead). -/
-def j4 : List Case := [thisCallOverridden]
+def j4 : List Case := [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate]
 
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
@@ -596,5 +616,8 @@ example : ctorClassBecomesAbstract.before = .ok [.A] ∧ ctorClassBecomesAbstrac
 
 example : thisCallOverridden.before = .ok [.A, .X] := by decide
 example : selfCall.before = .error .outOfFuel := by decide
+example : hookBecomesAbstract.before = .ok [.A, .A] ∧
+    hookBecomesAbstract.after = .error .abstractMethod := by decide
+example : hookBecomesPrivate.before = .ok [.A, .X] ∧ hookBecomesPrivate.after = .ok [.A, .A] := by decide
 
 end Jvm.Catalogue

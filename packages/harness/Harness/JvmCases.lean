@@ -10,6 +10,9 @@ catalogue's own.
 `lake exe jvmcases chain`: the Track J6 space of overriding chains (`Jvm.Clients.chainSpace`), each a case with
 `v1 = v0`.
 
+`lake exe jvmcases bodies`: the Track J4 space of library method bodies (`Jvm.Clients.bodySpace`), each a case
+with `v1 = v0`.
+
 `lake exe jvmcases count`: the catalogue's size and each client space's, as tab-separated lines (catalogue
 group or space, clients, programs) for `scripts/model_stats.py`. A space's programs are the well-typed
 (case, client) pairs that `space` dumps; `chainSpace`'s are its cases; MiMa's `spaceB` is counted in clients.
@@ -34,10 +37,15 @@ def main (args : List String) : IO Unit := do
     IO.println s!"space\tspace3\t{space3.length}\t{programs j3 space3}"
     IO.println s!"space\tspace5\t{space5.length}\t{programs j5 space5}"
     IO.println s!"space\tchainSpace\t{chainSpace.length}\t{chainSpace.length}"
+    IO.println s!"space\tbodySpace\t{bodySpace.length}\t{bodySpace.length}"
     IO.println s!"space\tMiMa.spaceB\t{MiMa.spaceB.length}\t"
     return
   if args.contains "chain" then
     for k in chainSpace do
+      IO.println (Jvm.Dump.caseJson k)
+    return
+  if args.contains "bodies" then
+    for k in bodySpace do
       IO.println (Jvm.Dump.caseJson k)
     return
   if args.contains "j3" then
