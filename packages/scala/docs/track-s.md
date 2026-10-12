@@ -133,6 +133,19 @@ And from Track S6: `caseFieldAdded` (accessor links; constructor, `apply`, `copy
 
 **The catalogue on HotSpot.** [`packages/scala/probes/run.py`](../probes/run.py) compiles each case with scalac 2.13.18 in the compile server (`v0`, the client against `v0`, `v1`), instruments the classfiles to log each method entered ([`Instrument.java`](../../jvm/probes/Instrument.java)), and runs the sites through [`packages/jvm/probes`](../../jvm/probes) on HotSpot 21, 25 and 27. The 9 cases that compile with Scala 2 agree on every `Throwable` and on the sequence of methods entered, with one exception: `caseFieldAdded` on `v0`, where HotSpot also enters `P.<init>` from `copy` and from the companion's `apply`. Those bodies come from the case-class desugaring as user members, which lowering does not synthesize; the linkage outcome agrees. Class initialisation is not modelled, so the probe mutes static initialisers, as it mutes building a receiver.
 
+### Refchecks accepted, so no `AbstractMethodError` (Question 1)
+
+A static promise across three layers ([`packages/scala/Scala/Refchecks.lean`](../Scala/Refchecks.lean), `lake build Scala.Refchecks`, about 20 minutes). Over the 4,704 programs of [`Members.membersSpace`](../../scala-types/ScalaTypes/Members.lean#L497) and each of scalac 2.12.21, 2.13.18 and dotc 3.9.0, [`refchecks_sound`](../Scala/Refchecks.lean#L275) decides by the kernel, in chunks of 400 programs:
+
+- `Members` (typer's inheritance checks and refchecks, `reported`) accepts exactly the programs the compiler accepts (772, 772 and 672);
+- for an accepted program and each concrete class `C` whose `m` `Members` says comes from owner `O`, HotSpot ran `O`'s `m` (the oracle is `members.py`'s run of `new C().m` on each accepted program, written by [`members_lean.py`](../probes/members_lean.py) into `RefchecksData`, as Track T's `PathsOracle` does);
+- the program lowered by [`Scala.lowerProgram`](../Scala/Lower.lean#L551) and linked by `Jvm` (constructor and `$init$` bodies run) enters `O`'s lowered method last, directly or through `C`'s mixin forwarder and `O.m$`, or, for a trait's `val`, the class's accessor; so it links, and throws no `AbstractMethodError`.
+
+The exclusions are named:
+
+- **`bug13199`**, four programs, Scala 2 only: a class's abstract `def m` re-abstracts a trait's `val m` and the subclass overrides it with a `val`. 2.12 and 2.13 accept them, and HotSpot throws `AbstractMethodError` ([scala/bug#13199](https://github.com/scala/bug/issues/13199)); dotc rejects them ([`bug13199_witnesses`](../Scala/Refchecks.lean#L285)). These are the only accepted programs of the space that fail at run time, under any of the three compilers.
+- **`lowerGap`**, from the model's side only: the rows `Scala.Lower` does not model. A trait's `val` overridden by the class: scalac and dotc still give the class the trait's setter `T$_setter_$m_$eq`, which `$init$` calls, and lowering does not, so the model's `new C` fails where HotSpot runs (20 class/owner pairs per Scala 2 dialect, 15 for Scala 3); and a trait's `lazy val`, whose implementation in a class lowering only partly models (24 and 16). Widening `Lower` for them is open; the `bug13199` programs are in the first row.
+
 ## Out of scope
 
 Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in [`docs/roadmap.md`](../../../docs/roadmap.md).
