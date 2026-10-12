@@ -32,14 +32,15 @@ class kind in the class-name hash); `Zinc.ImplicitScope.is_sound` (implicit scop
 ancestor's companion across subprojects, sbt/zinc#1845's summary folded into the API hash).
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Zinc.PingPong.zinc_diverges
-example := @Zinc.Cycles.zinc_ne_clean
-example := @Zinc.Cycles.annotated_eq_clean
-example := @IncComp.XCompiler.zinc_sound_charged
-example := @Zinc.Hier.D_obligations
-example := @Zinc.Hier.W_obligations
-example := @Zinc.Hier.Mk_obligations
-example := @Zinc.Flat.flat_sound
-example := @Zinc.Erasure.Er_obligations
-example := @Zinc.ImplicitScope.is_sound
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Zinc.spec : List Lean.Name :=
+  [``Zinc.PingPong.zinc_diverges,
+   ``Zinc.Cycles.zinc_ne_clean,
+   ``Zinc.Cycles.annotated_eq_clean,
+   ``IncComp.XCompiler.zinc_sound_charged,
+   ``Zinc.Hier.D_obligations,
+   ``Zinc.Hier.W_obligations,
+   ``Zinc.Hier.Mk_obligations,
+   ``Zinc.Flat.flat_sound,
+   ``Zinc.Erasure.Er_obligations,
+   ``Zinc.ImplicitScope.is_sound]

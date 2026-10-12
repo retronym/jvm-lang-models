@@ -16,6 +16,7 @@ The witnesses (`MiMa.finalField`, `MiMa.shadowField`, `MiMa.ifaceField`,
 `MiMa.protectedRemoved`, …) are the gaps filed as scala-garden/mima#993–#996.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @MiMa.miss_changes_footprint
-example := @MiMa.check_nil_of_mima_nil
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def MiMa.spec : List Lean.Name :=
+  [``MiMa.miss_changes_footprint,
+   ``MiMa.check_nil_of_mima_nil]

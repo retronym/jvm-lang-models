@@ -36,15 +36,16 @@ diffed over the recompiled units alone undercompiles; `IncComp.Stale.stale_affec
 affected units it does not.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @IncComp.XCompiler.round_preserves
-example := @IncComp.XCompiler.zinc_sound
-example := @IncComp.XCompiler.zinc_some_of_monotoneFrom
-example := @IncComp.XCompiler.downstream_sound
-example := @IncComp.XCompiler.inv_external
-example := @IncComp.Compiler.fixpoint_unique_of_wf
-example := @IncComp.Compiler.fixpoint_unique_of_explicit
-example := @IncComp.Compiler.zinc_eq_clean_of_wf
-example := @IncComp.Compiler.zinc_eq_clean_of_explicit
-example := @IncComp.Stale.stale_unsound
-example := @IncComp.Stale.stale_affected
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def IncComp.spec : List Lean.Name :=
+  [``IncComp.XCompiler.round_preserves,
+   ``IncComp.XCompiler.zinc_sound,
+   ``IncComp.XCompiler.zinc_some_of_monotoneFrom,
+   ``IncComp.XCompiler.downstream_sound,
+   ``IncComp.XCompiler.inv_external,
+   ``IncComp.Compiler.fixpoint_unique_of_wf,
+   ``IncComp.Compiler.fixpoint_unique_of_explicit,
+   ``IncComp.Compiler.zinc_eq_clean_of_wf,
+   ``IncComp.Compiler.zinc_eq_clean_of_explicit,
+   ``IncComp.Stale.stale_unsound,
+   ``IncComp.Stale.stale_affected]

@@ -15,6 +15,7 @@ Membership is calibrated against scalac 2.12, 2.13 and dotc 3.9 on 4,704 hierarc
 programs included.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @AsSeenFrom.compose
-example := @AsSeenFrom.chain_is_single
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def ScalaTypes.spec : List Lean.Name :=
+  [``AsSeenFrom.compose,
+   ``AsSeenFrom.chain_is_single]

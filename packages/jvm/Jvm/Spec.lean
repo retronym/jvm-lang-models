@@ -11,5 +11,6 @@ JVM linkage (JVMS §5.4: resolution, selection, access) as a `Query.Task` over t
 Calibrated on HotSpot 21, 25 and 27 over 58,400 client programs and 45 library edits.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Jvm.link_congr
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Jvm.spec : List Lean.Name :=
+  [``Jvm.link_congr]

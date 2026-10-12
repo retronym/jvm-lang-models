@@ -12,5 +12,6 @@ forwarders, bridges, `$init$` calls and erasure.
 Calibrated against scalac 2.12.21 and 2.13.18 on 1,348 programs and dotc 3.9.0 on 1,363.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Scala.lower_congr
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Scala.spec : List Lean.Name :=
+  [``Scala.lower_congr]

@@ -12,6 +12,7 @@ the queries it asked. Every model in this repository is built on it.
 * `Query.Task.run_congr`: the output half of T1, the form most proofs use.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Query.Task.run_eq_of_trace
-example := @Query.Task.run_congr
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Query.spec : List Lean.Name :=
+  [``Query.Task.run_eq_of_trace,
+   ``Query.Task.run_congr]

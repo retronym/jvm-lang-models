@@ -15,8 +15,9 @@ Theorems that connect layers.
   `Links.ZincBridgeScala3.after_eq_fresh_fix`: with retronym/scala3#10, B4 holds.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @IncComp.XCompiler.untouched_eq_clean
-example := @Links.ZincBridgeKeys.loop_witness
-example := @Links.ZincBridgeScala3.not_comp
-example := @Links.ZincBridgeScala3.after_eq_fresh_fix
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Links.spec : List Lean.Name :=
+  [``IncComp.XCompiler.untouched_eq_clean,
+   ``Links.ZincBridgeKeys.loop_witness,
+   ``Links.ZincBridgeScala3.not_comp,
+   ``Links.ZincBridgeScala3.after_eq_fresh_fix]

@@ -15,10 +15,11 @@ scalac's single `asSeenFrom`? Each theorem is a runtime check in the plugin.
 * `IntelliJ.agrees`: the plugin's walk equals scalac's wherever its fallback does not fire.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Chain.compose
-example := @Chain.chain_is_single
-example := @Chain.chain_is_intended
-example := @Chain.once_is_scalac
-example := @Chain.selfRooted_twice_diverges
-example := @IntelliJ.agrees
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def IntelliJ.spec : List Lean.Name :=
+  [``Chain.compose,
+   ``Chain.chain_is_single,
+   ``Chain.chain_is_intended,
+   ``Chain.once_is_scalac,
+   ``Chain.selfRooted_twice_diverges,
+   ``IntelliJ.agrees]

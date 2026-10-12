@@ -11,5 +11,6 @@ folded (JLS §13.4.9); and JLS chapter 13's rules checked against `Jvm` linkage 
 Calibrated against javac 17, 21 and 25 on 99 programs.
 -/
 
--- Each name below must exist: the build fails if a result this page states is renamed or removed.
-example := @Java.lower_congr
+/-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
+def Java.spec : List Lean.Name :=
+  [``Java.lower_congr]
