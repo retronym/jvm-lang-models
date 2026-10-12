@@ -17,4 +17,4 @@ Scala's types as scalac computes them: `asSeenFrom` once for any type language w
 | [`ScalaTypes/Desugar.lean`](ScalaTypes/Desugar.lean) | Case classes and case objects desugared onto a library prelude |
 | [`ScalaTypes/Members.lean`](ScalaTypes/Members.lean) | Membership and overriding (refchecks) as a `Task` |
 | [`ScalaTypes/Resolve.lean`](ScalaTypes/Resolve.lean) | Resolution over interfaces as a `Task`: linearization (once, over declarations or headers), `seenFrom`, the members a name selects, signature groups, `winner` |
-| [`ScalaTypes/Fine.lean`](ScalaTypes/Fine.lean) | The walk over headers and `member` queries is the walk over declarations ([`lookupH_eq`](ScalaTypes/Fine.lean#L240)), and asks only those queries ([`asks_lookupH`](ScalaTypes/Fine.lean#L366)) |
+| [`ScalaTypes/Fine.lean`](ScalaTypes/Fine.lean) | The walk over headers and `member` queries is the walk over declarations ([`lookupH_eq`](ScalaTypes/Fine.lean#L240)), and asks only those queries ([`asks_lookupH`](ScalaTypes/Fine.lean#L502)) |

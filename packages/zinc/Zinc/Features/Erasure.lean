@@ -1,5 +1,7 @@
 import IncComp.NonLocalAns
 import IncComp.Termination
+import ScalaTypes.Fine
+import Scala.Lower
 /-!
 # Erasure through inheritance: renderings, witnesses and dependency edges
 
@@ -29,6 +31,11 @@ Erasure has three inputs here, and they fail in different places:
 * **intersections**: `W with Z` erases to `Z` if `Z` is a class or extends `W`, and to `W`
   otherwise. The class-name hash of `Z` covers its parents, but not (in Zinc, per sbt/zinc#1844)
   whether it is a trait or a class.
+
+Erasure is the shared one, `Scala.erase`, over the program lowered to the shared syntax
+(`envOf`): `Long` and the intersection `Scala.Ty.inter` are in the shared layer, and an
+intersection erases by trait or class, read from the components' headers (`Scala.eraseInter`).
+Descriptors are `Scala.erase`'s strings.
 
 An erasure-only change reaches a descendant in two hops: the declaring class must recompile,
 and the descendant must notice that the declaration's erasure moved. Interfaces store each
@@ -113,18 +120,10 @@ def Ty.subst (args : List Ty) : Ty → Ty
 
 def ids : List Ty := [.p0, .p1]
 
-/-- JVM descriptors. -/
-inductive JTy | I | J | Str | Obj | cW | cZ
-  deriving DecidableEq, Repr
+/-- A JVM descriptor, as `Scala.erase` writes it. -/
+abbrev JTy := String
 
-def eraseBase : Ty → JTy
-  | .int => .I
-  | .long => .J
-  | .str => .Str
-  | _ => .Obj
-
-/-- The erasure of `V`: its underlying type's. -/
-def eraseV (und : Option Ty) : JTy := (und.map eraseBase).getD .Obj
+def objD : JTy := "Ljava/lang/Object;"
 
 /-- Does erasing the type read another class? -/
 def special : Ty → Bool
@@ -171,9 +170,71 @@ structure Out where
   seen : List (Option Ty)
   deriving DecidableEq, Repr
 
+/-! ## Lowering to the shared syntax
+
+Erasure is `Scala.erase` over the program in the shared syntax (`envOf`): a class has two type
+parameters, a value class is a `vcls` over its underlying type, and `W with Z` is the intersection
+`Scala.Ty.inter`, which erases by trait or class (`Scala.eraseInter`). `W` is a library trait,
+`trait W`, outside the program: the front end lowers it as such whatever its source says. -/
+
+def Cls.name : Cls → String
+  | .V => "V" | .W => "W" | .Z => "Z" | .M => "M" | .A => "A" | .B => "B" | .X => "X" | .Y => "Y"
+
+def Cls.ofName? (s : String) : Option Cls := allCls.find? (·.name = s)
+
+theorem Cls.ofName?_name (c : Cls) : Cls.ofName? c.name = some c := by cases c <;> rfl
+
+def Name.str : Name → String | .m => "m" | .g => "g"
+
+/-- A type of `Erasure`, written in class `self`. -/
+def Ty.toScala (self : Cls) : Ty → Scala.Ty
+  | .int => .int
+  | .long => .long
+  | .str => .str
+  | .p0 => .tp [self.name] 0
+  | .p1 => .tp [self.name] 1
+  | .vc => .ref "V"
+  | .wz => .inter "W" "Z"
+
+/-- A declaration's kind: a trait, a value class, or a class. -/
+def Decl.kind (d : Decl) : Scala.Kind :=
+  if d.isTrait then .trt else if d.und.isSome then .vcls else .cls
+
+def Decl.toScala (c : Cls) (d : Decl) : Scala.Decl :=
+  { name := c.name, kind := d.kind, tparams := 2
+    super := d.parent.map fun (p, as) => (p.name, as.map (Ty.toScala c))
+    members := d.decls.map fun (n, t) => { name := n.str, res := Ty.toScala c t }
+    under := d.und.map fun u => ("x", Ty.toScala c u) }
+
+/-- The library trait `W`. -/
+def libW : Scala.Decl := { name := "W", kind := .trt, tparams := 2 }
+
+/-- A class of the program in the shared syntax, `W` the library trait. -/
+def lowerI (I : Cls → Iface) (c : Cls) : Scala.Decl := if c = .W then libW else (I c).decl.toScala c
+
+/-- The program's environment. -/
+def envOf (I : Cls → Iface) : Scala.Env
+  | .decl n _ => (Cls.ofName? n).map fun c => { decl := lowerI I c }
+  | .header n => (Cls.ofName? n).map fun c => (lowerI I c).header
+  | .member n m => (Cls.ofName? n).bind fun c => (lowerI I c).member m
+
+/-- Erasure, from the current declarations: `Scala.erase`; a failure (a cycle) erases to
+`Object`. -/
+def eraseT (I : Cls → Iface) (t : Ty) : JTy :=
+  match Scala.ex (envOf I) (Scala.erase (t.toScala .M)) with
+  | .ok j => j
+  | .error _ => objD
+
+/-- The erasure of a type that reads no other class. -/
+def eraseBase (t : Ty) : JTy := eraseT (fun _ => {}) t
+
+/-- The erasure of `V`, declared `d`. -/
+def eraseVD (d : Decl) : JTy := eraseT (fun _ => { decl := d }) .vc
+
 /-! ## Pure views of an interface map -/
 
-def depth : ℕ := 4
+/-- Deep enough for every chain the shared walk reads (`Scala.fuel` parents). -/
+def depth : ℕ := Scala.fuel + 1
 
 def linP (I : Cls → Iface) : ℕ → Cls → List Ty → List (Cls × List Ty)
   | 0, _, _ => []
@@ -183,12 +244,6 @@ def linP (I : Cls → Iface) : ℕ → Cls → List Ty → List (Cls × List Ty)
     | none => [(c, a)]
 
 def chainP (I : Cls → Iface) (c : Cls) : List Cls := (linP I depth c ids).map (·.1)
-
-/-- Erasure, from the current declarations. -/
-def eraseT (I : Cls → Iface) : Ty → JTy
-  | .vc => eraseV (I .V).decl.und
-  | .wz => if !(I .Z).decl.isTrait || (chainP I .Z).contains .W then .cZ else .cW
-  | t => eraseBase t
 
 def entriesP (I : Cls → Iface) (n : Name) (L : List (Cls × List Ty)) : List (List Ty × Option Ty) :=
   L.map fun e => (e.2, (I e.1).decl.decls.lookup n)
@@ -285,7 +340,7 @@ def erasT (x : Ctx) : List (Name × Ty) → T (List (Name × JTy))
     let j ← if special t then do
         match ← askQ (homeC t) (.er x n t) with
         | .j y => pure y
-        | _ => pure .Obj
+        | _ => pure objD
       else pure (eraseBase t)
     let l ← erasT x rest
     pure ((n, j) :: l)
@@ -303,7 +358,7 @@ def nameT (d : Decl) (p : Cls) (L : List (Cls × List Ty)) (ownJ : List (Name ×
   let inh := render es
   match d.decls.lookup n with
   | some t =>
-    let jo := (ownJ.lookup n).getD .Obj
+    let jo := (ownJ.lookup n).getD objD
     pure ⟨inh.isSome && inh != some t, ((js.map (·.2)).filter (· != jo)).dedup, none⟩
   | none => pure ⟨false, [], if d.fwd then (js.map (·.2)).head? else none⟩
 
@@ -395,7 +450,7 @@ structure Ext where
 inductive H
   | ty (t : Option Ty) (o : Option Cls)
   | ents (l : List (Cls × Option Ty))
-  | chain (l : List (Cls × Option (Cls × List Ty))) (ks : List Bool)
+  | chain (l : List (Cls × Option (Cls × List Ty))) (ks : List Scala.Kind)
   | asfInh (lin : List (Cls × List Ty)) (ts : List (Option Ty)) (os : List (Option Cls))
   | inh (l : List (Cls × Option (Cls × List Ty) × List (Name × Ty)))
   | j (x : JTy)
@@ -424,7 +479,7 @@ def witI (x : Ext) (I : Cls → Iface) (c : Cls) : List (Cls × List (Name × JT
   | .fresh => (chainP I c).map fun e => (e, (I e).decl.decls.map fun d => (d.1, eraseT I d.2))
   | .stored => (chainP I c).map fun e => (e, (I e).ers)
   | .vcStored => (chainP I c).map fun e =>
-      (e, ((I e).decl.decls.filter (·.2 == .vc)).map fun d => (d.1, ((I e).ers.lookup d.1).getD .Obj))
+      (e, ((I e).decl.decls.filter (·.2 == .vc)).map fun d => (d.1, ((I e).ers.lookup d.1).getD objD))
   | .diverge => (linP I depth c ids).map fun e =>
       (e.1, (I e.1).decl.decls.filterMap fun d =>
         if eraseT I d.2 ≠ eraseT I (Ty.subst e.2 d.2) then some (d.1, eraseT I d.2) else none)
@@ -436,12 +491,12 @@ def π (r : Rend) (x : Ext) (I : Cls → Iface) (c : Cls) : K → H
       | .asf => .ty (asfP I c n) (winnerP I c n)
       | .decl => .ents ((chainP I c).map fun e => (e, (I e).decl.decls.lookup n))) (witN x I c n)
   | .cls => .chain ((chainP I c).map fun e => (e, (I e).decl.parent))
-      (if x.kind then (chainP I c).map fun e => (I e).decl.isTrait else [])
+      (if x.kind then (chainP I c).map fun e => (I e).decl.kind else [])
   | .inh =>
     .inhW (match r with
       | .asf => .asfInh (linP I depth c ids) (names.map (asfP I c)) (names.map (winnerP I c))
       | .decl => .inh (declsP I c)) (witI x I c)
-  | .und => .j (eraseV (I c).decl.und)
+  | .und => .j (eraseVD (I c).decl)
 
 /-- The key of a type's erasure: the name of the class it reads. -/
 def homeK (t : Ty) : Cls × K := (homeC t, if t = .wz then .cls else .und)
@@ -676,7 +731,7 @@ theorem trace_entriesT (I : Cls → Iface) (x : Ctx) (n : Name) :
       exact ⟨h1, List.mem_cons_of_mem _ h2⟩
 
 theorem eraseT_base (I : Cls → Iface) (t : Ty) (h : special t = false) : eraseT I t = eraseBase t := by
-  cases t <;> simp_all [special, eraseT]
+  cases t <;> first | rfl | simp [special] at h
 
 theorem run_erasT (I : Cls → Iface) (x : Ctx) :
     ∀ ns, (erasT x ns).run (answer I) = ns.map fun p => (p.1, eraseT I p.2) := by
@@ -872,11 +927,149 @@ theorem scope_unitF (x : Ext) (I : Cls → Iface) (s : Src) :
   · obtain ⟨c, n, h, he⟩ := trace_obsT I _ _ hq
     rcases h with h | h <;> (cases h; exact he)
 
+/-! ### What erasure reads
+
+`Scala.erase` of `V` asks `V`'s declaration; of `W with Z`, the headers of `W` (the library
+trait) and `Z`, and `Z`'s linearization, which over this single-parent language reads the headers
+of `Z`'s chain (`asks_linWith`). -/
+
+theorem header_lowerI (I : Cls → Iface) (c : Cls) (hc : c ≠ .W) :
+    (lowerI I c).header = ⟨c.name, 2, (I c).decl.kind,
+      ((I c).decl.parent.map fun (p, as) => (p.name, as.map (Ty.toScala c))).toList⟩ := by
+  simp only [lowerI, hc, if_false, Decl.toScala, Scala.Decl.header, Scala.Decl.parents, List.append_nil]
+
+theorem asks_needHeader (e : Scala.Env) (P : Scala.Q → Prop) (n : String) (h : P (.header n)) :
+    Scala.Asks e P (Scala.needHeader n) := by
+  unfold Scala.needHeader
+  refine Scala.Asks.bind ?_ fun o => ?_
+  · intro q hq; simp only [Scala.tq_askHeader, List.mem_singleton] at hq; subst hq; exact h
+  · cases o
+    · exact Scala.Asks.throw _
+    · exact Scala.Asks.pure _
+
+/-- A parentless header's linearization asks nothing. -/
+theorem asks_linWith_nil (e : Scala.Env) (P : Scala.Q → Prop) (h : String × Scala.Header)
+    (hp : h.2.parents = []) : ∀ k, Scala.Asks e P (Scala.linWith Scala.Node.header k h)
+  | 0 => Scala.Asks.throw _
+  | k + 1 => by
+    simp only [Scala.linWith]
+    refine Scala.Asks.bind ?_ fun _ => Scala.Asks.pure _
+    show Scala.Asks e P (Scala.linMerge Scala.Node.header _ _ [] h.2.parents)
+    rw [hp]
+    exact Scala.Asks.pure _
+
+theorem single_envOf (I : Cls → Iface) : Scala.SingleParent (envOf I) := by
+  intro n h hn
+  simp only [envOf] at hn
+  obtain ⟨c, _, rfl⟩ := Option.map_eq_some_iff.1 hn
+  by_cases hW : c = .W
+  · subst hW; simp [lowerI, libW, Scala.Decl.header, Scala.Decl.parents]
+  · rw [header_lowerI I c hW]; cases (I c).decl.parent <;> simp
+
+/-- The parent chain through the shared headers is `c`'s chain (cut at the library trait). -/
+theorem chainOf_envOf (I : Cls → Iface) : ∀ f (c : Cls) (a : List Ty),
+    ∀ m ∈ Scala.chainOf (envOf I) f c.name, ∃ e ∈ (linP I f c a).map (·.1), m = e.name
+  | 0, _, _, m, hm => by simp [Scala.chainOf] at hm
+  | f + 1, c, a, m, hm => by
+    simp only [Scala.chainOf, List.mem_cons] at hm
+    rcases hm with rfl | hm
+    · exact ⟨c, by simp only [linP]; split <;> simp, rfl⟩
+    · by_cases hW : c = .W
+      · subst hW
+        simp [envOf, Cls.ofName?_name, lowerI, libW, Scala.Decl.header, Scala.Decl.parents] at hm
+      · simp only [envOf, Cls.ofName?_name, Option.map_some, Option.bind_some,
+          header_lowerI I c hW] at hm
+        rcases hp : (I c).decl.parent with _ | ⟨q, qa⟩
+        · simp [hp] at hm
+        · simp only [hp, Option.map_some, Option.toList_some, List.head?_cons] at hm
+          obtain ⟨e, he, rfl⟩ := chainOf_envOf I f q (qa.map (Ty.subst a)) m hm
+          exact ⟨e, by simp only [linP, hp, List.map_cons, List.mem_cons]; exact Or.inr he, rfl⟩
+
+theorem envOf_header (I : Cls → Iface) (c : Cls) :
+    envOf I (.header c.name) = some (lowerI I c).header := by
+  simp only [envOf, Cls.ofName?_name, Option.map_some]
+  rfl
+
+/-- The shared walk from `c` asks the headers of `c`'s chain only (`Scala.asks_linWith_chain`). -/
+theorem asks_linWith (I : Cls → Iface) (k : ℕ) (c : Cls) (a : List Ty) :
+    Scala.Asks (envOf I) (fun q => ∃ e ∈ (linP I (k + 1) c a).map (·.1), q = .header e.name)
+      (Scala.linWith Scala.Node.header k (c.name, (lowerI I c).header)) :=
+  (Scala.asks_linWith_chain (envOf I) (single_envOf I) k c.name _ (envOf_header I c)).mono
+    fun _ ⟨m, hm, hq⟩ => by
+      obtain ⟨e, he, rfl⟩ := chainOf_envOf I (k + 1) c a m hm
+      exact ⟨e, he, hq⟩
+
+theorem ex_needHeaderW (I : Cls → Iface) :
+    Scala.ex (envOf I) (Scala.needHeader "W") = .ok libW.header := rfl
+
+theorem ex_needHeaderZ (I : Cls → Iface) :
+    Scala.ex (envOf I) (Scala.needHeader "Z") = .ok (lowerI I .Z).header := rfl
+
+/-- Erasing `W with Z` asks the library trait's header and the headers of `Z`'s chain. -/
+theorem asks_wz (I : Cls → Iface) :
+    Scala.Asks (envOf I) (fun q => q = .header "W" ∨ ∃ e ∈ chainP I .Z, q = .header e.name)
+      (Scala.erase (Ty.toScala .M .wz)) := by
+  show Scala.Asks _ _ (Scala.eraseInter "W" "Z")
+  unfold Scala.eraseInter
+  refine Scala.Asks.bind_ok (asks_needHeader _ _ _ (Or.inl rfl)) fun ha hha => ?_
+  refine Scala.Asks.bind_ok (asks_needHeader _ _ _ (Or.inr ⟨.Z, mem_chainP_self I .Z, rfl⟩))
+    fun hb hhb => ?_
+  rw [ex_needHeaderW] at hha; cases hha
+  rw [ex_needHeaderZ] at hhb; cases hhb
+  refine Scala.Asks.bind_ok (asks_linWith_nil _ _ _ rfl _) fun _ _ => ?_
+  refine Scala.Asks.bind_ok ((asks_linWith I Scala.fuel .Z ids).mono ?_) fun _ _ => Scala.Asks.pure _
+  rintro q ⟨e, he, rfl⟩
+  exact Or.inr ⟨e, he, rfl⟩
+
+/-- Erasing `V` asks `V`'s declaration. -/
+theorem asks_vc (I : Cls → Iface) :
+    Scala.Asks (envOf I) (fun q => q = .decl "V" false) (Scala.erase (Ty.toScala .M .vc)) := by
+  show Scala.Asks _ _ (do
+    let some v ← Scala.askDecl "V" false | pure (Scala.jname "V")
+    match v.decl.kind, v.decl.under with
+    | .vcls, some (_, .int) => pure "I"
+    | .vcls, some (_, .long) => pure "J"
+    | .vcls, some (_, .str) => pure "Ljava/lang/String;"
+    | .vcls, some _ => pure "Ljava/lang/Object;"
+    | _, _ => pure (Scala.jname "V"))
+  refine Scala.Asks.bind ?_ fun o => ?_
+  · intro q hq
+    have : Scala.tq (envOf I) (Scala.askDecl "V" false) = [.decl "V" false] := rfl
+    rw [this] at hq; simpa using hq
+  · cases o with
+    | none => exact Scala.Asks.pure _
+    | some v => simp only; split <;> exact Scala.Asks.pure _
+
+theorem eraseT_vc_congr (I I' : Cls → Iface) (hV : (I .V).decl = (I' .V).decl) :
+    eraseT I .vc = eraseT I' .vc := by
+  unfold eraseT
+  rw [Scala.ex_congr _ _ _ fun q hq => ?_]
+  rw [asks_vc I q hq]
+  simp only [envOf, show Cls.ofName? "V" = some .V from rfl, Option.map_some, lowerI,
+    reduceCtorEq, ite_false, hV]
+  rfl
+
+theorem eraseT_vc (I : Cls → Iface) : eraseT I .vc = eraseVD (I .V).decl :=
+  eraseT_vc_congr _ _ rfl
+
+theorem eraseT_wz_congr (I I' : Cls → Iface)
+    (hZ : ∀ e ∈ chainP I .Z, e ≠ .W → (I e).decl.kind = (I' e).decl.kind ∧ (I e).decl.parent = (I' e).decl.parent) :
+    eraseT I .wz = eraseT I' .wz := by
+  unfold eraseT
+  rw [Scala.ex_congr _ _ _ fun q hq => ?_]
+  rcases asks_wz I q hq with rfl | ⟨e, he, rfl⟩
+  · rfl
+  · simp only [envOf, Cls.ofName?_name, Option.map_some]
+    by_cases hW : e = .W
+    · subst hW; rfl
+    · rw [header_lowerI I e hW, header_lowerI I' e hW, (hZ e he hW).1, (hZ e he hW).2]
+
 theorem eraseT_congr (I I' : Cls → Iface) (hV : (I .V).decl = (I' .V).decl)
     (hZ : ∀ e ∈ chainP I .Z, (I e).decl = (I' e).decl) (t : Ty) : eraseT I t = eraseT I' t := by
-  have hch : chainP I .Z = chainP I' .Z := by
-    unfold chainP; rw [linP_congr I I' _ _ _ fun e he => by rw [hZ e he]]
-  cases t <;> simp only [eraseT, hV, hch, hZ .Z (mem_chainP_self I .Z)]
+  cases t with
+  | vc => exact eraseT_vc_congr I I' hV
+  | wz => exact eraseT_wz_congr I I' fun e he _ => by rw [hZ e he]; exact ⟨rfl, rfl⟩
+  | _ => rfl
 
 theorem iface_unitF (s : Src) (J : Cls → Iface) :
     ((unitF s).run (answer J)).iface = ⟨s.decl, ownErs J s.decl⟩ := by
@@ -954,7 +1147,7 @@ theorem Er_locality (r : Rend) (x : Ext) (I I' : Cls → Iface) (c : Cls)
         rw [hch e he]; simp only [her]
     · exact hmap (fun I e => (e, (I e).ers)) fun e he => by rw [hch e he]
     · exact hmap (fun I e => (e, ((I e).decl.decls.filter (·.2 == .vc)).map fun d =>
-        (d.1, ((I e).ers.lookup d.1).getD .Obj))) fun e he => by rw [hch e he]
+        (d.1, ((I e).ers.lookup d.1).getD objD))) fun e he => by rw [hch e he]
     · rw [← hlin]
       apply List.map_congr_left
       intro e he
@@ -972,7 +1165,7 @@ theorem Er_locality (r : Rend) (x : Ext) (I I' : Cls → Iface) (c : Cls)
   | cls =>
     simp only [π]
     rw [hmap (fun I e => (e, (I e).decl.parent)) fun e he => by rw [hch e he],
-      hmap (fun I e => (I e).decl.isTrait) fun e he => by rw [hch e he]]
+      hmap (fun I e => (I e).decl.kind) fun e he => by rw [hch e he]]
   | inh =>
     cases r
     · simp only [π, hlin, List.map_congr_left fun n _ => hasf n,
@@ -990,14 +1183,14 @@ theorem home_abs (x : Ext) (hkind : x.kind = true) (I I' : Cls → Iface) (t : T
   cases t with
   | vc =>
     simp only [homeK, homeC, reduceCtorEq, ite_false, π, H.j.injEq] at h
-    exact h
+    rw [eraseT_vc, eraseT_vc, h]
   | wz =>
     simp only [homeK, homeC, ite_true, π, H.chain.injEq, hkind] at h
     obtain ⟨hl, hk⟩ := h
     have hc := map_pair_fst hl
     rw [← hc] at hk
-    have hz := (List.map_inj_left.1 hk) .Z (mem_chainP_self I .Z)
-    simp only [eraseT, hc, hz]
+    exact eraseT_wz_congr I I' fun e he _ =>
+      ⟨(List.map_inj_left.1 hk) e he, (mem_of_map_pair hl he).2⟩
   | _ => simp [special] at hs
 
 /-- **Item 5.** As declared, with faithful macro keys and the kind in the class-name hash, meets
@@ -1332,6 +1525,14 @@ def int₁ : Cls → Src
 def int₂ : Cls → Src
   | Z => { decl := { parent := some (W, [int, int]), isTrait := true } }
   | c => int₀ c
+
+/-- `W with Z` through `Scala.erase`: `W` while `Z` is a trait of its own, `Z` once it is a class
+or extends `W`. -/
+example : eraseT (fun c => { decl := (int₀ c).decl }) .wz = "LW;" := by decide
+example : eraseT (fun c => { decl := (int₁ c).decl }) .wz = "LZ;" := by decide
+example : eraseT (fun c => { decl := (int₂ c).decl }) .wz = "LZ;" := by decide
+/-- `V` through `Scala.erase`: its underlying type's descriptor. -/
+example : eraseVD { und := some .long } = "J" ∧ eraseVD { und := some .int } = "I" := by decide
 
 /-- Trait to class: nothing recompiles under any witness or edge, because the name `Z` does not
 cover its kind; the declarer `M`, the forwarder in `A` and the client `X` are all stale. -/

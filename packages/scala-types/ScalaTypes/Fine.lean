@@ -304,6 +304,24 @@ theorem Asks.bind {e : Env} {P : Q → Prop} {x : M α} {f : α → M β} (hx : 
     | ok a => exact hf a q
     | error _ => simp
 
+/-- `Asks.bind`, where the continuation need only hold for the result `x` gives. -/
+theorem Asks.bind_ok {e : Env} {P : Q → Prop} {x : M α} {f : α → M β} (hx : Asks e P x)
+    (hf : ∀ a, ex e x = .ok a → Asks e P (f a)) : Asks e P (x >>= f) := by
+  intro q hq
+  rw [tq_bind, List.mem_append] at hq
+  rcases hq with hq | hq
+  · exact hx q hq
+  · revert hq; cases h : ex e x with
+    | ok a => exact hf a h q
+    | error _ => simp
+
+theorem Asks.mono {e : Env} {P P' : Q → Prop} {x : M α} (h : Asks e P x) (hP : ∀ q, P q → P' q) :
+    Asks e P' x := fun q hq => hP q (h q hq)
+
+/-- A computation's result is determined by the answers to the queries it asks. -/
+theorem ex_congr (e e' : Env) (x : M α) (h : ∀ q ∈ tq e x, e q = e' q) : ex e x = ex e' x :=
+  Task.run_congr _ _ _ h
+
 theorem Asks.pure {e : Env} {P : Q → Prop} (a : α) : Asks e P (Pure.pure a : M α) := by
   intro q hq; simp at hq
 
@@ -345,6 +363,124 @@ theorem asks_linH_of (e : Env) : ∀ k h, Asks e P (linH k h)
     exact Asks.bind (asks_linMerge_of hP e _ _ (asks_linH_of e k) _ []) fun _ => Asks.pure _
 
 end AsksHeader
+
+/-! ### Single-parent hierarchies
+
+Where every header has at most one parent (as in the toy languages of `Erasure` and
+`ImplicitScope`), the walk from `n` reads the headers of `n`'s parent chain (`chainOf`), and
+returns classes of it. -/
+
+/-- The parent chain of `n` through `e`'s headers, `k` classes deep: `n`, then its first parent's. -/
+def chainOf (e : Env) : Nat → String → List String
+  | 0, _ => []
+  | k + 1, n => n :: match (e (.header n) : Option Header).bind (·.parents.head?) with
+    | some (p, _) => chainOf e k p
+    | none => []
+
+/-- Every header has at most one parent. -/
+def SingleParent (e : Env) : Prop := ∀ n (h : Header), e (.header n) = some h → h.parents.length ≤ 1
+
+theorem ex_fetch_ok (e : Env) (p : String) (r : String × Header)
+    (h : ex e (Node.header.fetch p) = .ok r) : r.1 = p ∧ e (.header p) = some r.2 := by
+  have : ex e (Node.header.fetch p) =
+      match e (.header p) with | some h => .ok (p, h) | none => .error s!"not found: {p}" := by
+    show ex e (needHeader p >>= fun h => pure (p, h)) = _
+    rw [ex_bind, ex_needHeader]
+    cases e (.header p) <;> rfl
+  rw [this] at h
+  revert h
+  cases hp : e (.header p) with
+  | none => intro h; cases h
+  | some hp' => intro h; cases h; exact ⟨rfl, rfl⟩
+
+/-- **The walk over a single-parent hierarchy asks the headers of the parent chain.** -/
+theorem asks_linWith_chain (e : Env) (hs : SingleParent e) : ∀ k (n : String) (h : Header),
+    e (.header n) = some h →
+      Asks e (fun q => ∃ m ∈ chainOf e (k + 1) n, q = .header m) (linWith Node.header k (n, h))
+  | 0, _, _, _ => Asks.throw _
+  | k + 1, n, h, hn => by
+    simp only [linWith]
+    refine Asks.bind ?_ fun _ => Asks.pure _
+    show Asks e _ (linMerge Node.header _ _ [] h.parents)
+    have hchain : chainOf e (k + 1 + 1) n = n :: match h.parents.head? with
+        | some (p, _) => chainOf e (k + 1) p
+        | none => [] := by
+      simp only [chainOf, hn, Option.bind_some]
+    have hlen := hs n h hn
+    match hp : h.parents, hlen with
+    | [], _ => exact Asks.pure _
+    | [(p, _)], _ =>
+      simp only [linMerge]
+      rw [hp] at hchain
+      simp only [List.head?_cons] at hchain
+      refine Asks.bind_ok ?_ fun r hr => ?_
+      · show Asks e _ (needHeader p >>= fun h => pure (p, h))
+        refine Asks.bind ?_ fun _ => Asks.pure _
+        unfold needHeader
+        refine Asks.bind ?_ fun o => ?_
+        · intro q hq
+          simp only [tq_askHeader, List.mem_singleton] at hq
+          subst hq
+          refine ⟨p, ?_, rfl⟩
+          rw [hchain]; cases k <;> simp [chainOf]
+        · cases o
+          · exact Asks.throw _
+          · exact Asks.pure _
+      · obtain ⟨hr1, hr2⟩ := ex_fetch_ok e p r hr
+        obtain ⟨r1, r2⟩ := r
+        simp only at hr1 hr2
+        subst hr1
+        refine Asks.bind_ok ((asks_linWith_chain e hs k r1 r2 hr2).mono ?_) fun _ _ => Asks.pure _
+        rintro q ⟨m, hm, rfl⟩
+        exact ⟨m, by rw [hchain]; exact List.mem_cons_of_mem _ hm, rfl⟩
+
+/-- …and returns classes of it. -/
+theorem linWith_chain (e : Env) (hs : SingleParent e) : ∀ k (n : String) (h : Header)
+    (l : List ((String × Header) × List Ty)), e (.header n) = some h →
+      ex e (linWith Node.header k (n, h)) = .ok l → ∀ x ∈ l, x.1.1 ∈ chainOf e k n
+  | 0, _, _, _, _, hl => by simp [linWith] at hl
+  | k + 1, n, h, l, hn, hl => by
+    simp only [linWith, ex_bind] at hl
+    have hchain : chainOf e (k + 1) n = n :: match h.parents.head? with
+        | some (p, _) => chainOf e k p
+        | none => [] := by
+      simp only [chainOf, hn, Option.bind_some]
+    revert hl
+    rw [show Node.header.name (n, h) = h.name from rfl, show Node.header.parents (n, h) = h.parents from rfl,
+      show Node.header.tparams (n, h) = h.tparams from rfl]
+    have hlen := hs n h hn
+    match hp : h.parents, hlen with
+    | [], _ =>
+      simp only [linMerge, ex_pure]
+      intro hl; cases hl
+      intro x hx
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      subst hx; rw [hchain]; exact List.mem_cons_self
+    | [(p, pa)], _ =>
+      rw [hp] at hchain
+      simp only [List.head?_cons] at hchain
+      simp only [linMerge, ex_bind]
+      cases hf : ex e (Node.header.fetch p) with
+      | error _ => intro hl; cases hl
+      | ok r =>
+        obtain ⟨hr1, hr2⟩ := ex_fetch_ok e p r hf
+        obtain ⟨r1, r2⟩ := r
+        simp only at hr1 hr2
+        subst hr1
+        simp only
+        cases hrec : ex e (linWith Node.header k (r1, r2)) with
+        | error _ => intro hl; cases hl
+        | ok lp =>
+          simp only [ex_pure]
+          intro hl; cases hl
+          intro x hx
+          rw [hchain]
+          simp only [List.filter_nil, List.append_nil, List.mem_cons] at hx
+          rcases hx with rfl | hx
+          · exact List.mem_cons_self
+          · have hx' := (List.mem_filter.1 hx).1
+            obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hx'
+            exact List.mem_cons_of_mem _ (linWith_chain e hs k r1 r2 lp hr2 hrec y hy)
 
 theorem asks_fetchH (e : Env) (p : String) : Asks e Walky (Node.header.fetch p) :=
   asks_fetchH_of (fun _ => trivial) e p

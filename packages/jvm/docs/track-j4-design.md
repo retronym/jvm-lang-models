@@ -31,7 +31,7 @@ That is all. No data, no control flow, no exceptions, no `<clinit>`: the body is
 
 **The probe observes exactly the outcome.** `Render.java` already makes every rendered method log its owner through `ProbeLog.ran` on entry; it emits the body's sites after that log, with the same `emit` used for client sites and `this` as `aload_0`. `ProbeLog` keeps the list of owners entered instead of the last one, and `Run.java` compares the list and the `Throwable`. The known-deviation handling and the ledger are unchanged.
 
-**The front ends already produce bodies.** [`Scala.ClassOut`](../../scala/Scala/Lower.lean#L94) and [`Java.ClassOut`](../../java/Java/Lower.lean#L142) carry "the invokes of synthesized bodies" (`$init$` calls, forwarders, super calls, bridges) because the probes compare them; `toJvm` drops them today. With bodies in [`MethodInfo`](../Jvm/Link.lean#L51), `toJvm` keeps them, and the Scala catalogue's `valAddedToTrait`, `superCall*` and `traitOverrideAdded` are judged with the library's own calls. That is the first place the design is tested against something the model already got wrong.
+**The front ends already produce bodies.** [`Scala.ClassOut`](../../scala/Scala/Lower.lean#L110) and [`Java.ClassOut`](../../java/Java/Lower.lean#L142) carry "the invokes of synthesized bodies" (`$init$` calls, forwarders, super calls, bridges) because the probes compare them; `toJvm` drops them today. With bodies in [`MethodInfo`](../Jvm/Link.lean#L51), `toJvm` keeps them, and the Scala catalogue's `valAddedToTrait`, `superCall*` and `traitOverrideAdded` are judged with the library's own calls. That is the first place the design is tested against something the model already got wrong.
 
 ## What stays out, and why
 

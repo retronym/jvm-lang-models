@@ -13,6 +13,6 @@ Theorems that connect layers. B4 ([`untouched_eq_clean`](Links/ZincBridge.lean#L
 | File | Contents |
 |---|---|
 | [`ZincBridge.lean`](Links/ZincBridge.lean) | Scala lowering as an [`XCompiler`](../inc-comp/IncComp/General.lean#L22); T3b (explicit) for [`XCompiler`](../inc-comp/IncComp/General.lean#L22); B4 [`untouched_eq_clean`](Links/ZincBridge.lean#L133) |
-| [`ZincBridgeKeys.lean`](Links/ZincBridgeKeys.lean) | B4 with Zinc's actual keys (inheritance, member refs): [`loop_witness`](Links/ZincBridgeKeys.lean#L158) ([retronym/zinc#57](https://github.com/retronym/zinc/issues/57)) |
+| [`ZincBridgeKeys.lean`](Links/ZincBridgeKeys.lean) | B4 with Zinc's actual keys (inheritance, member refs): [`loop_witness`](Links/ZincBridgeKeys.lean#L159) ([retronym/zinc#57](https://github.com/retronym/zinc/issues/57)) |
 | [`ZincBridgeLibs.lean`](Links/ZincBridgeLibs.lean) | B4 for a client of a library JAR (stamp keys) |
 | [`ZincBridgeScala3.lean`](Links/ZincBridgeScala3.lean) | B4 for Scala 3: `comp` fails under F6 ([`not_comp`](Links/ZincBridgeScala3.lean#L79)) and holds with [retronym/scala3#10](https://github.com/retronym/scala3/issues/10) ([`after_eq_fresh_fix`](Links/ZincBridgeScala3.lean#L110)) |

@@ -26,10 +26,25 @@ namespace Scala
 
 def jname (n : String) : String := s!"L{n};"
 
+/-- The erasure of an intersection `a with b`: its *intersection dominator* (scalac's
+`intersectionDominator`, for two components): the one that is a subclass of the other, else the
+class if one is a class and the other a trait, else the first. It reads both headers (their kinds)
+and their linearizations, not their members. -/
+def eraseInter (a b : String) : M String := do
+  let ha ← needHeader a
+  let hb ← needHeader b
+  let la ← linH fuel (a, ha)
+  let lb ← linH fuel (b, hb)
+  let derives (l : List ((String × Header) × List Ty)) (n : String) := l.any (·.1.2.name == n)
+  pure (jname (if derives lb a then b else if derives la b then a
+    else if ha.kind == .trt && hb.kind != .trt then b else a))
+
 /-- Erasure of a type in a descriptor. A value class erases to its underlying type, which needs
 its declaration. -/
 def erase : Ty → M String
   | .int => pure "I"
+  | .long => pure "J"
+  | .inter a b => eraseInter a b
   | .bool => pure "Z"
   | .unit => pure "V"
   | .str => pure "Ljava/lang/String;"
@@ -43,6 +58,7 @@ def erase : Ty → M String
     let d := v.decl
     match d.kind, d.under with
     | .vcls, some (_, .int) => pure "I"
+    | .vcls, some (_, .long) => pure "J"
     | .vcls, some (_, .str) => pure "Ljava/lang/String;"
     | .vcls, some _ => pure "Ljava/lang/Object;"
     | _, _ => pure (jname n)

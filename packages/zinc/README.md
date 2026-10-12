@@ -6,7 +6,7 @@ Zinc as instances of `IncComp`: its loop and policies (`Zinc.Loop`), its bridges
 
 **Calibration.** The conformance harness ([retronym/zinc#25](https://github.com/retronym/zinc/issues/25), #36) runs these spaces through real Zinc and compares classfiles with a clean build; on the names and givens spaces the model and Zinc agree on every verdict and recompiled set (2,331 + 2,372 cases). 20 failures the model predicted all failed on Zinc `develop`.
 
-**Gaps.** `Erasure` and `ImplicitScope` each carry their own toy Scala instead of `scala-types`; `Hier` and `Flat` are on the shared walk. The port is [`docs/29-shared-scala.md`](docs/29-shared-scala.md).
+**Gaps.** `ImplicitScope` carries its own toy Scala instead of `scala-types`, and `Erasure` its own two-parameter walk (its erasure is [`Scala.erase`](../scala/Scala/Lower.lean#L44)); `Hier` and `Flat` are on the shared walk. The port is [`docs/29-shared-scala.md`](docs/29-shared-scala.md).
 
 ## Files
 
@@ -19,7 +19,7 @@ Zinc as instances of `IncComp`: its loop and policies (`Zinc.Loop`), its bridges
 | [`Zinc/Bridges/HierShared.lean`](Zinc/Bridges/HierShared.lean) | `Hier`'s lookup is the shared semantics over whole declarations, for every program ([`toy_eq_shared`](Zinc/Bridges/HierShared.lean#L63)); the space of 1,638,400 hierarchies, for calibration against the compilers |
 | [`Hier.lean`](Zinc/Bridges/Hier.lean), [`HierSound.lean`](Zinc/Bridges/HierSound.lean) Class hierarchies lowered to `ScalaTypes`, member lookup the shared walk over `header` and `member` queries; designs `D` (decls + walk), `W` (materialised members), `Mk` (Merkle) all meet their obligations |
 | [`Flat.lean`](Zinc/Bridges/Flat.lean) | The Merkle PoC's flattened hash over a stored linearization: [`Fl_obligations`](Zinc/Bridges/Flat.lean#L759), [`flat_sound`](Zinc/Bridges/Flat.lean#L843); header and refchecks keys and their ablation |
-| [`Erasure.lean`](Zinc/Features/Erasure.lean) | Erasure through inheritance (as seen from vs as declared; value classes, intersections): witnesses, a dependency edge, [`dep_sound`](Zinc/Features/Erasure.lean#L1129); `lake exe exhaustive erasure` |
+| [`Erasure.lean`](Zinc/Features/Erasure.lean) | Erasure through inheritance (as seen from vs as declared; value classes, intersections): witnesses, a dependency edge, [`dep_sound`](Zinc/Features/Erasure.lean#L1322); `lake exe exhaustive erasure` |
 | [`ImplicitScope.lean`](Zinc/Features/ImplicitScope.lean) | Implicit scope through an ancestor's companion across projects ([sbt/zinc#1845](https://github.com/sbt/zinc/issues/1845)): [`is_obligations`](Zinc/Features/ImplicitScope.lean#L520), [`is_sound`](Zinc/Features/ImplicitScope.lean#L576), [`stored_eq_recomputed`](Zinc/Features/ImplicitScope.lean#L680); `lake exe exhaustive implicit` |
 | [`SplitProof.lean`](Zinc/Features/SplitProof.lean) | The shared names instance `Spec` (a slot language, units split upstream and downstream): today's and #34's failures, the rules' obligations, precision, F4/F5 as [`joint_not_comp`](Zinc/Features/SplitProof.lean#L952), [`cross_downstream_sound`](Zinc/Features/SplitProof.lean#L621) |
 | [`SpecGivens.lean`](Zinc/Features/SpecGivens.lean) | Implicit search on `Spec`'s scopes, as an [`XCompiler`](../inc-comp/IncComp/General.lean#L22): G1/G2 ([`g12_today`](Zinc/Features/SpecGivens.lean#L302)), the G rule's obligations, #24's [`g_decls_not_abstraction`](Zinc/Features/SpecGivens.lean#L320) |
