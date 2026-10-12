@@ -79,7 +79,7 @@ The Mathlib-free packages can be required on their own, for example [`packages/i
 
 This is the canonical statement of the obligations and T1–T5; other documents point here.
 
-**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On [`XCompiler`](packages/inc-comp/IncComp/General.lean#L20):
+**The obligations.** A compiler is a per-unit task that queries an oracle, plus a bridge: `keys` (what it records), `π` (a hash per key) and `covers` (which queries a key vouches for). On [`XCompiler`](packages/inc-comp/IncComp/General.lean#L20) ([`XCompiler.Obligations`](packages/inc-comp/IncComp/General.lean#L44)):
 
 - **comp** (compositionality): joint compilation of a group is a fixed point of the per-unit tasks, with group-mates answered from their fresh interfaces;
 - **coverage**: every traced query, misses included, is covered by a recorded key;
