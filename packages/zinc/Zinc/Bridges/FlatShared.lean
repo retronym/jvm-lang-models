@@ -31,8 +31,8 @@ Results, over the 192,000 programs without a `var`:
 |---|---|---|---|
 | linearization agrees | 192,000 | 192,000 | 192,000 |
 | selections agree | 192,000 | 192,000 | 192,000 |
-| each class compiles under both, or fails under both | 184,640 | 124,352 | 191,680 |
-| the same errors, by kind and class | 171,392 | 103,824 | 184,064 |
+| each class compiles under both, or fails under both | 162,320 | 117,520 | 183,488 |
+| the same errors, by kind and class | 137,456 | 84,288 | 153,952 |
 
 The first two rows are now `lin_eq_shared` and `sel_eq_shared` (no class of the space declares a
 selected member private). `Flat`'s refchecks are closest to Scala 3's. The named exclusions, where
@@ -51,7 +51,7 @@ selected member private). `Flat`'s refchecks are closest to Scala 3's. The named
 
 Checking this comparison found two gaps in the shared semantics, both fixed in `Scala.Members` and
 pinned by witnesses there: an abstract member and a concrete one of an incompatible type through
-different parents (both compilers reject), and Scala 3's re-abstraction by a trait.
+different parents (both compilers reject), and Scala 3's re-abstraction by a trait (track-s.md, 13 Oct).
 -/
 
 open Query
