@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    name: Workspace (all packages)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,3 +29,38 @@ jobs:
           lint: false
       - name: Core theorems use only the standard axioms
         run: python3 -I scripts/check_axioms.py
+
+  standalone:
+    name: Standalone ${{ matrix.package }}
+    # The Mathlib-free packages, built on their own, as a consumer that requires one of them does.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [query, jvm, java, scala-types, scala, intellij]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: packages/${{ matrix.package }}
+          use-mathlib-cache: false
+          build: true
+          test: false
+          lint: false
+
+  mima-sound:
+    name: MiMa.Sound (slow)
+    # The corrected MiMa rules, checked by kernel `decide` over the edit space: about half an hour,
+    # so only on main and on demand.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          use-mathlib-cache: true
+          build: false
+          test: false
+          lint: false
+      - run: lake build MiMa.Sound

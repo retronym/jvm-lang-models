@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "query",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../query",
+   "configFile": "lakefile.toml"}],
+ "name": "«scala-types»",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

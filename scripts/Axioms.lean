@@ -1,9 +1,8 @@
 import Zinc
 import Scala
-import BinCompat.ZincBridgeScala3
-import BinCompat.ZincBridgeKeys
-import BinCompat.ZincBridgeLibs
-
+import Links.ZincBridgeScala3
+import Links.ZincBridgeKeys
+import Links.ZincBridgeLibs
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
@@ -69,7 +68,7 @@ import BinCompat.ZincBridgeLibs
 #print axioms Zinc.SplitProof.Spec.g_narrowed_obligations
 #print axioms Zinc.SplitProof.Spec.g12_today
 #print axioms Zinc.TCompiler.downstream_sound
--- the shared asSeenFrom (Scala/AsSeenFrom.lean) and T1 for lowering
+-- the shared asSeenFrom (packages/scala-types/ScalaTypes/AsSeenFrom.lean) and T1 for lowering
 #print axioms AsSeenFrom.compose
 #print axioms AsSeenFrom.chain_is_single
 #print axioms Scala.lower_congr

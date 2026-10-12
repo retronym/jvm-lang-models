@@ -1,0 +1,63 @@
+name = "harness"
+version = "0.1.0"
+
+# The executables that enumerate program spaces, write the dumps the conformance harness and the
+# probes read, and print the exhaustive checks' tables; and the scripts that analyse their runs.
+# Run them from the repository root: `lake exe <name>`.
+[[require]]
+name = "zinc"
+path = "../zinc"
+
+[[require]]
+name = "jvm"
+path = "../jvm"
+
+[[require]]
+name = "java"
+path = "../java"
+
+[[require]]
+name = "scala"
+path = "../scala"
+
+[[require]]
+name = "mima"
+path = "../mima"
+
+[[require]]
+name = "links"
+path = "../links"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_exe]]
+name = "exhaustive"
+root = "Harness.Exhaustive"
+
+[[lean_exe]]
+name = "conformance"
+root = "Harness.Conformance"
+
+[[lean_exe]]
+name = "jconformance"
+root = "Harness.JConformance"
+
+[[lean_exe]]
+name = "jvmcases"
+root = "Harness.JvmCases"
+
+[[lean_exe]]
+name = "scalaprobe"
+root = "Harness.ScalaProbe"
+
+[[lean_exe]]
+name = "javaprobe"
+root = "Harness.JavaProbe"
+
+[[lean_exe]]
+name = "bincompat"
+root = "Harness.MimaMain"
+

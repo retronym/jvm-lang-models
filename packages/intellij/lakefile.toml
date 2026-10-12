@@ -1,0 +1,13 @@
+name = "intellij"
+version = "0.1.0"
+defaultTargets = ["IntelliJ"]
+
+# When the IntelliJ Scala plugin's chains of substitutor links compute the same member type as
+# scalac's `asSeenFrom`. scalac's walk is `ScalaTypes.AsSeenFrom`, shared with the Scala layer;
+# `IntelliJ.Port` proves this model's `Scalac.asf` is that map. No Mathlib.
+[[require]]
+name = "scala-types"
+path = "../scala-types"
+
+[[lean_lib]]
+name = "IntelliJ"

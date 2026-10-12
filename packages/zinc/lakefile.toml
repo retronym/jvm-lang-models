@@ -1,0 +1,25 @@
+name = "zinc"
+version = "0.1.0"
+defaultTargets = ["Zinc"]
+
+# Zinc as instances of `IncComp`: its loop and policies (`Zinc.Loop`), its bridges and variants
+# (`Zinc.Bridges`: Scala 2 as seen from, Scala 3 as declared, Merkle, hash forms), and each Scala
+# and Java feature (`Zinc.Features`).
+[[require]]
+name = "inc-comp"
+path = "../inc-comp"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+# The name-resolution spaces, compiled to native code so that `native_decide` over them (in
+# `Zinc.Features.NamesRules`) does not run in the interpreter.
+[[lean_lib]]
+name = "ZincNames"
+roots = ["ZincNames"]
+precompileModules = true
+
+[[lean_lib]]
+name = "Zinc"

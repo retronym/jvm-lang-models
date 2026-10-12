@@ -1,0 +1,16 @@
+# `Query`
+
+A computation that asks questions: a query tree (`Task`) that either returns or asks a query and continues with a function of the answer; running it against an oracle gives the output and the *trace*. T1 (`Task.run_eq_of_trace`): two oracles that agree on the trace give the same output. Every model in this repository is built on it. No Mathlib.
+
+**Start here.** `Query/Task.lean`.
+
+**Calibration.** None needed: it is the free monad of *Build Systems à la Carte* with a dependent answer type.
+
+**Gaps.** `Task` still lives in the `Zinc` namespace, from before this package existed.
+
+## Files
+
+| File | Contents |
+|---|---|
+| `Task.lean` | Free monad of query trees; `run`, `trace`; T1 `run_eq_of_trace`, `run_congr` |
+| `Basic.lean` | What the Mathlib-free layers took from Mathlib: decidable equality of `Except`, a low-priority `List` monad, `dedupLast` (Mathlib's `dedup`, structural) |

@@ -1,0 +1,12 @@
+name = "scala-types"
+version = "0.1.0"
+defaultTargets = ["ScalaTypes"]
+
+# Scala's types as scalac computes them: `asSeenFrom`, linearization, membership and overriding.
+# No Mathlib, so that the IntelliJ model and other consumers can depend on it cheaply.
+[[require]]
+name = "query"
+path = "../query"
+
+[[lean_lib]]
+name = "ScalaTypes"
