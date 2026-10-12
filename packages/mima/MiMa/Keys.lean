@@ -80,7 +80,7 @@ theorem miss_changes_footprint (x : Witness) (h0 : (outcome x.w0 x.prog).toBool 
 
 /-! ## The gaps, each with a witness -/
 
-def pubM : MethodInfo := {}
+def pubM : MethodInfo C N D := {}
 
 /-- **MiMa-F1, final fields.** A public field becomes `final`; a client's `putfield` now fails with
 `IllegalAccessError`. MiMa's field key covers the query and does not compare `final`. -/
@@ -162,7 +162,7 @@ example : protectedRemoved.missed = true ∧ protectedRemoved.uncovered (.method
 
 /-- The `mima` field of each `Jvm` catalogue case is the first problem the model of MiMa reports
 (which MiMa itself reports too: `packages/mima/probes`). -/
-example : (all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject).all
+example : (all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject ++ j4).all
     (fun k => k.mima == ((mima k.v0 k.v1).head?.map Problem.name)) = true := by
   decide +kernel
 

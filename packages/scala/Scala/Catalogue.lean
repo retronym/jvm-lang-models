@@ -15,8 +15,9 @@ Library and client are lowered with `Scala.lower`, then linked with `Jvm.outcome
 compatible, yet Zinc must recompile the client. `widenedToValueClass` shows the other gap: the
 edited unit is `V`, but the classfile that changes is `W`'s, because lowering `W` read `V`.
 
-Sites that would run a trait method's body through `invokestatic T.m$` or `T.$init$` are left
-out: they predate static interface methods in `Jvm` (Track J3).
+A synthesized body is the method's body in `Jvm` (Track J4): a mixin forwarder runs `T.m$`, which
+runs `T.m`; a constructor runs the `$init$` of its traits, which runs the setters of their `val`s; a
+static forwarder reads `MODULE$` and calls the module's method. So outcomes list those entries too.
 -/
 
 namespace Scala.Catalogue
@@ -44,7 +45,9 @@ def build (dl : Dialect) (lib client : Program) : Except String (List ClassOut) 
   let c ← (client.desugar dl).mapM fun s => lower dl s env
   pure (c.flatten ++ l ++ (← preludeClasses dl))
 
-def Case.prog (k : Case) : Jvm.Program String String String := { loads := k.loads, sites := k.sites }
+/-- The program; a new instance runs its `()V` constructor's body (the `$init$` calls). -/
+def Case.prog (k : Case) : Jvm.Program String String String :=
+  { loads := k.loads, sites := k.sites, init := some (ctorName, "()V") }
 
 def run (cs : Except String (List ClassOut)) (p : Jvm.Program String String String) :
     Except String (Except LinkError (List String)) :=
@@ -92,8 +95,8 @@ def abstractAddedToTrait : Case where
   sites := [invokeinterface "T" "b" "()I" "X"]
 
 /-- A `val` added to a trait: its getter is abstract in the interface and implemented in each
-class that mixes the trait in, so an old client class lacks it. On HotSpot (2.13.18) the failure
-comes earlier, at `new X`: `T.$init$` calls the setter the old class lacks. -/
+class that mixes the trait in, so an old client class lacks it. The failure comes at `new X`, as on
+HotSpot (2.13.18): `X.<init>` runs `T.$init$`, which calls the setter the old class lacks. -/
 def valAddedToTrait : Case where
   name := "valAddedToTrait"
   mima := some "ReversedMissingMethodProblem"
@@ -101,7 +104,7 @@ def valAddedToTrait : Case where
   v1 := [trt "T" [dfn "a", { name := "v", res := .int, isVal := true }]]
   client := [cls "X" [] none [("T", [])]]
   loads := ["X"]
-  sites := [invokeinterface "T" "v" "()I" "X"]
+  sites := [new "X", invokeinterface "T" "v" "()I" "X"]
 
 /-- A class becomes a trait: the client's subclass now extends an interface. -/
 def classBecomesTrait : Case where
@@ -212,19 +215,24 @@ def all : List Case :=
    paramWithDefaultAdded, traitOverrideAdded, widenedToValueClass, caseFieldAdded, nestedClassMoved,
    enumCaseAdded, enumCaseRemoved, inlineBodyChanged]
 
-example : caseFieldAdded.before = .ok (.ok ["P", "P", "P"]) ∧
+example : caseFieldAdded.before = .ok (.ok ["P", "P", "P", "P$", "P$"]) ∧
     caseFieldAdded.after = .ok (.error .noSuchMethod) := by decide +kernel
 
-example : concreteAddedToTrait.after = .ok (.ok ["X", "X", "T"]) := by decide +kernel
+/-- `X.a` is a forwarder to `T.a$`, which runs `T.a`; `T.b` is a default method. -/
+example : concreteAddedToTrait.after = .ok (.ok ["X", "X", "T", "T", "T"]) := by decide +kernel
 example : abstractAddedToTrait.after = .ok (.error .abstractMethod) := by decide +kernel
 example : valAddedToTrait.after = .ok (.error .abstractMethod) ∧
-    valAddedToTrait.fresh = .ok (.ok ["X"]) := by decide +kernel
+    valAddedToTrait.fresh = .ok (.ok ["X", "X"]) := by decide +kernel
+/-- …and it is `new X` that fails, through `T.$init$`'s setter call. -/
+example : ({ valAddedToTrait with sites := [new "X"] }).before = .ok (.ok ["X"]) ∧
+    ({ valAddedToTrait with sites := [new "X"] }).after = .ok (.error .abstractMethod) := by decide +kernel
 example : classBecomesTrait.before = .ok (.ok []) ∧
     classBecomesTrait.after = .ok (.error .incompatibleClassChange) := by decide +kernel
-example : paramWithDefaultAdded.before = .ok (.ok ["O$", "O"]) ∧
+/-- The static forwarder `O.f` reads `O$.MODULE$` and calls `O$.f`. -/
+example : paramWithDefaultAdded.before = .ok (.ok ["O$", "O", "O$", "O$"]) ∧
     paramWithDefaultAdded.after = .ok (.error .noSuchMethod) := by decide +kernel
 example : traitOverrideAdded.before = .ok (.ok ["B"]) ∧ traitOverrideAdded.after = .ok (.ok ["B"]) ∧
-    traitOverrideAdded.fresh = .ok (.ok ["X"]) := by decide +kernel
+    traitOverrideAdded.fresh = .ok (.ok ["X", "T", "T"]) := by decide +kernel
 example : widenedToValueClass.before = .ok (.ok ["W"]) ∧
     widenedToValueClass.after = .ok (.error .noSuchMethod) := by decide +kernel
 
@@ -235,12 +243,12 @@ example : (trace .s213 (cls "W" [{ name := "use", params := [.ref "V"], res := .
 example : nestedClassMoved.before = .ok (.ok ["Top$N", "Top$N"]) ∧
     nestedClassMoved.after = .ok (.error .noClassDef) := by decide +kernel
 
-example : enumCaseAdded.before = .ok (.ok ["Color$", "Color"]) ∧
-    enumCaseAdded.after = .ok (.ok ["Color$", "Color"]) := by decide +kernel
+example : enumCaseAdded.before = .ok (.ok ["Color$", "Color", "Color$", "Color$"]) ∧
+    enumCaseAdded.after = .ok (.ok ["Color$", "Color", "Color$", "Color$"]) := by decide +kernel
 example : enumCaseRemoved.after = .ok (.error .noSuchField) := by decide +kernel
 
 /-- The library's classfiles are equal before and after the edit. -/
 example : lowerProgram .s3 inlineBodyChanged.v0 = lowerProgram .s3 inlineBodyChanged.v1 := by decide +kernel
-example : inlineBodyChanged.after = .ok (.ok ["O"]) := by decide +kernel
+example : inlineBodyChanged.after = .ok (.ok ["O", "O$", "O$"]) := by decide +kernel
 
 end Scala.Catalogue

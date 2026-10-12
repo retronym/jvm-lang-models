@@ -123,12 +123,27 @@ structure ClassOut where
   inner : List (String × String × String × List String) := []
   deriving DecidableEq, Repr
 
+/-- A synthesized body's instruction as a `Jvm.Site` of class `self`. Lowering's static calls and
+super calls name a trait (`T.$init$`, `T.m$`, and `T.m` from `m$`), so they are interface methods; a
+call on `self` is on `this`; `invokespecial` of a constructor is a `new` (a value class's boxing);
+any other receiver is a new instance of the owner. -/
+def Insn.site (self : String) : Insn → Option (Jvm.Site String String String)
+  | ⟨"invokestatic", o, n, d⟩ => some (.invokestaticIface o n d)
+  | ⟨"invokespecial", o, n, d⟩ => some (if n == "<init>" then .construct o n d else .invokespecial o n d true)
+  | ⟨"invokevirtual", o, n, d⟩ => some (if o == self then .invokevirtualThis o n d else .invokevirtual o n d o)
+  | ⟨"invokeinterface", o, n, d⟩ => some (if o == self then .invokeinterfaceThis o n d else .invokeinterface o n d o)
+  | ⟨"getstatic", o, n, d⟩ => some (.getstatic o n d)
+  | _ => none
+
+/-- The linkage view; a synthesized body's invokes are the method's body (Track J4), a user body is
+empty. -/
 def ClassOut.toJvm (c : ClassOut) : Jvm.Classfile String String String where
   header := { isInterface := c.itf, isAbstract := c.abs, isFinal := c.final, super := c.super,
               ifaces := c.ifaces }
   methods := c.methods.map fun m =>
     (m.name, m.desc, { isStatic := m.static, isAbstract := m.abs, isFinal := m.final,
-                       access := if m.priv then .priv else .pub })
+                       access := if m.priv then .priv else .pub,
+                       body := (m.calls.getD []).filterMap (Insn.site c.name) })
   fields := c.fields.map fun f =>
     (f.name, f.desc, { isStatic := f.static, isFinal := f.final, access := if f.priv then .priv else .pub })
 
@@ -264,8 +279,11 @@ def lowerTrait (dl : Dialect) (d : Decl) (outer : Option String := none) : M Cla
       ms := ms ++ [{ name := m.name, desc := e },
                    { name := m.name ++ "$", desc := ← descOf [jname d.name] m.allParams m.res, static := true,
                      calls := some [⟨"invokespecial", d.name, m.name, e⟩] }]
+  -- `$init$` initialises each concrete `val` through its setter, on the `$this` it is passed
   if hasInit dl true d then
-    ms := ms ++ [{ name := "$init$", desc := s!"({jname d.name})V", static := true }]
+    let sets ← (d.members.filter fun m => m.isVal && !m.lzy && !m.abs && retained d.name l ((d, []), m)).mapM
+      fun m => do pure (⟨"invokeinterface", d.name, setterName d.name m.name, s!"({← erase m.res})V"⟩ : Insn)
+    ms := ms ++ [{ name := "$init$", desc := s!"({jname d.name})V", static := true, calls := some sets }]
   pure { name := d.name, itf := true, abs := true, ifaces := ← ifacesOf d, methods := ms }
 
 def superLin (d : Decl) : M (List Anc) := do

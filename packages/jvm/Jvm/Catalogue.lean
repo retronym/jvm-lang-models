@@ -18,8 +18,9 @@ namespace Jvm.Catalogue
 inductive C | A | B | I | J | X | K | Y | O
   deriving DecidableEq, Repr
 
-/-- `init` is `<init>`, a constructor; `hashCode` and `finalize` are `Object`'s. -/
-inductive N | m | init | hashCode | finalize
+/-- `init` is `<init>`, a constructor; `hashCode` and `finalize` are `Object`'s; `run` is a library
+method whose body calls `m` (Track J4). -/
+inductive N | m | init | hashCode | finalize | run
   deriving DecidableEq, Repr
 
 /-- `v` is `()V`, `i` is `()I`; `s` is a field of type `String`; `iv` is `(I)V`. -/
@@ -31,8 +32,8 @@ abbrev P := Program C N D
 
 def world (l : List (C × Classfile C N D)) : W := fun c => (l.find? (·.1 = c)).map (·.2)
 
-def inst : MethodInfo := {}
-def abs : MethodInfo := { isAbstract := true }
+def inst : MethodInfo C N D := {}
+def abs : MethodInfo C N D := { isAbstract := true }
 
 structure Case where
   name : String
@@ -400,8 +401,8 @@ def j3 : List Case :=
 Every class here declares its constructors, so `packages/jvm/probes` renders exactly those (and no default
 `()V`); each keeps a public `()V`, which `new` and subclasses' constructors call. -/
 
-def ctor0 : N × D × MethodInfo := (.init, .v, inst)
-def ctorI (acc : Access := .pub) : N × D × MethodInfo := (.init, .iv, { access := acc })
+def ctor0 : N × D × MethodInfo C N D := (.init, .v, inst)
+def ctorI (acc : Access := .pub) : N × D × MethodInfo C N D := (.init, .iv, { access := acc })
 
 /-- A class becomes sealed without permitting the client's subclass: loading the subclass fails
 (JVMS §5.3.5), with HotSpot's "cannot inherit from sealed class". -/
@@ -576,6 +577,92 @@ def ifaceFinalizeRemoved : Case where
   prog := { sites := [invokeinterface .I .finalize .v .X] }
 
 def jObject : List Case := [ifaceHashCodeRemoved, ifaceFinalizeRemoved]
+/-! ## Track J4: method bodies
+
+A method's body is the sites it runs; a `this` site's receiver is the class the caller instantiated. -/
+
+/-- `A.m()V` calls `this.m()I`; the client's `X extends A` overrides `m()I`, and a call of `A.m()V`
+on an `X` enters `A.m()V` and then `X.m()I`. -/
+def thisCallOverridden : Case where
+  name := "thisCallOverridden"
+  mima := none
+  v0 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .i] }), (.m, .i, inst)] })]
+  v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .i] }), (.m, .i, inst)] })]
+  client := [(.X, { header := { super := some .A }, methods := [(.m, .i, inst)] })]
+  prog := { sites := [invokevirtual .A .m .v .X] }
+
+/-- A method that calls itself on `this` runs out of fuel: the model's bound, not a JVM error. -/
+def selfCall : Case where
+  name := "selfCall"
+  mima := none
+  v0 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
+  v1 := [(.A, { methods := [(.m, .v, { body := [invokevirtualThis .A .m .v] })] })]
+  prog := { sites := [invokevirtual .A .m .v .A] }
+
+/-- A template method: `A.run()` calls `this.m()`, and `m` becomes abstract. The client's
+`X extends A` never calls `m`; it fails inside the library's `run` (`AbstractMethodError`). -/
+def hookBecomesAbstract : Case where
+  name := "hookBecomesAbstract"
+  mima := some "DirectAbstractMethodProblem"
+  v0 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, inst)] })]
+  v1 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, abs)] })]
+  client := [(.X, { header := { super := some .A } })]
+  prog := { sites := [invokevirtual .A .run .v .X] }
+
+/-- The hook becomes private: the library's `this.m()` now runs `A.m` itself, not the client's
+override (a private method is not overridden). Links, and runs different code. -/
+def hookBecomesPrivate : Case where
+  name := "hookBecomesPrivate"
+  mima := some "DirectMissingMethodProblem"
+  v0 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, inst)] })]
+  v1 := [(.A, { header := p1, methods := [(.run, .v, { body := [invokevirtualThis .A .m .v] }), (.m, .v, { access := .priv })] })]
+  client := [(.X, { header := { super := some .A }, methods := [(.m, .v, inst)] })]
+  prog := { sites := [invokevirtual .A .run .v .X] }
+
+/-- An interface gains an abstract hook that its default `run()` calls (MiMa's
+`ReversedMissingMethodProblem`). The client's `X implements J` already had a package-private `m()I`:
+it overrides `J.m` (§5.4.5), so selection finds it, and `invokeinterface` then fails because it is not
+public (JVMS §6.5 `invokeinterface`, run-time exceptions). Found by the 17 reversed edits of
+`MiMa.Reversed`; the same rule as Track J7's `pkgMethodAboveDefault`. -/
+def ifaceHookPackagePrivate : Case where
+  name := "ifaceHookPackagePrivate"
+  mima := some "ReversedMissingMethodProblem"
+  v0 := [(.J, { header := { iface with pkg := 1 }, methods := [(.run, .v, inst)] })]
+  v1 := [(.J, { header := { iface with pkg := 1 },
+                methods := [(.run, .v, { body := [invokeinterfaceThis .J .m .i] }), (.m, .i, abs)] })]
+  client := [(.X, { header := { ifaces := [.J] }, methods := [(.m, .i, { access := .pkg })] })]
+  prog := { sites := [invokeinterface .J .run .v .X] }
+
+/-- `A` and its inner class `B` as javac compiles them: `A` is the nest host and lists `B`, `B` names
+`A`; `B.run()` calls `A`'s private `m` (`new A().m()`). -/
+def nestA (members : List C) : Classfile C N D :=
+  { header := { p1 with nestMembers := members }, methods := [(.m, .v, { access := .priv })] }
+def nestB (host : Option C) : Classfile C N D :=
+  { header := { p1 with nestHost := host }, methods := [(.run, .v, { body := [invokevirtual .A .m .v .A] })] }
+
+/-- The inner class leaves the nest (`A`'s `NestMembers` no longer lists `B`, as when `B` is
+recompiled as a top-level class beside an old `B`): the library's own call of `A.m` from `B.run` fails
+(JVMS §5.4.4). The client only calls `B.run`. -/
+def nestMemberRemoved : Case where
+  name := "nestMemberRemoved"
+  mima := none
+  v0 := [(.A, nestA [.B]), (.B, nestB (some .A))]
+  v1 := [(.A, nestA []), (.B, nestB (some .A))]
+  prog := { sites := [invokevirtual .B .run .v .B] }
+
+/-- The inner class moves to another nest: `B`'s `NestHost` is now `I`, which lists it, so `A` and
+`B` are no longer nestmates. -/
+def nestHostChanged : Case where
+  name := "nestHostChanged"
+  mima := none
+  v0 := [(.A, nestA [.B]), (.B, nestB (some .A)), (.I, { header := p1 })]
+  v1 := [(.A, nestA [.B]), (.B, nestB (some .I)), (.I, { header := { p1 with nestMembers := [.B] } })]
+  prog := { sites := [invokevirtual .B .run .v .B] }
+
+/-- The Track J4 cases the probe runs (`selfCall` overflows the JVM's stack instead). -/
+def j4 : List Case :=
+  [thisCallOverridden, hookBecomesAbstract, hookBecomesPrivate, ifaceHookPackagePrivate, nestMemberRemoved,
+   nestHostChanged]
 
 def all : List Case :=
   [methodRemoved, resultTypeChanged, classBecomesInterface, becomesStatic, becomesAbstract,
@@ -647,5 +734,14 @@ example : pkgMethodAboveDefault.before = .ok [.I] ∧ pkgMethodAboveDefault.afte
 example : fieldIfaceDepthBeforeSuper.before = .ok [.A] ∧ fieldIfaceDepthBeforeSuper.after = .ok [.K] := by decide
 example : ifaceHashCodeRemoved.before = .ok [.O] ∧ ifaceHashCodeRemoved.after = .ok [.O] := by decide
 example : ifaceFinalizeRemoved.before = .ok [.X] ∧ ifaceFinalizeRemoved.after = .error .noSuchMethod := by decide
+example : thisCallOverridden.before = .ok [.A, .X] := by decide
+example : selfCall.before = .error .outOfFuel := by decide
+example : hookBecomesAbstract.before = .ok [.A, .A] ∧
+    hookBecomesAbstract.after = .error .abstractMethod := by decide
+example : hookBecomesPrivate.before = .ok [.A, .X] ∧ hookBecomesPrivate.after = .ok [.A, .A] := by decide
+example : ifaceHookPackagePrivate.before = .ok [.J] ∧
+    ifaceHookPackagePrivate.after = .error .illegalAccess := by decide
+example : nestMemberRemoved.before = .ok [.B, .A] ∧ nestMemberRemoved.after = .error .illegalAccess := by decide
+example : nestHostChanged.before = .ok [.B, .A] ∧ nestHostChanged.after = .error .illegalAccess := by decide
 
 end Jvm.Catalogue

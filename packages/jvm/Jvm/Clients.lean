@@ -14,7 +14,7 @@ space of clients over the catalogue's universe:
 
 One site suffices: linking is lazy and per site, so a client fails on `v1` iff one of its sites
 (or its loads) does. `breaksSomeClient` is the model's verdict for a MiMa problem; `changesSomeClient`
-adds "links on both, and runs a different method" (the Track J4 verdict for `overrideAdded`, `pulledUp`).
+adds "links on both, and does not behave the same" (`Jvm.SameBehaviour`: the methods entered differ; the verdict for `overrideAdded`, `pulledUp`).
 Checked per catalogue case by kernel `decide`.
 
 Not in the space: clients with more than one class, fields, `invokespecial`; and the verifier's
@@ -120,11 +120,12 @@ def breaking (k : Case) (sp : List Client := space) : Option Client :=
 
 def breaksSomeClient (k : Case) (sp : List Client := space) : Bool := (breaking k sp).isSome
 
-/-- The first client that links on both and runs a different method. -/
+/-- The first client that links on both and does not behave the same (`Jvm.SameBehaviour`): it
+enters different methods, or the same in a different order. -/
 def changing (k : Case) (sp : List Client := space) : Option Client :=
   sp.find? fun (cl, p) =>
     let k' := k.withClient (cl, p)
-    wellTyped k'.w0 p && links k'.w0 p && links k'.w1 p && k'.before != k'.after
+    wellTyped k'.w0 p && links k'.w0 p && links k'.w1 p && !decide (SameBehaviour k'.w0 k'.w1 p)
 
 def changesSomeClient (k : Case) (sp : List Client := space) : Bool := (changing k sp).isSome
 
@@ -207,10 +208,10 @@ def accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg"
 
 def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X" | .K => "K" | .Y => "Y" | .O => "Object"
 
-def nTag : N → String | .m => "m" | .init => "init" | .hashCode => "hashCode" | .finalize => "finalize"
+def nTag : N → String | .m => "m" | .init => "init" | .hashCode => "hashCode" | .finalize => "finalize" | .run => "run"
 
 /-- `m()V` with `mi`, or nothing. -/
-def declM : Option MethodInfo → List (N × D × MethodInfo)
+def declM : Option (MethodInfo C N D) → List (N × D × MethodInfo C N D)
   | none => []
   | some mi => [(.m, .v, mi)]
 
@@ -298,7 +299,7 @@ of the interfaces directly, and declares a public `m()V` or nothing. One `invoke
 `J.m` or `K.m`, or `invokevirtual` of `A.m` or `X.m`, on an `X`, from a client class `Y` in package
 0, 1 or 2. -/
 def defaultsSpace : List Case :=
-  let decls : List (String × Option MethodInfo) :=
+  let decls : List (String × Option (MethodInfo C N D)) :=
     [("-", none), ("default", some {}), ("abstract", some { isAbstract := true }),
      ("static", some { isStatic := true }), ("private", some { access := .priv })]
   let iface (c : C) (sup : List C) : List Part := decls.map fun (t, mi) =>
@@ -316,7 +317,7 @@ def defaultsSpace : List Case :=
     pure (b.join { label := s!"A{impl}={optTag accTag acc}",
                    lib := [(.A, { header := { pkg := 1, ifaces := is },
                                   methods := declM (acc.map fun a => { access := a }) })] })
-  let xm : List (String × Option MethodInfo) := [("-", none), ("pub", some {})]
+  let xm : List (String × Option (MethodInfo C N D)) := [("-", none), ("pub", some {})]
   let xA : List Part := xm.map fun (t, mi) =>
     { label := s!"X<A>={t}", client := [(.X, { header := { super := some .A }, methods := declM mi })] }
   let xI : List Part := do
@@ -364,8 +365,8 @@ or not. One `invokeinterface` of `I` or `J`'s `hashCode` or `finalize`, or `invo
 `X`'s, on an `X`, from a client class `Y` in package 0, 1 or 2. A space of its own rather than a
 column of `defaultsSpace`, where it would repeat over every declaration of `m`. -/
 def objectSpace : List Case :=
-  let hc (mi : MethodInfo) := (N.hashCode, D.i, mi)
-  let fin (mi : MethodInfo) := (N.finalize, D.v, mi)
+  let hc (mi : MethodInfo C N D) := (N.hashCode, D.i, mi)
+  let fin (mi : MethodInfo C N D) := (N.finalize, D.v, mi)
   let i : List Part := do
     let (t, h) ← [("-", []), ("default", [hc inst]), ("abstract", [hc abs]),
                   ("static", [hc { isStatic := true }]), ("private", [hc { access := .priv }])]
@@ -382,5 +383,107 @@ def objectSpace : List Case :=
   let sites := fromY ([C.I, .J].flatMap (fun c => [Site.invokeinterface c .hashCode .i .X, .invokeinterface c .finalize .v .X]) ++
     [Site.invokevirtual .X .hashCode .i .X, .invokevirtual .X .finalize .v .X])
   build "object" (i ⊗ j ⊗ x ⊗ sites)
+
+/-- The Track J4 body space: a library method's own call of `m`. `A` in package 1, `B extends A` in
+package 1 or 2; `run()V` is declared in `A` or in `B`, and its body is one site: `this.m()`, a static
+`m()`, `new B().m()`, `super.m()` or `new A().m()` (from `B`; the latter meets the verifier's protected
+check), or a read or write of the field `this.m`. `A`'s `m` is
+absent or any well-formed method (any access, `static`, `abstract`, `final`), or, for the field sites,
+absent or any field; `B` declares a public `m()V` or not. The client calls `run` on a `B`, or on its
+`X extends B` in the unnamed package, which declares `m()V` with any access, `static`, or not at all.
+Each program is a case with `v1 = v0`, as `chainSpace`'s are: an edit of `A.m` breaks a client iff the
+client links with `A.m` in one state and not in the other, so the states calibrate every edit. -/
+def bodySpace : List Case :=
+  let accs : List Access := [.pub, .prot, .pkg, .priv]
+  let mInfos : List (MethodInfo C N D) := do
+    let s ← [false, true]
+    let a ← [false, true]
+    let f ← [false, true]
+    let acc ← accs
+    if a && (s || f || acc == .priv) then [] else pure { isStatic := s, isAbstract := a, isFinal := f, access := acc }
+  let fInfos : List FieldInfo := do
+    let s ← [false, true]
+    let f ← [false, true]
+    let acc ← accs
+    pure { isStatic := s, isFinal := f, access := acc }
+  let accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg" | .priv => "priv"
+  let flags (s a f : Bool) : String :=
+    (if s then "+static" else "") ++ (if a then "+abstract" else "") ++ (if f then "+final" else "")
+  let mTag : Option (MethodInfo C N D) → String
+    | none => "-" | some i => accTag i.access ++ flags i.isStatic i.isAbstract i.isFinal
+  let fTag : Option FieldInfo → String
+    | none => "-" | some i => accTag i.access ++ flags i.isStatic false i.isFinal
+  -- (where `run` is, the body site's name, the site, whether it is a field site)
+  let kinds : List (C × String × Site C N D × Bool) :=
+    [C.A, .B].flatMap (fun w =>
+      [(w, "this.m()", .invokevirtualThis w .m .v, false), (w, "static", .invokestatic w .m .v, false),
+       (w, "new B().m()", .invokevirtual .B .m .v .B, false),
+       (w, "getfield", .getfieldThis w .m .s, true), (w, "putfield", .putfieldThis w .m .s, true)]) ++
+    [(C.B, "super.m()", .invokespecial .A .m .v false, false),
+     (C.B, "new A().m()", .invokevirtual .A .m .v .A, false)]
+  let xMs : List (Option (MethodInfo C N D)) :=
+    none :: (accs.map fun a => some { access := a }) ++ [some { isStatic := true }]
+  let cases : List Case := do
+    let (w, kn, site, isField) ← kinds
+    let runM : N × D × MethodInfo C N D := (.run, .v, { body := [site] })
+    let (aM, aF) ← if isField then (fInfos.map some ++ [none]).map fun f => (none, f)
+                   else (mInfos.map some ++ [none]).map fun m => (m, none)
+    let bM ← if isField then [false] else [false, true]
+    let bPkg ← [1, 2]
+    let (recv, xM) ← (C.B, none) :: if isField then [(C.X, none)] else xMs.map (C.X, ·)
+    let lib : List (C × Classfile C N D) :=
+      [(.A, { header := p1,
+              methods := (if w = .A then [runM] else []) ++ (aM.map fun i => (N.m, D.v, i)).toList,
+              fields := (aF.map fun i => (N.m, D.s, i)).toList }),
+       (.B, { header := { pkg := bPkg, super := some .A },
+              methods := (if w = .B then [runM] else []) ++ (if bM then [(.m, .v, inst)] else []) })]
+    let name := s!"body/{cName w}.run:{kn},A.m={if isField then fTag aF else mTag aM}," ++
+      s!"B=p{bPkg}{if bM then ".m" else ""},X.m={mTag xM},recv={cName recv}"
+    pure { name, mima := none, v0 := lib, v1 := lib,
+           client := if recv = .X then [(.X, { header := { super := some .B }, methods := (xM.map fun i => (N.m, D.v, i)).toList })] else [],
+           prog := { sites := [.invokevirtual w .run .v recv] } }
+  cases
+
+/-- The Track J4 nest space: private access between nestmates (JVMS §5.4.4), reached through a library
+method's body. `A` and `I` (a class here) in package 1, `B` in package 1 or 2, extending `A` or not;
+eight nest configurations of `NestHost` and `NestMembers` (none, `A` hosting `B`, either half of that
+alone, `B` hosting `A`, `I` hosting both, `I` listing only `A`, `B` claiming `I` while `A` lists `B`).
+`run()V` in `B` (or in `A`) reads the other class's member `m`, private or public: `new A().m()`, a
+static `m()`, a field or a static field, or `this.m()` from `B extends A`. The client calls `run`.
+Each program is a case with `v1 = v0`. -/
+def nestSpace : List Case :=
+  -- (name, A's NestHost, A's NestMembers, B's NestHost, B's NestMembers, I's NestMembers)
+  let cfgs : List (String × Option C × List C × Option C × List C × List C) :=
+    [("none", none, [], none, [], []), ("A>B", none, [.B], some .A, [], []),
+     ("B->A", none, [], some .A, [], []), ("A:B", none, [.B], none, [], []),
+     ("B>A", some .B, [], none, [.A], []), ("I>AB", some .I, [], some .I, [], [.A, .B]),
+     ("I>A,B->I", some .I, [], some .I, [], [.A]), ("A:B,B->I", none, [.B], some .I, [], [.B])]
+  let cases : List Case := do
+    let (cfg, aH, aM, bH, bM, iM) ← cfgs
+    let bPkg ← [1, 2]
+    let bSup ← [false, true]
+    let (w, dc) ← [(C.B, C.A), (C.A, C.B)]
+    let acc ← [Access.priv, .pub]
+    -- (name, the member `dc` declares, the site in `w.run`)
+    let kinds : List (String × (List (N × D × MethodInfo C N D) × List (N × D × FieldInfo)) × Site C N D) :=
+      [("new().m()", ([(.m, .v, { access := acc })], []), .invokevirtual dc .m .v dc),
+       ("static m()", ([(.m, .v, { access := acc, isStatic := true })], []), .invokestatic dc .m .v),
+       ("getfield", ([], [(.m, .s, { access := acc })]), .getfield dc .m .s dc),
+       ("getstatic", ([], [(.m, .s, { access := acc, isStatic := true })]), .getstatic dc .m .s)] ++
+      (if w = .B && bSup then [("this.m()", ([(.m, .v, { access := acc })], []), .invokevirtualThis .A .m .v)] else [])
+    let (kn, (dms, dfs), site) ← kinds
+    let runM : N × D × MethodInfo C N D := (.run, .v, { body := [site] })
+    let members (c : C) : List (N × D × MethodInfo C N D) × List (N × D × FieldInfo) :=
+      ((if c = w then [runM] else []) ++ (if c = dc then dms else []), if c = dc then dfs else [])
+    let lib : List (C × Classfile C N D) :=
+      [(.A, { header := { pkg := 1, nestHost := aH, nestMembers := aM },
+              methods := (members .A).1, fields := (members .A).2 }),
+       (.B, { header := { pkg := bPkg, super := if bSup then some .A else none, nestHost := bH, nestMembers := bM },
+              methods := (members .B).1, fields := (members .B).2 }),
+       (.I, { header := { pkg := 1, nestMembers := iM } })]
+    let name := s!"nest/{cfg},B=p{bPkg}{if bSup then "<A" else ""},{cName w}.run:{kn},{cName dc}.m=" ++
+      (if acc = .priv then "priv" else "pub")
+    pure { name, mima := none, v0 := lib, v1 := lib, prog := { sites := [.invokevirtual w .run .v w] } }
+  cases
 
 end Jvm.Clients

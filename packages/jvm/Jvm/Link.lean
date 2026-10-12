@@ -17,8 +17,11 @@ compatibility asks whether its old classfile still *links* (and selects the same
 the new library. Both are questions about a task's trace against an edited environment.
 
 The model is generic in class, method-name and descriptor types. Calibrated against HotSpot 21, 25
-and 27 by `packages/jvm/probes`. Not modelled: nestmates (private access is same-class only), method bodies
-(a library method's own calls), signature-polymorphic methods, loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
+and 27 by `packages/jvm/probes`. A method's body is its linkage behaviour (Track J4): the sites it runs, in
+order, with `this` as a receiver; a program's outcome is the sequence of methods it enters. Private access
+extends to nestmates (§5.4.4). Not modelled: data and control flow in bodies, constructor chaining
+(a constructor's implicit `super(…)` call), signature-polymorphic methods,
+loader constraints, class initialisation, protected constructors and modules (all classes are in one). Linking is lazy, as on the JVM: an error is raised by
 the first site that hits it; a class is loaded, with its loading checks, when it is first referred
 to, and each site is verified just before it runs (as if each site were its own method).
 `Object` is a class like any other, present when a class table has it: an interface's `super` is
@@ -49,13 +52,52 @@ structure Header (C : Type) where
   pkg : Nat := 0
   /-- The `PermittedSubclasses` attribute: `some ps` for a sealed class or interface. -/
   permitted : Option (List C) := none
+  /-- The `NestHost` attribute: the class that claims to be this class's nest host. -/
+  nestHost : Option C := none
+  /-- The `NestMembers` attribute of a nest host. -/
+  nestMembers : List C := []
   deriving DecidableEq, Repr
 
-structure MethodInfo where
+/-- A call site, as javac emits it for `new R().m()` with the static receiver type `C` (an upcast
+`C c = new R(); c.m()` when `R ≠ C`), or a `new C()` whose constructor is not modelled (`construct`
+models one); field accesses likewise.
+`invokespecial` is a `super` call (`iface` for `I.super.m()`) from the site's class, so it is wrapped in a
+`within`. `within x s` runs `s` from a static method of the client's class `x`. -/
+inductive Site (C N D : Type)
+  | invokestatic (c : C) (n : N) (d : D)
+  | invokevirtual (c : C) (n : N) (d : D) (recv : C)
+  | invokeinterface (c : C) (n : N) (d : D) (recv : C)
+  | new (c : C)
+  /-- `invokestatic` of an interface method (an `InterfaceMethodref`). -/
+  | invokestaticIface (c : C) (n : N) (d : D)
+  | invokespecial (c : C) (n : N) (d : D) (iface : Bool)
+  | getfield (c : C) (n : N) (d : D) (recv : C)
+  | putfield (c : C) (n : N) (d : D) (recv : C)
+  | getstatic (c : C) (n : N) (d : D)
+  | putstatic (c : C) (n : N) (d : D)
+  | within (x : C) (s : Site C N D)
+  /-- `new c(…)`: `new c; dup; invokespecial c.n d`, where `n` is the constructor's name (`<init>`)
+  in the caller's name type. -/
+  | construct (c : C) (n : N) (d : D)
+  /-- `this.m()` in a method body: `aload_0; invokevirtual c.n d`. The receiver is the run's `this`
+  (Track J4); outside an instance method's body there is none, and the verifier rejects the site. -/
+  | invokevirtualThis (c : C) (n : N) (d : D)
+  /-- `aload_0; invokeinterface c.n d`, on the run's `this`. -/
+  | invokeinterfaceThis (c : C) (n : N) (d : D)
+  /-- `aload_0; getfield c.n d`, on the run's `this`. -/
+  | getfieldThis (c : C) (n : N) (d : D)
+  /-- `aload_0; …; putfield c.n d`, on the run's `this`. -/
+  | putfieldThis (c : C) (n : N) (d : D)
+  deriving DecidableEq, Repr
+
+/-- A method's flags and its body. The body is the method's linkage behaviour (Track J4): the sites it
+runs, in order, when it runs straight through once; no data, no control flow. Empty by default. -/
+structure MethodInfo (C N D : Type) where
   isStatic : Bool := false
   isAbstract : Bool := false
   isFinal : Bool := false
   access : Access := .pub
+  body : List (Site C N D) := []
   deriving DecidableEq, Repr
 
 structure FieldInfo where
@@ -66,7 +108,7 @@ structure FieldInfo where
 
 structure Classfile (C N D : Type) where
   header : Header C := {}
-  methods : List (N × D × MethodInfo) := []
+  methods : List (N × D × MethodInfo C N D) := []
   fields : List (N × D × FieldInfo) := []
   deriving Repr
 
@@ -82,8 +124,8 @@ inductive Q (C N D : Type)
 
 def Ans {C N D : Type} : Q C N D → Type
   | .header _ => Option (Header C)
-  | .method .. => Option MethodInfo
-  | .declared _ => List (N × D × MethodInfo)
+  | .method .. => Option (MethodInfo C N D)
+  | .declared _ => List (N × D × MethodInfo C N D)
   | .field .. => Option FieldInfo
 
 def answer (w : World C N D) : (q : Q C N D) → Ans q
@@ -96,7 +138,7 @@ def answer (w : World C N D) : (q : Q C N D) → Ans q
 def agrees (w w' : World C N D) : Q C N D → Bool
   | .header c => decide ((w c).map (·.header) = (w' c).map (·.header))
   | .method c n d =>
-    let f : Classfile C N D → Option MethodInfo :=
+    let f : Classfile C N D → Option (MethodInfo C N D) :=
       fun cf => (cf.methods.find? fun m => m.1 = n ∧ m.2.1 = d).map (·.2.2)
     decide ((w c).bind f = (w' c).bind f)
   | .declared c => decide (((w c).map (·.methods)).getD [] = ((w' c).map (·.methods)).getD [])
@@ -125,6 +167,9 @@ inductive LinkError
   /-- A class or member the site's class may not access (§5.4.4), or a write to a final field. -/
   | illegalAccess
   | noSuchField
+  /-- The run entered methods more than `fuel` deep: not an error the JVM throws, but the model's
+  bound on a body that calls itself back. -/
+  | outOfFuel
   deriving DecidableEq, Repr
 
 abbrev L (C N D : Type) := Query.Task (Q C N D) Ans
@@ -134,11 +179,11 @@ abbrev M (C N D : Type) := ExceptT LinkError (L C N D)
 def askHeader (c : C) : M C N D (Option (Header C)) :=
   ExceptT.lift (Query.Task.ask (.header c) Query.Task.pure : L C N D (Option (Header C)))
 
-def askMethod (c : C) (n : N) (d : D) : M C N D (Option MethodInfo) :=
-  ExceptT.lift (Query.Task.ask (.method c n d) Query.Task.pure : L C N D (Option MethodInfo))
+def askMethod (c : C) (n : N) (d : D) : M C N D (Option (MethodInfo C N D)) :=
+  ExceptT.lift (Query.Task.ask (.method c n d) Query.Task.pure : L C N D (Option (MethodInfo C N D)))
 
-def askDeclared (c : C) : M C N D (List (N × D × MethodInfo)) :=
-  ExceptT.lift (Query.Task.ask (.declared c) Query.Task.pure : L C N D (List (N × D × MethodInfo)))
+def askDeclared (c : C) : M C N D (List (N × D × MethodInfo C N D)) :=
+  ExceptT.lift (Query.Task.ask (.declared c) Query.Task.pure : L C N D (List (N × D × MethodInfo C N D)))
 
 def askField (c : C) (n : N) (d : D) : M C N D (Option FieldInfo) :=
   ExceptT.lift (Query.Task.ask (.field c n d) Query.Task.pure : L C N D (Option FieldInfo))
@@ -175,7 +220,7 @@ def subclassOf (c : C) : Nat → C → M C N D Bool
 
 /-- Look a method up in `c` and its superclasses (resolution, §5.4.3.3 step 2, which finds static
 and private methods too). -/
-def chain (inst : Bool) (n : N) (d : D) : Nat → C → M C N D (Option (C × MethodInfo))
+def chain (inst : Bool) (n : N) (d : D) : Nat → C → M C N D (Option (C × MethodInfo C N D))
   | 0, _ => pure none
   | k + 1, c => do
     let h ← hdr c
@@ -204,7 +249,7 @@ def below (a : C) : Nat → C → M C N D (Option (List C))
 static methods neither override nor are overridden. A package-private `ma` is overridden from its
 own run-time package, or (case (b)) through a method `mb` of a class between them that `mi` can
 override and that can override `ma`. -/
-def overridesK (n : N) (d : D) : Nat → C → MethodInfo → C → MethodInfo → M C N D Bool
+def overridesK (n : N) (d : D) : Nat → C → MethodInfo C N D → C → MethodInfo C N D → M C N D Bool
   | 0, _, _, _, _ => pure false
   | k + 1, x, mi, a, ma => do
     if mi.isStatic || mi.access = .priv || ma.isStatic || ma.access = .priv then return false
@@ -218,14 +263,14 @@ def overridesK (n : N) (d : D) : Nat → C → MethodInfo → C → MethodInfo �
     return false
 
 /-- `overridesK` with the hierarchy's depth bound. -/
-def overrides (n : N) (d : D) (x : C) (mi : MethodInfo) (a : C) (ma : MethodInfo) :
+def overrides (n : N) (d : D) (x : C) (mi : MethodInfo C N D) (a : C) (ma : MethodInfo C N D) :
     M C N D Bool :=
   overridesK n d depth x mi a ma
 
 /-- Selection's walk (§5.4.6 step 2): the first declaration in `c` or a superclass that overrides
 the resolved method `(a, ma)`. -/
-def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo) :
-    Nat → C → M C N D (Option (C × MethodInfo))
+def chainOver (n : N) (d : D) (a : C) (ma : MethodInfo C N D) :
+    Nat → C → M C N D (Option (C × MethodInfo C N D))
   | 0, _ => pure none
   | k + 1, c => do
     let h ← hdr c
@@ -249,7 +294,7 @@ def permits (x : C) (h hs : Header C) : Bool :=
   | some ps => (h.isPublic || h.pkg == hs.pkg) && ps.contains x
 
 /-- The final instance methods named `n` with descriptor `d` declared in `c` or a superclass. -/
-def finalsAbove (n : N) (d : D) : Nat → C → M C N D (List (C × MethodInfo))
+def finalsAbove (n : N) (d : D) : Nat → C → M C N D (List (C × MethodInfo C N D))
   | 0, _ => pure []
   | k + 1, c => do
     let here := match ← askMethod c n d with
@@ -311,12 +356,25 @@ def resolveCls (cur : Cur C) (c : C) : M C N D (Header C) := do
   if !h.isPublic && h.pkg != (← curPkg cur) then throw .illegalAccess
   pure h
 
-/-- Member access from `cur` to a member of `decl` (§5.4.4). Private access is same-class only:
-nestmates are not modelled. -/
+/-- The nest host of `c` (JVMS §5.4.4): the class its `NestHost` attribute names, if that class is
+present, in `c`'s run-time package and lists `c` in its `NestMembers`; otherwise `c` itself (since
+JDK 15 a failed nest-host check is not an error, `c` is just alone in its nest). -/
+def nestHostOf (c : C) : M C N D C := do
+  let h ← hdr c
+  let some n := h.nestHost | return c
+  match ← askHeader n with
+  | some hn => pure (if hn.pkg = h.pkg && hn.nestMembers.contains c then n else c)
+  | none => pure c
+
+/-- Member access from `cur` to a member of `decl` (§5.4.4). A private member is accessible from its
+own class and from the classes of its nest: `cur` and `decl` have the same nest host. -/
 def accessible (cur : Cur C) (decl : C) (acc : Access) : M C N D Bool := do
   match acc with
   | .pub => pure true
-  | .priv => pure (cur = some decl)
+  | .priv =>
+    match cur with
+    | none => pure false
+    | some x => if x = decl then pure true else pure ((← nestHostOf x) = (← nestHostOf decl))
   | .pkg => pure ((← hdr decl).pkg = (← curPkg cur))
   | .prot =>
     if (← hdr decl).pkg = (← curPkg cur) then return true
@@ -327,7 +385,7 @@ def accessible (cur : Cur C) (decl : C) (acc : Access) : M C N D Bool := do
 /-- The maximally-specific superinterface methods of `c` for `n` and `d` (§5.4.3.3): instance
 methods, not private, declared in a superinterface of `c` that no other such method's interface
 extends. -/
-def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo)) := do
+def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo C N D)) := do
   let is ← ifacesOf depth c
   -- Mathlib's `dedup` keeps the last occurrence of each interface; so does this.
   let cands ← (Query.dedupLast is).filterMapM fun i => do
@@ -341,7 +399,7 @@ def maxSpecific (c : C) (n : N) (d : D) : M C N D (List (C × MethodInfo)) := do
 
 /-- Step 3 of §5.4.3.3 and §5.4.3.4: a unique non-abstract maximally-specific method, else any
 superinterface method. -/
-def fromIfaces (c : C) (n : N) (d : D) : M C N D (C × MethodInfo) := do
+def fromIfaces (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let ms ← maxSpecific c n d
   match ms.filter fun p => !p.2.isAbstract with
   | [r] => pure r
@@ -350,12 +408,12 @@ def fromIfaces (c : C) (n : N) (d : D) : M C N D (C × MethodInfo) := do
     | r :: _ => pure r
     | [] => throw .noSuchMethod
 
-def checkAccess (cur : Cur C) (r : C × MethodInfo) : M C N D (C × MethodInfo) := do
+def checkAccess (cur : Cur C) (r : C × MethodInfo C N D) : M C N D (C × MethodInfo C N D) := do
   if !(← accessible cur r.1 r.2.access) then throw .illegalAccess
   pure r
 
 /-- Method resolution against a class, §5.4.3.3. -/
-def resolveClass (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo) := do
+def resolveClass (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let h ← resolveCls cur c
   if h.isInterface then throw .incompatibleClassChange
   match ← chain false n d depth c with
@@ -363,7 +421,7 @@ def resolveClass (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
   | none => checkAccess cur (← fromIfaces c n d)
 
 /-- Interface method resolution, §5.4.3.4. -/
-def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo) := do
+def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let h ← resolveCls cur c
   if !h.isInterface then throw .incompatibleClassChange
   match ← askMethod c n d with
@@ -380,7 +438,7 @@ def resolveIface (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × MethodInf
 itself. `invokeinterface` also fails if it selects a method that is neither public nor private (JVMS
 §6.5), before the check for an abstract one: a package-private class method can override a public
 interface method (§5.4.5) but not run for it. -/
-def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo) : M C N D C := do
+def select (iface : Bool) (r : C) (n : N) (d : D) (a : C) (ma : MethodInfo C N D) : M C N D C := do
   if ma.access = .priv then return a
   match ← chainOver n d a ma depth r with
   | some (o, i) =>
@@ -412,29 +470,6 @@ def resolveField (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × FieldInfo
   | some (a, f) =>
     if !(← accessible cur a f.access) then throw .illegalAccess
     pure (a, f)
-
-/-- A call site, as javac emits it for `new R().m()` with the static receiver type `C` (an upcast
-`C c = new R(); c.m()` when `R ≠ C`), or a `new C()` whose constructor is not modelled (`construct`
-models one); field accesses likewise.
-`invokespecial` is a `super` call (`iface` for `I.super.m()`) from the site's class, so it is wrapped in a
-`within`. `within x s` runs `s` from a static method of the client's class `x`. -/
-inductive Site (C N D : Type)
-  | invokestatic (c : C) (n : N) (d : D)
-  | invokevirtual (c : C) (n : N) (d : D) (recv : C)
-  | invokeinterface (c : C) (n : N) (d : D) (recv : C)
-  | new (c : C)
-  /-- `invokestatic` of an interface method (an `InterfaceMethodref`). -/
-  | invokestaticIface (c : C) (n : N) (d : D)
-  | invokespecial (c : C) (n : N) (d : D) (iface : Bool)
-  | getfield (c : C) (n : N) (d : D) (recv : C)
-  | putfield (c : C) (n : N) (d : D) (recv : C)
-  | getstatic (c : C) (n : N) (d : D)
-  | putstatic (c : C) (n : N) (d : D)
-  | within (x : C) (s : Site C N D)
-  /-- `new c(…)`: `new c; dup; invokespecial c.n d`, where `n` is the constructor's name (`<init>`)
-  in the caller's name type. -/
-  | construct (c : C) (n : N) (d : D)
-  deriving DecidableEq, Repr
 
 /-- The verifier's assignability of class type `r` to `c` (JVMS §4.10.1.2, as HotSpot checks it):
 equal names pass without loading; otherwise `c` is loaded, an interface passes, and a class must be
@@ -475,43 +510,70 @@ def verifyProtected (cur : Cur C) (c r : C) (acc : M C N D (Option (C × Access)
   if (← hdr a).pkg = (← hdr x).pkg then return
   if !(← subclassOf x depth r) then throw .verify
 
-/-- Execute a site from `cur`; the result is the class whose method runs, whose field is accessed,
-or that is instantiated. The verifier checks the receiver's upcast before the site runs; then the
-receiver is instantiated, the member resolved and selected. -/
-def runSiteK (cur : Cur C) : Site C N D → M C N D C
+/-- The class whose code runs a `this` site and the class of `this`: the verifier rejects `aload_0`
+outside an instance method's body. -/
+def thisOf (cur : Cur C) (self : Option C) : M C N D (C × C) :=
+  match cur, self with
+  | some x, some t => pure (x, t)
+  | _, _ => throw .verify
+
+/-- Enter the method `n d` of `o`, the class resolution or selection chose, on the receiver `self`
+(`none` for a static method): the entry itself, then the method's body, each site run from `o` by
+`run` (Track J4). -/
+def enter (run : Cur C → Option C → Site C N D → M C N D (List C)) (o : C) (n : N) (d : D)
+    (self : Option C) : M C N D (List C) := do
+  let body := ((← askMethod o n d).map (·.body)).getD []
+  let l ← body.mapM (run (some o) self)
+  pure (o :: l.flatten)
+
+/-- Execute a site from `cur`, with `self` the class of `this` (`none` outside an instance method's
+body); a method the site selects is entered with `enter'`, and a new instance's constructor run with
+`init'`. A static method entered from a body keeps the caller's `this`: the static helpers that take
+the receiver as their first argument (Scala's `$init$` and `m$`) see it as `aload_0`. The result is the sequence of methods
+entered, or for a site that enters none, the class whose field is accessed or that is instantiated.
+The verifier checks the receiver's upcast before the site runs; then the receiver is instantiated,
+the member resolved and selected. -/
+def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (init' : C → M C N D Unit)
+    (cur : Cur C) (self : Option C) : Site C N D → M C N D (List C)
   | .invokestatic c n d => do
     let (o, i) ← resolveClass cur c n d
     if !i.isStatic then throw .incompatibleClassChange
-    pure o
+    enter' o n d self
   | .invokestaticIface c n d => do
     let (o, i) ← resolveIface cur c n d
     if !i.isStatic then throw .incompatibleClassChange
-    pure o
+    enter' o n d self
   | .invokevirtual c n d r => do
     assignable r c
     verifyProtected cur c r do
       pure ((← chain false n d depth c).map fun (a, i) => (a, i.access))
     instantiate cur r
+    init' r
     let (a, i) ← resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
-    select false r n d a i
+    enter' (← select false r n d a i) n d (some r)
   | .invokeinterface c n d r => do
     assignable r c
     instantiate cur r
+    init' r
     let (a, i) ← resolveIface cur c n d
     if i.isStatic then throw .incompatibleClassChange
     if !(← ifacesOf depth r).contains c then throw .incompatibleClassChange
-    select true r n d a i
+    enter' (← select true r n d a i) n d (some r)
   | .new c => do
     instantiate cur c
-    pure c
+    init' c
+    pure [c]
   | .invokespecial c n d iface => do
     -- `this` is an instance of the site's class.
     let x ← match cur with
       | some x => pure x
       | none => throw .verify
     verifySpecial x c
-    instantiate cur x
+    -- In an instance method's body the receiver is `this`; otherwise a new `x`.
+    let t ← match self with
+      | some t => pure t
+      | none => do instantiate cur x; init' x; pure x
     let (a, i) ← if iface then resolveIface cur c n d else resolveClass cur c n d
     if i.isStatic then throw .incompatibleClassChange
     let hc ← hdr c
@@ -520,43 +582,46 @@ def runSiteK (cur : Cur C) : Site C N D → M C N D C
         | some s => pure s
         | none => pure c
       else pure c
-    match ← chain true n d depth start with
-    | some (o, i) => if i.isAbstract then throw .abstractMethod else pure o
-    | none =>
-      let ms ← maxSpecific start n d
-      match ms.filter fun p => !p.2.isAbstract with
-      | [p] => pure p.1
-      | [] => if i.isAbstract then throw .abstractMethod else pure a
-      | _ => throw .incompatibleClassChange
+    let o ← match ← chain true n d depth start with
+      | some (o, i) => if i.isAbstract then throw .abstractMethod else pure o
+      | none =>
+        let ms ← maxSpecific start n d
+        match ms.filter fun p => !p.2.isAbstract with
+        | [p] => pure p.1
+        | [] => if i.isAbstract then throw .abstractMethod else pure a
+        | _ => throw .incompatibleClassChange
+    enter' o n d (some t)
   | .getfield c n d r => do
     assignable r c
     verifyProtected cur c r do
       pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
     instantiate cur r
+    init' r
     let (a, f) ← resolveField cur c n d
     if f.isStatic then throw .incompatibleClassChange
-    pure a
+    pure [a]
   | .putfield c n d r => do
     assignable r c
     verifyProtected cur c r do
       pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
     instantiate cur r
+    init' r
     let (a, f) ← resolveField cur c n d
     if f.isStatic then throw .incompatibleClassChange
     if f.isFinal then throw .illegalAccess
-    pure a
+    pure [a]
   | .getstatic c n d => do
     let (a, f) ← resolveField cur c n d
     if !f.isStatic then throw .incompatibleClassChange
-    pure a
+    pure [a]
   | .putstatic c n d => do
     let (a, f) ← resolveField cur c n d
     if !f.isStatic then throw .incompatibleClassChange
     if f.isFinal then throw .illegalAccess
-    pure a
+    pure [a]
   | .within x s => do
     discard <| resolveCls cur x
-    runSiteK (some x) s
+    runSiteWith enter' init' (some x) none s
   | .construct c n d => do
     instantiate cur c
     -- Resolution walks the superclasses as for any method, with its access check; then the
@@ -564,21 +629,79 @@ def runSiteK (cur : Cur C) : Site C N D → M C N D C
     -- HotSpot's `linktime_resolve_special_method`).
     let (a, _) ← resolveClass cur c n d
     if a != c then throw .noSuchMethod
-    pure c
+    enter' c n d (some c)
+  | .invokevirtualThis c n d => do
+    let (x, t) ← thisOf cur self
+    assignable x c
+    verifyProtected cur c x do
+      pure ((← chain false n d depth c).map fun (a, i) => (a, i.access))
+    let (a, i) ← resolveClass cur c n d
+    if i.isStatic then throw .incompatibleClassChange
+    enter' (← select false t n d a i) n d (some t)
+  | .invokeinterfaceThis c n d => do
+    let (x, t) ← thisOf cur self
+    assignable x c
+    let (a, i) ← resolveIface cur c n d
+    if i.isStatic then throw .incompatibleClassChange
+    if !(← ifacesOf depth t).contains c then throw .incompatibleClassChange
+    enter' (← select true t n d a i) n d (some t)
+  | .getfieldThis c n d => do
+    let (x, _) ← thisOf cur self
+    assignable x c
+    verifyProtected cur c x do
+      pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
+    let (a, f) ← resolveField cur c n d
+    if f.isStatic then throw .incompatibleClassChange
+    pure [a]
+  | .putfieldThis c n d => do
+    let (x, _) ← thisOf cur self
+    assignable x c
+    verifyProtected cur c x do
+      pure ((← lookupField n d depth c).map fun (a, f) => (a, f.access))
+    let (a, f) ← resolveField cur c n d
+    if f.isStatic then throw .incompatibleClassChange
+    if f.isFinal then throw .illegalAccess
+    pure [a]
 
-def runSite : Site C N D → M C N D C := runSiteK none
+/-- Bound on the depth of nested method entries: a body may call a method whose body calls it back.
+The spaces' bodies are a site or two deep, so the bound only keeps the run total. -/
+def fuel : Nat := 8
 
-/-- A client: the classes it loads, then the sites it executes, in order. -/
+/-- Run the constructor `init` (a name and descriptor) of a new instance of `c`, if `c` declares it:
+its errors are the site's, the methods it enters are not part of the outcome (as `ProbeLog` mutes
+them). With `init = none`, constructors are not run. -/
+def initWith (run : Cur C → Option C → Site C N D → M C N D (List C)) (init : Option (N × D))
+    (c : C) : M C N D Unit :=
+  match init with
+  | none => pure ()
+  | some (n, d) => do
+    if (← askMethod c n d).isSome then discard <| enter run c n d (some c)
+
+/-- Run a site with `k` levels of method entry left; entering a method with a nonempty body at the
+end of the fuel is `outOfFuel`. -/
+def runK (init : Option (N × D)) : Nat → Cur C → Option C → Site C N D → M C N D (List C)
+  | 0 => let stop := fun _ _ _ => throw .outOfFuel
+         runSiteWith (enter stop) (initWith stop init)
+  | k + 1 => runSiteWith (enter (runK init k)) (initWith (runK init k) init)
+
+def runSite (init : Option (N × D)) : Site C N D → M C N D (List C) := runK init fuel none none
+
+/-- A client: the classes it loads, then the sites it executes, in order. With `init`, the name and
+descriptor of the no-argument constructor, an instance a site creates runs its constructor's body
+(`initWith`); without, constructors are not run (the `Jvm` catalogue's classes have empty ones). -/
 structure Program (C N D : Type) where
   loads : List C := []
   sites : List (Site C N D) := []
+  init : Option (N × D) := none
   deriving Repr
 
 def link (p : Program C N D) : M C N D (List C) := do
   for x in p.loads do load x
-  p.sites.mapM runSite
+  pure (← p.sites.mapM (runSite p.init)).flatten
 
-/-- The outcome of linking `p` in `w`: the first error, or the class each site ran. -/
+/-- The outcome of linking `p` in `w`: the first error, or the sequence of methods entered, in order
+(Track J4). A site that enters no method contributes the class whose field it accesses or that it
+instantiates; with empty bodies, the sequence is the class each site ran. -/
 def outcome (w : World C N D) (p : Program C N D) : Except LinkError (List C) :=
   (link p).run.run (answer w)
 
@@ -597,6 +720,15 @@ whenever it did. Agreement on the footprint is sufficient (`link_congr`), not ne
 method changes the answer to a query and leaves the client linking. -/
 def Compatible (w₀ w₁ : World C N D) (p : Program C N D) : Prop :=
   (outcome w₀ p).toBool = true → (outcome w₁ p).toBool = true
+
+/-- *Same behaviour*: `p` has the same outcome against both tables, the same error or the same
+methods entered in the same order. An edit that is compatible for `p` but not same-behaviour links
+and runs different code (`Jvm.Clients.changesSomeClient`). -/
+def SameBehaviour (w₀ w₁ : World C N D) (p : Program C N D) : Prop :=
+  outcome w₀ p = outcome w₁ p
+
+instance (w₀ w₁ : World C N D) (p : Program C N D) : Decidable (SameBehaviour w₀ w₁ p) :=
+  inferInstanceAs (Decidable (outcome w₀ p = outcome w₁ p))
 
 theorem compatible_of_footprint (w₀ w₁ : World C N D) (p : Program C N D)
     (h : ∀ q ∈ footprint w₀ p, answer w₀ q = answer w₁ q) : Compatible w₀ w₁ p := by

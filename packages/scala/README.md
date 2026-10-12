@@ -17,4 +17,5 @@ What scalac and dotc emit for a Scala subset: lowering to classfiles as a `Task`
 | [`Scala/Space.lean`](Scala/Space.lean) | Program spaces for calibrating lowering against scalac and dotc |
 | [`Scala/Catalogue.lean`](Scala/Catalogue.lean) | Scala library edits, lowered and linked: before, after, fresh |
 | [`probes/probe.py`](probes/probe.py) | Compiles `scalaprobe`'s sources with scalac 2.12, 2.13 and 3 and diffs the classfiles against the model |
+| [`probes/run.py`](probes/run.py) | Runs the catalogue's clients on HotSpot (scalac-compiled, instrumented) and compares outcomes with the model |
 | [`probes/members.py`](probes/members.py) | Calibrates [`packages/scala-types/ScalaTypes/Members.lean`](../scala-types/ScalaTypes/Members.lean) against scalac's and dotc's override errors |

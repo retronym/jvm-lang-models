@@ -49,6 +49,7 @@ def jvm_counts():
 
 SPACE_FILES = {'space': 'packages/jvm/Jvm/Clients.lean', 'space3': 'packages/jvm/Jvm/Clients.lean',
                'space5': 'packages/jvm/Jvm/Clients.lean', 'chainSpace': 'packages/jvm/Jvm/Clients.lean',
+               'bodySpace': 'packages/jvm/Jvm/Clients.lean', 'nestSpace': 'packages/jvm/Jvm/Clients.lean',
                'MiMa.spaceB': 'packages/mima/MiMa/Edits.lean'}
 
 

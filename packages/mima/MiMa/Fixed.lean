@@ -40,7 +40,7 @@ def Extra.name : Extra → String
 def rank : Access → ℕ | .pub => 3 | .prot => 2 | .pkg => 1 | .priv => 0
 
 /-- Method resolution through `c`, without the access check (§5.4.3.3, §5.4.3.4). -/
-def rawResolve (c : C) (n : N) (d : D) : M C N D (C × MethodInfo) := do
+def rawResolve (c : C) (n : N) (d : D) : M C N D (C × MethodInfo C N D) := do
   let h ← hdr c
   if h.isInterface then
     match ← askMethod c n d with

@@ -4,15 +4,16 @@ import Java.Lower
 
 The Java counterpart of `packages/scala/Scala/Catalogue.lean`, and input for Track B's source-level spaces. Each
 case is a library edit (`v0` → `v1`, Java declarations), client units compiled against `v0`, and
-a JVM program: the classes the client loads, the sites it executes directly, and client methods
-whose bodies it runs (their `getstatic`s and invokes, read off the client's lowered classfile).
+a JVM program: the classes the client loads and the sites it executes. A method's body is its
+lowered `getstatic`s and invokes (Track J4), so a site that calls a client method runs the client's
+compiled body.
 
 * `before`: the client against `v0`;
 * `after`: the same client classfiles against `v1` (what MiMa asks about);
 * `fresh`: the client recompiled against `v1` (what a clean build runs, and what Zinc must reach).
 
-Only the bodies in `runs` change between `after` and `fresh`; hand-written `sites` are the same
-call sites in both, so `fresh` is meaningful only for cases whose client calls are in `runs`.
+Only the client's bodies change between `after` and `fresh`; hand-written `sites` are the same call
+sites in both, so `fresh` is meaningful only for cases whose sites call client methods.
 `recompiles` says whether a clean build changes the client's classfiles at all: a constant edit
 changes them although every outcome is the same (JLS §13.4.9).
 
@@ -34,30 +35,15 @@ structure Case where
   client : Program := []
   loads : List String := []
   sites : List S := []
-  /-- Client methods `(class, method)` whose bodies run after `sites`. -/
-  runs : List (String × String) := []
 
 /-- The client's classfiles, compiled against `lib`. -/
 def clientOf (lib client : Program) : Except String (List ClassOut) := do
   let c ← client.mapM fun u => lower u (lib ++ client).env
   pure c.flatten
 
-def Insn.site : Insn → Option S
-  | ⟨"getstatic", o, n, d⟩ => some (.getstatic o n d)
-  | ⟨"invokestatic", o, n, d⟩ => some (.invokestatic o n d)
-  | ⟨"invokevirtual", o, n, d⟩ => some (.invokevirtual o n d o)
-  | ⟨"invokeinterface", o, n, d⟩ => some (.invokeinterface o n d o)
-  | _ => none
-
-/-- The sites of the bodies of `runs`, as compiled into `client`. -/
-def bodySites (client : List ClassOut) (runs : List (String × String)) : List S :=
-  runs.flatMap fun (c, m) => match client.find? (·.name == c) with
-    | some k => (k.methods.filter (·.name == m)).flatMap fun mo =>
-        mo.calls.filterMap fun i => (Insn.site i).map (.within c)
-    | none => []
-
+/-- The program; a new instance runs its `()V` constructor's body (its `super()` call). -/
 def Case.prog (k : Case) (client : List ClassOut) : Jvm.Program String String String :=
-  { loads := k.loads, sites := k.sites ++ bodySites client k.runs }
+  { loads := k.loads, sites := k.sites, init := some ("<init>", "()V") }
 
 def Case.world (client : Except String (List ClassOut)) (lib : Program) :
     Except String (List ClassOut × Jvm.World String String String) := do
@@ -115,7 +101,6 @@ def constantValueChanged : Case where
   client := [cls "X" [returns "k" (.field "A" "K")]]
   loads := ["X"]
   sites := [new "X", invokevirtual "X" "k" "()I" "X"]
-  runs := [("X", "k")]
 
 /-- The same, through an interface's constant that folds `A`'s: the client names only `J`, yet
 its classfile changes with `A.K`. -/
@@ -127,7 +112,6 @@ def constantThroughInterface : Case where
   client := [cls "X" [returns "l" (.field "J" "L")]]
   loads := ["X"]
   sites := [new "X", invokevirtual "X" "l" "()I" "X"]
-  runs := [("X", "l")]
 
 /-- A constant stops being one (its initialiser becomes a call). The old client still has the old
 value folded in and does not read the field; a fresh one reads it with `getstatic`. -/
@@ -139,7 +123,6 @@ def constantBecomesNonConstant : Case where
   client := [cls "X" [returns "k" (.field "A" "K")]]
   loads := ["X"]
   sites := [new "X", invokevirtual "X" "k" "()I" "X"]
-  runs := [("X", "k")]
 
 /-- A non-constant field is removed: the client reads it, so it no longer links. -/
 def nonConstantRemoved : Case where
@@ -150,7 +133,6 @@ def nonConstantRemoved : Case where
   client := [cls "X" [returns "n" (.field "A" "N")]]
   loads := ["X"]
   sites := [new "X", invokevirtual "X" "n" "()I" "X"]
-  runs := [("X", "n")]
 
 /-- A constant is removed: the client folded it, so it still links (and still returns `1`). -/
 def constantRemoved : Case where
@@ -161,7 +143,6 @@ def constantRemoved : Case where
   client := [cls "X" [returns "k" (.field "A" "K")]]
   loads := ["X"]
   sites := [new "X", invokevirtual "X" "k" "()I" "X"]
-  runs := [("X", "k")]
 
 /-! ## Interfaces (§13.5) -/
 

@@ -4,13 +4,13 @@
 
 The Lean model was built to answer one question: is Zinc's invalidation sound, relative to obligations on the compiler bridge? To answer it, each feature file (`Erasure`, `Hier`, `Flat`, `Inline`, `Names`, …) has its own toy language, sized to what Zinc hashes. The toys found real bugs, but they are private to one consumer. Factored out, the same knowledge answers other questions:
 
-- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L591)).
+- **Binary compatibility.** Zinc asks whether a client must be *recompiled*; MiMa asks whether its old classfile still *links*. Both are questions about a task's trace against an edited environment, so T1 applies to linkage unchanged ([`link_congr`](../packages/jvm/Jvm/Link.lean#L714)).
 - **IDE type systems.** The TCK (`retronym/scala-type-system-tck`) checks IntelliJ against an `asSeenFrom` model that now shares its core with the Scala layer.
 - **Scala 2 → 3 migration.** The name-resolution calibration in [talks#21](https://github.com/retronym/talks/issues/21) is already a list of differences between the two compilers.
 
 ## Architecture
 
-The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L74), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L572) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L421) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
+The layers and their imports are in [the root README](../README.md#packages). [`Jvm.World`](../packages/jvm/Jvm/Link.lean#L116), [`Jvm.Program`](../packages/jvm/Jvm/Link.lean#L692) and [`Jvm.Site`](../packages/jvm/Jvm/Link.lean#L66) are the contract between them: a front end turns sources into classfiles and a client program; a consumer reads them. Each layer is calibrated against its real tool before claims are built on it.
 
 ## Done
 
@@ -20,24 +20,18 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 | Track | Layer | Results |
 |---|---|---|
-| Tracks J1–J3, J5–J8 | JVM linkage, overriding along library chains, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
+| Tracks J1–J8 | JVM linkage, overriding along library chains, method bodies and nestmates, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
 | Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, five gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
 
 ## Open
 
-### Track J4: behaviour
-
-**Why.** The JVM model links but runs no code. A library method's own calls are invisible, so MiMa's 17 `ReversedMissingMethodProblem` reports that break no client in the model are unjudged, and nestmates can't be modelled usefully (a nest change breaks a client only through a library method's own calls). Constants folded into the client are part of the same gap.
-
-**Done looks like.** Method bodies as a list of sites linked when the method runs; constants folded at the client; `changesSomeClient` generalised to "links, but runs different code"; the 17 reports classified on HotSpot. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
-
-### Track J3 remainder: nestmates and smaller linkage gaps
+### Track J3 remainder: smaller linkage gaps
 
 **Why.** These are what [`packages/jvm/Jvm/Link.lean`](../packages/jvm/Jvm/Link.lean) still says it doesn't model, and each can hide a MiMa gap.
 
-**Done looks like.** Nestmates (`NestHost`/`NestMembers`, private access between members; after Track J4); protected constructors and constructor chaining between library classes. Each calibrated on HotSpot like the rest. Clients in the library's package and a space over two client classes are done by Track J6's `chainSpace` (client class `J` in package 0, 1 or 2 beside `X`); the catalogue's own spaces still have one client class, in the unnamed package. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
+**Done looks like.** Protected constructors; constructor chaining in the `Jvm` catalogue (a constructor's implicit `super(…)` call; Java's explicit one runs since Track J4); class initialisation (`<clinit>`, JVMS §5.5) on top of method bodies. Each calibrated on HotSpot like the rest. Clients in the library's package and a space over two client classes are done by Track J6's `chainSpace` (client class `J` in package 0, 1 or 2 beside `X`); the catalogue's own spaces still have one client class, in the unnamed package. Track: [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md).
 
 ### Next seams
 

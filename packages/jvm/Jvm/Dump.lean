@@ -24,7 +24,7 @@ def pkgIn (l : List (C × Classfile C N D)) (c : C) : Nat :=
 /-- The binary name: package `n > 0` is `p<n>`. -/
 def qual (pk : C → Nat) (c : C) : String :=
   if pk c = 0 || c = .O then cBase c else s!"p{pk c}.{cBase c}"
-def nName : N → String | .m => "m" | .init => "<init>" | .hashCode => "hashCode" | .finalize => "finalize"
+def nName : N → String | .m => "m" | .init => "<init>" | .hashCode => "hashCode" | .finalize => "finalize" | .run => "run"
 def dName : D → String | .v => "()V" | .i => "()I" | .s => "Ljava/lang/String;" | .iv => "(I)V"
 
 def accName : Access → String | .pub => "public" | .prot => "protected" | .pkg => "package" | .priv => "private"
@@ -40,11 +40,7 @@ def errName : LinkError → String
   | .verify => "verify"
   | .illegalAccess => "illegalAccess"
   | .noSuchField => "noSuchField"
-
-def methodJson (m : N × D × MethodInfo) : String :=
-  "{\"name\":" ++ jstr (nName m.1) ++ ",\"desc\":" ++ jstr (dName m.2.1) ++
-  ",\"static\":" ++ jbool m.2.2.isStatic ++ ",\"abstract\":" ++ jbool m.2.2.isAbstract ++
-  ",\"final\":" ++ jbool m.2.2.isFinal ++ ",\"access\":" ++ jstr (accName m.2.2.access) ++ "}"
+  | .outOfFuel => "outOfFuel"
 
 def fieldJson (m : N × D × FieldInfo) : String :=
   "{\"name\":" ++ jstr (nName m.1) ++ ",\"desc\":" ++ jstr (dName m.2.1) ++
@@ -54,23 +50,14 @@ def fieldJson (m : N × D × FieldInfo) : String :=
 section
 variable (pk : C → Nat)
 
-def classJson (c : C × Classfile C N D) : String :=
-  let h := c.2.header
-  let cName := qual pk
-  "{\"name\":" ++ jstr (cName c.1) ++ ",\"interface\":" ++ jbool h.isInterface ++
-  ",\"abstract\":" ++ jbool h.isAbstract ++ ",\"final\":" ++ jbool h.isFinal ++
-  ",\"public\":" ++ jbool h.isPublic ++
-  ",\"super\":" ++ (match h.super with | some s => jstr (cName s) | none => "null") ++
-  ",\"ifaces\":" ++ jarr (h.ifaces.map (jstr ∘ cName)) ++
-  ",\"permits\":" ++ (match h.permitted with | some ps => jarr (ps.map (jstr ∘ cName)) | none => "null") ++
-  ",\"methods\":" ++ jarr (c.2.methods.map methodJson) ++
-  ",\"fields\":" ++ jarr (c.2.fields.map fieldJson) ++ "}"
-
 def member (op : String) (c : C) (n : N) (d : D) : String :=
   "{\"op\":" ++ jstr op ++ ",\"owner\":" ++ jstr (qual pk c) ++ ",\"name\":" ++ jstr (nName n) ++
   ",\"desc\":" ++ jstr (dName d)
 
 def withRecv (s : String) (r : C) : String := s ++ ",\"recv\":" ++ jstr (qual pk r) ++ "}"
+
+/-- A site on `this` (Track J4): `aload_0` for the receiver. -/
+def onThis (s : String) : String := s ++ ",\"this\":true}"
 
 def siteJson : Site C N D → String
   | .invokestatic c n d => member pk "invokestatic" c n d ++ "}"
@@ -85,6 +72,31 @@ def siteJson : Site C N D → String
   | .new c => "{\"op\":\"new\",\"owner\":" ++ jstr (qual pk c) ++ "}"
   | .construct c n d => member pk "construct" c n d ++ "}"
   | .within x s => "{\"op\":\"at\",\"cls\":" ++ jstr (qual pk x) ++ ",\"site\":" ++ siteJson s ++ "}"
+  | .invokevirtualThis c n d => onThis (member pk "invokevirtual" c n d)
+  | .invokeinterfaceThis c n d => onThis (member pk "invokeinterface" c n d)
+  | .getfieldThis c n d => onThis (member pk "getfield" c n d)
+  | .putfieldThis c n d => onThis (member pk "putfield" c n d)
+
+/-- A method; its body's sites, if any, as `body`. -/
+def methodJson (m : N × D × MethodInfo C N D) : String :=
+  "{\"name\":" ++ jstr (nName m.1) ++ ",\"desc\":" ++ jstr (dName m.2.1) ++
+  ",\"static\":" ++ jbool m.2.2.isStatic ++ ",\"abstract\":" ++ jbool m.2.2.isAbstract ++
+  ",\"final\":" ++ jbool m.2.2.isFinal ++ ",\"access\":" ++ jstr (accName m.2.2.access) ++
+  (if m.2.2.body.isEmpty then "" else ",\"body\":" ++ jarr (m.2.2.body.map (siteJson pk))) ++ "}"
+
+def classJson (c : C × Classfile C N D) : String :=
+  let h := c.2.header
+  let cName := qual pk
+  "{\"name\":" ++ jstr (cName c.1) ++ ",\"interface\":" ++ jbool h.isInterface ++
+  ",\"abstract\":" ++ jbool h.isAbstract ++ ",\"final\":" ++ jbool h.isFinal ++
+  ",\"public\":" ++ jbool h.isPublic ++
+  ",\"super\":" ++ (match h.super with | some s => jstr (cName s) | none => "null") ++
+  ",\"ifaces\":" ++ jarr (h.ifaces.map (jstr ∘ cName)) ++
+  ",\"permits\":" ++ (match h.permitted with | some ps => jarr (ps.map (jstr ∘ cName)) | none => "null") ++
+  (match h.nestHost with | some n => ",\"nestHost\":" ++ jstr (cName n) | none => "") ++
+  (if h.nestMembers.isEmpty then "" else ",\"nestMembers\":" ++ jarr (h.nestMembers.map (jstr ∘ cName))) ++
+  ",\"methods\":" ++ jarr (c.2.methods.map (methodJson pk)) ++
+  ",\"fields\":" ++ jarr (c.2.fields.map fieldJson) ++ "}"
 
 def outcomeJson : Except LinkError (List C) → String
   | .ok l => "{\"ok\":" ++ jarr (l.map (jstr ∘ qual pk)) ++ "}"

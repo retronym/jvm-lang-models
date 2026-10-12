@@ -3,3 +3,4 @@
 .claude/
 .cache/
 literate/_out/
+__pycache__/

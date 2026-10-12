@@ -9,7 +9,9 @@ import java.util.*;
  * Plain Java 17, so it runs on JDK 21 as well as on the JDK that rendered the classfiles.
  *
  * A client loads its classes (`Loads.run`, by `ldc`), then runs each site (`Site<k>.run`), each
- * verified just before it runs. Which method ran is read from `ProbeLog`.
+ * verified just before it runs. The methods entered, and the classes whose fields a site read or
+ * wrote, are read from `ProbeLog`; the outcome is their sequence over all sites (Track J4), or the
+ * `Throwable`.
  *
  * Usage: java -cp classes Run cases.jsonl out
  * Prints one TSV row per case and world: case, world, model, JVM, verdict, JVM message; then a
@@ -85,7 +87,8 @@ public class Run {
   }
 
   static String expected(Map<String, Object> o) {
-    if (o.containsKey("error")) return ERRORS.get((String) o.get("error"));
+    // `outOfFuel`, the model's bound on nested entries, maps to itself: no JVM outcome matches it.
+    if (o.containsKey("error")) return ERRORS.getOrDefault((String) o.get("error"), (String) o.get("error"));
     return "ok " + Json.arr(o.get("ok"));
   }
 
@@ -97,11 +100,11 @@ public class Run {
         call(l, "Loads");
         List<Map<String, Object>> sites = Json.objs(k.get("sites"));
         for (int i = 0; i < sites.size(); i++) {
-          Map<String, Object> s = sites.get(i);
-          ProbeLog.last = null;
-          ProbeLog.obj = null;
+          ProbeLog.reset();
           call(l, "Site" + i);
-          ran.add(result(s, l, k));
+          // Only `Object`'s methods run without logging: an invoke that logged nothing ran one.
+          if (ProbeLog.entered.isEmpty() && invoke(sites.get(i))) ran.add("java.lang.Object");
+          for (Object e : ProbeLog.entered) ran.add(e instanceof ProbeLog.Put p ? written(p, l, k) : (String) e);
         }
         return new String[] { "ok " + ran, "" };
       } catch (Throwable t) {
@@ -110,37 +113,36 @@ public class Run {
     }
   }
 
-  /** Which class ran, was instantiated, or had its field read or written. */
-  static String result(Map<String, Object> s, ClassLoader l, Map<String, Object> k) throws Exception {
+  static boolean invoke(Map<String, Object> s) {
     if (s.get("op").equals("at")) s = Json.obj(s.get("site"));
-    switch ((String) s.get("op")) {
-      case "new": return (String) s.get("owner");
-      case "putfield":
-        for (Class<?> c = ProbeLog.obj.getClass(); c != null; c = c.getSuperclass()) {
-          if (written(c, s, ProbeLog.obj)) return c.getName();
-        }
-        return "?";
-      case "putstatic":
-        for (String t : List.of("v0", "v1", "client")) {
-          for (Map<String, Object> c : Json.objs(k.get(t))) {
-            try {
-              Class<?> x = Class.forName((String) c.get("name"), false, l);
-              if (x.getClassLoader() == l && written(x, s, null)) return x.getName();
-            } catch (LinkageError | ClassNotFoundException e) {
-              // not in this world
-            }
-          }
-        }
-        return "?";
-      // Only `Object`'s methods run without logging.
-      default: return ProbeLog.last == null ? "java.lang.Object" : ProbeLog.last;
-    }
+    return ((String) s.get("op")).startsWith("invoke");
   }
 
-  static boolean written(Class<?> c, Map<String, Object> s, Object o) throws Exception {
+  /** The class whose field a put wrote: the receiver's class or a superclass, or a loaded class's static field. */
+  static String written(ProbeLog.Put p, ClassLoader l, Map<String, Object> k) throws Exception {
+    if (p.obj() != null) {
+      for (Class<?> c = p.obj().getClass(); c != null; c = c.getSuperclass()) {
+        if (written(c, p.field(), p.obj())) return c.getName();
+      }
+      return "?";
+    }
+    for (String t : List.of("v0", "v1", "client")) {
+      for (Map<String, Object> c : Json.objs(k.get(t))) {
+        try {
+          Class<?> x = Class.forName((String) c.get("name"), false, l);
+          if (x.getClassLoader() == l && written(x, p.field(), null)) return x.getName();
+        } catch (LinkageError | ClassNotFoundException e) {
+          // not in this world
+        }
+      }
+    }
+    return "?";
+  }
+
+  static boolean written(Class<?> c, String name, Object o) throws Exception {
     for (java.lang.reflect.Field f : c.getDeclaredFields()) {
       boolean st = java.lang.reflect.Modifier.isStatic(f.getModifiers());
-      if (f.getName().equals(s.get("name")) && st == (o == null)) {
+      if (f.getName().equals(name) && st == (o == null)) {
         f.setAccessible(true);
         if ("put".equals(f.get(o))) return true;
       }
