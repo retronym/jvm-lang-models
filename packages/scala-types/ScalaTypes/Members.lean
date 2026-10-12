@@ -7,22 +7,45 @@ For a class `C` the verdict is either the errors scalac (or dotc) reports for `C
 signature, the member a selection on `C` runs. It is computed over `C`'s interfaces only (`lin`,
 `sigGroups`, `memberType` from `Lower` and `AsSeenFrom`), so it is a `Task` like lowering.
 
-The checks are `RefChecks.checkAllOverrides`, per *overriding pair* `(member, other)`: `member` is
-`C`'s member of a signature group (its first, along the linearization; they match as seen from
-`C`), `other` a later one. A pair is checked in the class where it first meets, so it is skipped
-when some parent of `C` already has both owners as base classes. An abstract member overriding a
-concrete one is no pair. Only the first failing check of a member's first failing pair is reported, in `checkOverride`'s
-order: access, `final`, a missing `override` (an inherited `override` that overrides nothing in its
-own class counts as missing), accidental override (no third member overridden by both), `def`
-over `val`, lazy against strict, result type. A private member is not inherited, so it is
-in no pair with an inherited member (`Lower.hits`). Per class: `override` that overrides nothing,
-and an abstract member left in a concrete class.
+The checks are `RefChecks.checkAllOverrides`, per *overriding pair* `(member, other)`, in the order
+the compilers' `OverridingPairs.Cursor` forms them (`pairs2`): a signature group's concrete members
+first, then its deferred ones, each in linearization order; each member not yet seen as the upper
+member of a pair is the lower member of a pair with every later member of another class, which is
+then seen. A pair's checks are `checkOverride`'s, in its order (`checkPair`): access, `final`, a
+missing `override`, accidental override, `def` over `val`, lazy against strict, result type. A
+private member of another class is in no pair (scalac); dotc leaves every private member out, and
+reports a private member of the class that matches an inherited one on its own. A pair a parent
+already has is left to it in 2.12, checked again in 2.13, and checked again in dotc unless the
+parent has the owners in the same order (`handledByParent`). Per class: `override` that overrides
+nothing; an abstract member left in a concrete class (`missingS2`, and dotc's own member,
+`concreteS3`); dotc's re-check of a member its direct parents give it (`checkMemberTypesOK`).
+
+Errors are reported once per position: an error of a pair whose lower member the class declares is
+at that member, every other one at the class, where only the first is reported. Typer's
+inheritance checks (a `final` parent, two instances of a base class) come before refchecks and stop
+it (`typerDecl`, `reported`).
 
 The member a selection runs is the group's first concrete member along the linearization
 (`Lower.winner`): a concrete member is never overridden by an abstract one.
 
-`membersSpace` is the calibration space; `packages/scala/probes/members.py` compares its verdicts with
-scalac 2.12, 2.13 and dotc 3, including the programs they reject.
+**Against the specification.** SLS §5.1.4 states restrictions on a member and the member it
+overrides, and §5.1.3 which member overrides which ("a concrete definition always overrides an
+abstract definition"); neither says which errors a compiler prints. Of the rules above, the cursor's
+order, the first error per position, the abstract-superclass chain (`missingS2`), dotc's separate
+private check and its member-type re-check decide which classes of a rejected program report which
+errors, never whether a program compiles: over `membersSpace` and `FlatRules`' 192,000 programs,
+scalac 2.12, 2.13 and dotc 3.9 accept the same programs except in two families, both where an
+abstract declaration meets a concrete member, which §5.1.3 says it does not override. dotc lets a
+trait's abstract declaration re-abstract (`reabsTraitOnly`), and checks an abstract declaration, a
+class's or a trait's, as an override of the concrete member (`abstractOverFinal`, and stability:
+dotc's `checkAll`, scala/scala3 neg/i11130); scalac does neither and follows the text. Both
+compilers let a class's abstract declaration re-abstract, which the text does not (`reabsClass`).
+2.12's leaving a pair to a parent is unsound (`recheck11136`). The drafts in `docs/upstream` report
+these.
+
+`membersSpace` and `FlatRules`' space (`lake exe scalaprobe OUT flat`) are the calibration spaces;
+`packages/scala/probes/members.py` compares the verdicts with scalac 2.12, 2.13 and dotc 3,
+including the programs they reject.
 -/
 
 open Query
@@ -41,6 +64,8 @@ inductive Kind
   | weakerAccess
   | illegalModifiers
   | resultType
+  | finalParent
+  | baseTypes
   deriving DecidableEq, Repr
 
 def Kind.name : Kind → String
@@ -49,6 +74,7 @@ def Kind.name : Kind → String
   | .accidental => "accidental" | .needsAbstract => "needsAbstract" | .stable => "stable"
   | .lazyMismatch => "lazyMismatch" | .weakerAccess => "weakerAccess"
   | .illegalModifiers => "illegalModifiers" | .resultType => "resultType"
+  | .finalParent => "finalParent" | .baseTypes => "baseTypes"
 
 /-- An error is reported for a class (or object, or trait). -/
 structure Err where
@@ -58,7 +84,7 @@ structure Err where
 
 /-- The compiler stops before refchecks when an earlier phase reported an error. -/
 def Kind.phase : Kind → Nat
-  | .illegalModifiers => 0
+  | .illegalModifiers | .finalParent | .baseTypes => 0
   | _ => 1
 
 def isBase (l : List Anc) (a : String) : Bool := l.any (·.1.name == a)
@@ -124,7 +150,9 @@ member of its own parent unless a direct parent supplies it (`Members.reabsTrait
 def concreteS3 (n : String) : Nat → Decl → M Bool
   | 0, _ => pure false
   | k + 1, d => do
-    match d.members.find? fun mm => mm.name == n && !mm.fieldOnly with
+    -- a private member is not inherited, and does not implement (`isImplemented` reads
+    -- `nonPrivateMembersNamed`)
+    match d.members.find? fun mm => mm.name == n && !mm.fieldOnly && !mm.priv with
     | some mm => pure (!mm.abs)
     | none =>
       let mut r := false
@@ -132,20 +160,154 @@ def concreteS3 (n : String) : Nat → Decl → M Bool
         if ← concreteS3 n k (← need p) then r := true
       pure r
 
+/-- Does `d`, or a parent reached through abstract classes and traits only, declare `n`? The names
+dotc's `checkMemberTypesOK` checks in a concrete class (a concrete parent was checked itself). -/
+def declaredUpAbstract (n : String) : Nat → Decl → M Bool
+  | 0, _ => pure false
+  | k + 1, d => do
+    if d.members.any (·.name == n) then return true
+    for (p, _) in d.parents do
+      let pd ← need p
+      if (pd.kind == .trt || pd.abs) && (← declaredUpAbstract n k pd) then return true
+    pure false
+
+/-- `d` and its superclasses as far as they are abstract classes: where Scala 2 looks for deferred
+declarations a concrete class must implement (`RefChecks.checkNoAbstractDecls` follows
+`superClass` while it is `ABSTRACT`; a trait is never a superclass). -/
+def abstractChain : Nat → Decl → M (List Decl)
+  | 0, d => pure [d]
+  | k + 1, d => do
+    match d.super with
+    | some (p, _) =>
+      let pd ← need p
+      if pd.kind == .cls && pd.abs then pure (d :: (← abstractChain k pd)) else pure [d]
+    | none => pure [d]
+
+/-- Scala 2: does concrete class `d` leave the signature group `g` unimplemented? Either no member
+of `g` is concrete (`checkNoAbstractMembers`), or a deferred declaration of `d` or of an abstract
+superclass in a row (`abstractChain`) re-abstracts the member that implements it: the first concrete
+member along the linearization comes from a base class of the declaring class
+(`checkNoAbstractDecls`). A concrete class's re-abstraction therefore does not reach its
+subclasses: `object X extends C`, with `C` re-abstracting a trait's concrete `m`, compiles. -/
+def missingS2 (d : Decl) (g : List Hit) : M Bool := do
+  match g.find? fun h => !h.2.abs && !h.2.priv with
+  | none => pure (g.any fun h => h.2.abs && !h.2.priv)
+  | some impl =>
+    let mut r := false
+    for bc in ← abstractChain fuel d do
+      if g.any (fun h => h.1.1.name == bc.name && h.2.abs) && isBase (← lin fuel bc) impl.1.1.name then r := true
+    pure r
+
+/-- `checkOverride`'s checks of one pair, `member` over `other`, in its order: access, `final`, a
+missing `override` (an inherited `override` that overrides nothing in its own class counts as
+missing), accidental override (no third member overridden by both), `def` over `val`, lazy against
+strict, result type. `None` when the pair is legal. -/
+def checkPair (d : Decl) (l : List Anc) (g : List Hit) (mh oh : Hit) (allowPrivOvr : Bool) : M (Option Kind) := do
+  let mo := mh.1.1
+  let m := mh.2
+  let oo := oh.1.1
+  let o := oh.2
+  let lmo ← lin fuel mo
+  let loo ← lin fuel oo
+  let ov ← hasOverride mo m
+  let overridesInOwner := (hitsAbove lmo m.name).any (overridesIn mo.name lmo ((mo, []), m))
+  let third := g.any fun x => x.1.1.name != mo.name && x.1.1.name != oo.name &&
+    isBase lmo x.1.1.name && isBase loo x.1.1.name
+  let both := !o.abs && !m.abs
+  pure <|
+    if m.priv && !allowPrivOvr then some .weakerAccess
+    else if o.final then some .finalOverride
+    else if both && !(ov && (mo.name == d.name || overridesInOwner)) then
+      some (if mo.name == d.name then .needsOverride else .conflicting)
+    -- an inherited `override` of a member `other`'s owner does not have, with no third
+    -- member overridden by both
+    else if both && !isBase lmo oo.name && !third then some .accidental
+    else if o.isVal && !m.isVal then some .stable
+    else if o.isVal && m.isVal && !o.abs && o.lzy != m.lzy then some .lazyMismatch
+    else if !conforms (seenFrom d.name l mo.name m.res) (seenFrom d.name l oo.name o.res) then
+      some .resultType
+    else none
+
+/-- Is the pair of members of `lo` and `hi` (the lower member's owner first) left to a direct parent
+whose linearization is `pl`? 2.12: when the parent has both owners as base classes
+(`hasCommonParentAsSubclass`); 2.13 never; dotc also needs them in that order in the parent's
+linearization (`canBeHandledByParent`), so a deferred member of a subclass and the concrete member
+it re-abstracts are checked again.
+
+Spec: unspecified SLS §5.1.4: whether a subclass checks again an overriding pair a parent already
+checked. 2.12 leaves it to the parent, 2.13 checks every pair again, dotc when the parent has the
+owners in the other order. 2.12's rule is unsound: `Members.recheck11136` compiles and its JVM
+rejects it at load
+([mixin-final-override-recheck.md](../../../docs/upstream/mixin-final-override-recheck.md)). -/
+def handledByParent (dl : Dialect) (pls : List (List Anc)) (lo hi : String) : Bool :=
+  match dl with
+  | .s212 => pls.any fun pl => isBase pl lo && isBase pl hi
+  | .s213 => false
+  | .s3 => pls.any fun pl => isBase pl lo && isBase pl hi &&
+      (pl.findIdx? (·.1.name == lo)).getD 0 < (pl.findIdx? (·.1.name == hi)).getD 0
+
+/-- Scala 2's overriding pairs of a signature group, in `OverridingPairs.Cursor`'s order, and their
+errors. The cursor's scope holds the group's members but other classes' private ones, the concrete
+ones first and then the deferred ones, each in linearization order; each member not yet seen as the
+upper member of a pair is the lower member of a pair with every later one of another class that is
+not private, which is then seen. So a concrete member pairs with a deferred member of a subclass
+that re-abstracts it, the concrete one as the lower member. 2.12 skips a pair when a direct parent
+has both owners as base classes (`hasCommonParentAsSubclass`); 2.13 does not. Returns the errors at
+lower members `d` declares (the first per member: one message per position) and those of inherited
+pairs, in order (`mixinOverrideErrors`). -/
+def pairs2 (dl : Dialect) (d : Decl) (l : List Anc) (pls : List (List Anc)) (g : List Hit) :
+    M (List Kind × List Kind) := do
+  -- dotc leaves every private member out (`memberCanMatchInheritedSymbols`); a private member of
+  -- `d` that matches an inherited one is reported on its own ("weaker access")
+  let cand := g.filter fun h => !(h.2.priv && (dl == .s3 || h.1.1.name != d.name))
+  let order := cand.filter (!·.2.abs) ++ cand.filter (·.2.abs)
+  let mut seen : List Nat := []
+  let mut own : List Kind := []
+  if dl == .s3 && g.any (fun h => h.1.1.name == d.name && h.2.priv && h.2.ov != some true) &&
+      g.any (fun h => h.1.1.name != d.name && !h.2.priv) then
+    own := own ++ [.weakerAccess]
+  let mut mixin : List Kind := []
+  for (lo, i) in order.zipIdx do
+    if seen.contains i then continue
+    let mut ownFound := false
+    for (hi, j) in order.zipIdx.drop (i + 1) do
+      if hi.1.1.name == lo.1.1.name || hi.2.priv then continue
+      seen := j :: seen
+      if handledByParent dl pls lo.1.1.name hi.1.1.name then continue
+      if let some k ← checkPair d l g lo hi (dl == .s3 && lo.2.ov == some true) then
+        if lo.1.1.name == d.name then
+          if !ownFound then own := own ++ [k]; ownFound := true
+        else mixin := mixin ++ [k]
+  -- dotc's `checkAll` then checks each deferred declaration of the class against the concrete
+  -- members it overrides
+  if dl == .s3 then
+    for dh in g do
+      if dh.1.1.name != d.name || !dh.2.abs then continue
+      if own.length > 0 then break
+      for oh in g do
+        if oh.1.1.name == d.name || oh.2.abs || oh.2.priv then continue
+        if let some k ← checkPair d l g dh oh (dh.2.ov == some true) then
+          own := own ++ [k]
+          break
+  pure (own, mixin)
+
 /-- The refchecks errors of definition `d` (a class, trait or object).
 
 Spec: cites SLS §5.1.4, SLS §5.2
 Spec: unspecified SLS §5.1.4: which errors refchecks reports for a member, and in which order. Both
 compilers report one per member, in the order access, `final`, missing `override`, accidental
-override, `def` over `val`, lazy against strict, result type; calibrated on the 4,704 programs of
-`Members.membersSpace` by `packages/scala/probes/members.py`.
-Spec: unspecified SLS §5.1.4: whether a subclass checks again an overriding pair its parent already
-checked. 2.13 does, 2.12 and 3 do not (`Members.recheck`;
-[mixin-final-override-recheck.md](../../../docs/upstream/mixin-final-override-recheck.md)). -/
+override, `def` over `val`, lazy against strict, result type (`Members.checkPair`); calibrated on
+the 4,704 programs of `Members.membersSpace` by `packages/scala/probes/members.py` and on
+`FlatRules`' 192,000. -/
 def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   let l ← lin fuel d
   let pls ← d.parents.mapM fun (p, _) => do lin fuel (← need p)
   let mut ks : List Kind := []
+  -- Both compilers report an error once per position. An error of a pair whose lower member `d`
+  -- declares is at that member; any other (an inherited pair, an implementation, an abstract member
+  -- left) is at the class, so only the first of those is reported (scalac's
+  -- `printMixinOverrideErrors`, then the reporter's one message per position).
+  let mut atClass := false
   -- Scala 3 rejects `override private` before refchecks
   if dl == .s3 && d.members.any (fun m => m.priv && m.ov == some true) then
     ks := ks ++ [.illegalModifiers]
@@ -154,68 +316,52 @@ def checkDecl (dl : Dialect) (d : Decl) : M (List Err) := do
     for h in g do
       if h.1.1.name == d.name && h.2.ov == some true && g.length == 1 then
         ks := ks ++ [.overridesNothing]
-    -- The lower members of pairs: every member no earlier non-private concrete member
-    -- overrides. Scala 2 stops at a private member of `C`; Scala 3 also checks the inherited
-    -- member it fails to hide.
-    let lows := g.zipIdx.filter fun (_, i) => !(g.take i).any fun x => !x.2.priv && !x.2.abs
-    let lows := if dl != .s3 && (g.head?.any (·.2.priv)) then lows.take 1 else lows
-    for (mh, i) in lows do
-      let mo := mh.1.1
-      let m := mh.2
-      let lmo ← lin fuel mo
-      -- `override` counts only if it overrides something in the owner (else "overrides nothing")
-      let ov ← hasOverride mo m
-      let overridesInOwner := (hitsAbove lmo m.name).any (overridesIn mo.name lmo ((mo, []), m))
-      -- `checkOverride`: the first failing check of the first failing pair
-      let mut found : Option Kind := none
-      for oh in g.drop (i + 1) do
-        if found.isSome then break
-        let oo := oh.1.1
-        let o := oh.2
-        if mo.name == oo.name then continue
-        -- a pair a parent has was checked there (2.13 checks it again)
-        if dl != .s213 && pls.any fun pl => isBase pl mo.name && isBase pl oo.name then continue
-        let loo ← lin fuel oo
-        -- an abstract member and a concrete one through different paths: the concrete one
-        -- implements it, so its type must conform (scalac and dotc: "incompatible type"); no other
-        -- check applies. Scala 3 checks the pair in full when the abstract one re-abstracts a
-        -- member of a base class.
-        if m.abs && !o.abs && (dl != .s3 || !isBase lmo oo.name) then
-          if !conforms (seenFrom d.name l oo.name o.res) (seenFrom d.name l mo.name m.res) then
-            found := some .resultType
-          continue
-        let third := g.any fun x => x.1.1.name != mo.name && x.1.1.name != oo.name &&
-          isBase lmo x.1.1.name && isBase loo x.1.1.name
-        let both := !o.abs && !m.abs
-        found :=
-          if m.priv && !(dl == .s3 && m.ov == some true) then some .weakerAccess
-          else if o.final then some .finalOverride
-          else if both && !(ov && (mo.name == d.name || overridesInOwner)) then
-            some (if mo.name == d.name then .needsOverride else .conflicting)
-          -- an inherited `override` of a member `other`'s owner does not have, with no third
-          -- member overridden by both
-          else if both && !isBase lmo oo.name && !third then some .accidental
-          else if o.isVal && !m.isVal then some .stable
-          else if o.isVal && m.isVal && !o.abs && o.lzy != m.lzy then some .lazyMismatch
-          else if !conforms (seenFrom d.name l mo.name m.res) (seenFrom d.name l oo.name o.res) then
-            some .resultType
-          else none
-      if let some k := found then ks := ks ++ [k]
+    -- the overriding pairs, in the compiler's cursor order (`pairs2`)
+    let (own, mixin) ← pairs2 dl d l pls g
+    ks := ks ++ own
+    if let some k := mixin.head? then
+      if !atClass then
+        ks := ks ++ [k]
+        atClass := true
   -- an abstract member left in a concrete class
   if d.kind != .trt && !d.abs then
     for g in sigGroups d.name l do
       if g.any (fun h => h.2.abs && !h.2.priv) then
-        -- both compilers: a class's abstract declaration re-abstracts an inherited concrete
-        -- member (`effWinner`); Scala 3 also: a trait's, unless a direct parent supplies the
-        -- concrete member (`concreteS3`)
-        let byClass := (← effWinner d.name g).isNone
+        -- both compilers: no concrete member, or a deferred declaration of `d` or of an abstract
+        -- superclass in a row re-abstracts the one there is (`missingS2`); Scala 3 also: the
+        -- member dotc computes for `d` is abstract, as when a trait re-abstracts and no direct
+        -- parent supplies the concrete member (`concreteS3`)
+        let byClass ← missingS2 d g
         let byTrait ← if dl == .s3 then
             match g.head? with
             | some h => do pure !(← concreteS3 h.2.name fuel d)
             | none => pure false
           else pure false
         let missing := byClass || byTrait
-        if missing then ks := ks ++ [.needsAbstract]
+        if missing && !atClass then
+          ks := ks ++ [.needsAbstract]
+          atClass := true
+    -- dotc's `checkMemberTypesOK`: a member `d` does not declare is the intersection of what its
+    -- direct parents give it, and the member a selection picks must conform to each of them. Only
+    -- for a name `d` or an abstract or trait parent declares (through abstract and trait parents:
+    -- a concrete parent was checked itself). The pair was checked in a parent and left there by the
+    -- cursor (`handledByParent`); this is where dotc finds it again.
+    if dl == .s3 then
+      for g in sigGroups d.name l do
+        let some h := g.head? | continue
+        let pub := g.filter (!·.2.priv)
+        if pub.any (·.1.1.name == d.name) || !(← declaredUpAbstract h.2.name fuel d) then continue
+        let impl? := if ← concreteS3 h.2.name fuel d then pub.find? (!·.2.abs) else pub.head?
+        let some impl := impl? | continue
+        let mut fromParents : List Hit := []
+        for (p, _) in d.parents do
+          let lp ← lin fuel (← need p)
+          if let some o := pub.find? (isBase lp ·.1.1.name) then fromParents := fromParents ++ [o]
+        let bad := fromParents.any fun o => o.1.1.name != impl.1.1.name &&
+          !conforms (seenFrom d.name l impl.1.1.name impl.2.res) (seenFrom d.name l o.1.1.name o.2.res)
+        if bad && !atClass then
+          ks := ks ++ [.resultType]
+          atClass := true
   pure (ks.eraseDups.map fun k => { cls := d.name, kind := k })
 
 /-- The errors the compiler reports for a program: those of the earliest phase that has any. -/
@@ -229,6 +375,66 @@ def errors (dl : Dialect) (p : Program) : Except String (List Err) := do
   match (es.map (·.kind.phase)).min? with
   | some ph => pure (es.filter (·.kind.phase == ph))
   | none => pure []
+
+/-! ## Typer's inheritance checks
+
+Two errors the typer reports for a definition's parents, before refchecks, which then does not run
+(scalac 2.12, 2.13 and dotc 3.9, over `FlatRules`' programs): a parent that is a `final` class, and
+two instances of one base class with different type arguments. They are not refchecks, so they are
+not in `errors` (which `Zinc.Flat.Shared` compares with `Flat`'s refchecks); `reported` puts the two
+phases together, as a compiler reports them. -/
+
+/-- The base types `d`'s direct parents give it, each as `d` sees it: (class, type arguments). -/
+def parentBases (d : Decl) : M (List (String × List Ty)) := do
+  let mut r := []
+  for (p, pa) in d.parents do
+    let pd ← need p
+    let lp ← lin fuel pd
+    let w := namedWorld d.name [(pd.name, pa)]
+    r := r ++ lp.map fun (a, ts) => (a.name, ts.map (AsSeenFrom.asf w (.this [d.name]) [p]))
+  pure r
+
+/-- Do two of `d`'s parents give it different instances of one base class? -/
+def baseConflict (d : Decl) : M Bool := do
+  let bs ← parentBases d
+  pure (bs.any fun (a, ts) => bs.any fun (b, us) => a == b && ts != us)
+
+/-- Does `d` have conflicting base types, through its own parents or inherited from one? -/
+def baseConflictDeep : Nat → Decl → M Bool
+  | 0, _ => pure false
+  | k + 1, d => do
+    if ← baseConflict d then return true
+    for (p, _) in d.parents do
+      if ← baseConflictDeep k (← need p) then return true
+    pure false
+
+/-- Typer's errors for `d`. A parent that is a `final` class (scalac: "illegal inheritance from
+final class"; dotc: "cannot extend final class"). Different instances of a base class: scalac
+reports them where the parents meet ("inherits different type instances"); dotc where a class
+or object is instantiable ("cannot be instantiated since it has conflicting base types"), so also
+in an object extending such a class, but not in a class that already has a final parent. -/
+def typerDecl (dl : Dialect) (d : Decl) : M (List Err) := do
+  let mut ks : List Kind := []
+  let mut finalParent := false
+  for (p, _) in d.parents do
+    let pd ← need p
+    if pd.final && pd.kind != .trt then finalParent := true
+  if finalParent then ks := ks ++ [.finalParent]
+  let conflict ← if dl == .s3 then
+      if d.kind == .trt || d.abs || finalParent then pure false else baseConflictDeep fuel d
+    else baseConflict d
+  if conflict then ks := ks ++ [.baseTypes]
+  pure (ks.map fun k => { cls := d.name, kind := k })
+
+/-- What the compiler reports for a program: typer's errors if there are any, else refchecks'
+(`errors`). -/
+def reported (dl : Dialect) (p : Program) : Except String (List Err) := do
+  let q := p.desugar dl
+  let env := (prelude dl ++ q).env
+  let ts ← q.flatMap (fun s => s.cls.toList ++ s.obj.toList) |>.mapM fun d =>
+    (typerDecl dl d).run.run env
+  let ts := ts.flatten
+  if ts.isEmpty then errors dl p else pure ts
 
 /-- For each concrete class, the owner of the `m` a selection runs (none if `m` is private).
 
@@ -412,5 +618,35 @@ def reabsTraitViaClass : Program :=
 
 example : errors .s213 reabsTraitViaClass = .ok [] := by decide +kernel
 example : errors .s3 reabsTraitViaClass = .ok [] := by decide +kernel
+
+/-! ### A pair a parent has, checked again (scala/bug#11136)
+
+`trait IO { def m = "" }; trait SO extends IO { override final def m = "" };
+trait SOIO extends IO { override def m = "" }; trait SOSO extends SOIO with SO;
+abstract class AS extends SO; class L extends AS with SOSO`. In `SOSO`, `SO.m` overrides `SOIO.m`;
+in `L`, whose linearization puts `SOIO` first, `SOIO.m` overrides the final `SO.m`. 2.12 leaves the
+pair to the parent `SOSO`, which has both owners, and compiles `L` (its JVM rejects it at run time:
+`IncompatibleClassChangeError`); 2.13 checks every pair again (scala/scala#7439); dotc checks it
+again because the parent has the owners in the other order (`handledByParent`). -/
+def recheck11136 : Program :=
+  let conc (ov fin : Bool) : Mem := { mem .str false with ov := some ov, final := fin }
+  [decl "IO" .trt [] [conc false false], decl "SO" .trt ["IO"] [conc true true],
+   decl "SOIO" .trt ["IO"] [conc true false], decl "SOSO" .trt ["SOIO", "SO"] [],
+   decl "AS" .cls ["SO"] [] (abs := true), decl "L" .cls ["AS", "SOSO"] []]
+
+example : errors .s212 recheck11136 = .ok [] := by decide +kernel
+example : errors .s213 recheck11136 = .ok [{ cls := "L", kind := .finalOverride }] := by decide +kernel
+example : errors .s3 recheck11136 = .ok [{ cls := "L", kind := .finalOverride }] := by decide +kernel
+
+/-- `abstract class B { final def m: String = "" }; abstract class C extends B { def m: String }`:
+scalac's cursor pairs them with the concrete `B.m` overriding `C`'s abstract `m`, as SLS §5.1.3 has
+it, and nothing fails; dotc's `checkAll` also checks `C.m` as an override of the final `B.m` and
+rejects `C`. -/
+def abstractOverFinal : Program :=
+  [decl "B" .cls [] [{ mem .str false with final := true }] (abs := true),
+   decl "C" .cls ["B"] [mem .str true] (abs := true)]
+
+example : errors .s213 abstractOverFinal = .ok [] := by decide +kernel
+example : errors .s3 abstractOverFinal = .ok [{ cls := "C", kind := .finalOverride }] := by decide +kernel
 
 end Scala.Members
