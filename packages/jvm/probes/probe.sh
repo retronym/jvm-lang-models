@@ -18,6 +18,8 @@ case "$arg" in
   space|chain) space=$arg; cases=$work/cases.jsonl; lake exe jvmcases "$arg" > "$cases" ;;
   *) space=$(basename "$arg" .jsonl); cases=$arg ;;
 esac
+commit=$(git rev-parse HEAD)
+dirty=false; git diff --quiet HEAD -- . ':(exclude)packages/*/probes/runs' || dirty=true
 render=${RENDER_JAVA_HOME:-$HOME/.sdkman/candidates/java/25.0.4-tem}
 "$render/bin/javac" -d "$work/render" "$here/Render.java" "$here/Json.java"
 "$render/bin/java" -cp "$work/render" Render "$cases" "$out"
@@ -30,8 +32,6 @@ for jh in "$@"; do
   i=$((i + 1))
 done
 if [ -n "${RUNS:-}" ]; then
-  commit=$(git rev-parse HEAD)
-  dirty=false; git diff --quiet HEAD -- . ':(exclude)packages/*/probes/runs' || dirty=true
   date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   mkdir -p "$(dirname "$RUNS")/verdicts"
   verdicts=verdicts/${date%%T*}-$space-${commit:0:10}.tsv.gz

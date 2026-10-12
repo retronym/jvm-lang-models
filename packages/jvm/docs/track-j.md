@@ -24,7 +24,7 @@ Steps:
 
 ## Results
 
-**Calibration.** On Temurin 21.0.12, 25.0.4 and 27, the probe agrees with the model on every catalogue case and on every program of `space`, `space3`, `space5` and `chainSpace`, apart from two known HotSpot bugs on JDK 21, below.
+**Calibration.** On Temurin 21.0.12, 25.0.4 and 27, the probe agrees with the model on every catalogue case and on every program of `space`, `space3`, `space5` and `chainSpace`, apart from two known HotSpot bugs on JDK 21, below. Runs from Track J6 on are recorded in the [calibration ledger](../probes/runs/README.md), one line per run with its commit.
 
 **[`LinkError`](../Jvm/Link.lean#L111) to the JVM's exceptions**, the same on all three JDKs: `noClassDef` → `NoClassDefFoundError`, `incompatibleClassChange` → `IncompatibleClassChangeError`, `noSuchMethod` → `NoSuchMethodError`, `noSuchField` → `NoSuchFieldError`, `abstractMethod` → `AbstractMethodError`, `instantiation` → `InstantiationError`, `illegalAccess` → `IllegalAccessError`, `verify` → `VerifyError`. `finalSuper` and `finalOverride` are `IncompatibleClassChangeError`, not `VerifyError`.
 
