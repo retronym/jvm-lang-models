@@ -174,6 +174,57 @@ example : breaksSomeClient fieldIfaceBeforeSuper space3 = true ∧
 example : breaksSomeClient putstaticBecomesFinal space3 = true := by decide +kernel
 
 
+/-! ## Building calibration spaces
+
+A calibration space is a product of named alternatives: library shapes, client shapes and sites. Each
+alternative is a `Part`, a label and the classes and sites it contributes; `Part.and` multiplies two
+lists of them, joining labels with commas, so a program's name lists every choice that made it. Each
+program is a case with `v1 = v0`: it calibrates linking itself, not an edit. -/
+
+/-- One choice in a space: its label, the library and client classes it adds, and its sites. -/
+structure Part where
+  label : String
+  lib : List (C × Classfile C N D) := []
+  client : List (C × Classfile C N D) := []
+  sites : List (Site C N D) := []
+
+/-- `p` then `q`: the label `p,q`, and both parts' classes and sites. -/
+def Part.join (p q : Part) : Part :=
+  { label := if p.label.isEmpty then q.label else if q.label.isEmpty then p.label else s!"{p.label},{q.label}",
+    lib := p.lib ++ q.lib, client := p.client ++ q.client, sites := p.sites ++ q.sites }
+
+/-- Every choice of `ps` with every choice of `qs`, in that order. -/
+def Part.and (ps qs : List Part) : List Part := do
+  let p ← ps
+  let q ← qs
+  pure (p.join q)
+
+infixl:70 " ⊗ " => Part.and
+
+def accs : List Access := [.pub, .prot, .pkg, .priv]
+
+def accTag : Access → String | .pub => "pub" | .prot => "prot" | .pkg => "pkg" | .priv => "priv"
+
+def cName : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
+
+/-- `m()V` with `mi`, or nothing. -/
+def declM : Option MethodInfo → List (N × D × MethodInfo)
+  | none => []
+  | some mi => [(.m, .v, mi)]
+
+/-- An optional choice's tag: `-` for none. -/
+def optTag (f : α → String) : Option α → String
+  | none => "-"
+  | some a => f a
+
+/-- The programs of a space named `space`: every choice of `parts` (a product of `Part` lists),
+kept when it is well-typed against its library (each receiver a subtype of its owner). -/
+def build (space : String) (parts : List Part) : List Case :=
+  parts.filterMap fun p =>
+    let k : Case := { name := s!"{space}/{p.label}", mima := none, v0 := p.lib, v1 := p.lib,
+                      client := p.client, prog := { sites := p.sites } }
+    if wellTyped k.w0 k.prog then some k else none
+
 /-- The Track J6 space: overriding along a chain of library classes, the shape of JVMS §5.4.5's
 example. `A` (package 1), `B extends A` and `I extends B` (`I` is a class here; `B` and `I` each in
 package 1 or 2); `A` declares `m()V` with any access, final or not, and `B` and `I` each declare it
@@ -183,33 +234,25 @@ public, package-private, private or not at all; one `invokevirtual` of `A.m`, `B
 calibrates selection (§5.4.6) and the load-time check for final methods (§5.3.5), both of which
 use transitive overriding (§5.4.5 (b)). -/
 def chainSpace : List Case :=
-  let accs : List Access := [.pub, .prot, .pkg, .priv]
-  let opt : Option Access → List (N × D × MethodInfo)
-    | none => []
-    | some a => [(.m, .v, { access := a })]
-  let tag : Option Access → String
-    | none => "-" | some .pub => "pub" | some .prot => "prot" | some .pkg => "pkg" | some .priv => "priv"
-  let cn : C → String | .A => "A" | .B => "B" | .I => "I" | .J => "J" | .X => "X"
-  let cases : List Case := do
-    let aAcc ← accs
-    let aFin ← [false, true]
-    let bAcc ← none :: accs.map some
-    let bPkg ← [1, 2]
-    let iAcc ← none :: accs.map some
-    let iPkg ← [1, 2]
-    let xAcc ← [none, some .pub, some .pkg, some .priv]
+  let opt (a : Option Access) := declM (a.map fun a => { access := a })
+  let tag := optTag accTag
+  let a : List Part := do
+    let acc ← accs
+    let fin ← [false, true]
+    pure { label := s!"A={accTag acc}{if fin then "+final" else ""}",
+           lib := [(.A, { header := p1, methods := declM (some { access := acc, isFinal := fin }) })] }
+  let below (c s : C) : List Part := do
+    let acc ← none :: accs.map some
+    let pkg ← [1, 2]
+    pure { label := s!"{cName c}=p{pkg}.{tag acc}",
+           lib := [(c, { header := { pkg, super := some s }, methods := opt acc })] }
+  let x : List Part := [none, some .pub, some .pkg, some .priv].map fun acc =>
+    { label := s!"X={tag acc}", client := [(.X, { header := { super := some .I }, methods := opt acc })] }
+  let site : List Part := do
     let owner ← [C.A, .B, .I]
-    let jPkg ← [0, 1, 2]
-    let lib : List (C × Classfile C N D) :=
-      [(.A, { header := p1, methods := [(.m, .v, { access := aAcc, isFinal := aFin })] }),
-       (.B, { header := { pkg := bPkg, super := some .A }, methods := opt bAcc }),
-       (.I, { header := { pkg := iPkg, super := some .B }, methods := opt iAcc })]
-    let name := s!"chain/A={tag (some aAcc)}{if aFin then "+final" else ""},B=p{bPkg}.{tag bAcc}," ++
-      s!"I=p{iPkg}.{tag iAcc},X={tag xAcc},site={cn owner}.m@p{jPkg}"
-    pure { name, mima := none, v0 := lib, v1 := lib,
-           client := [(.X, { header := { super := some .I }, methods := opt xAcc }),
-                      (.J, { header := { pkg := jPkg } })],
-           prog := { sites := [.within .J (.invokevirtual owner .m .v .X)] } }
-  cases
+    let pkg ← [0, 1, 2]
+    pure { label := s!"site={cName owner}.m@p{pkg}", client := [(.J, { header := { pkg } })],
+           sites := [.within .J (.invokevirtual owner .m .v .X)] }
+  build "chain" (a ⊗ below .B .A ⊗ below .I .B ⊗ x ⊗ site)
 
 end Jvm.Clients
