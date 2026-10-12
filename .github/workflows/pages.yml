@@ -1,0 +1,102 @@
+name: Pages
+
+# The site at https://retronym.github.io/jvm-lang-models/: the literate pages at the root, the
+# doc-gen4 API documentation under api/.
+#
+# The literate pages build on every push to main that touches them or the model (a few minutes:
+# Verso and the Mathlib-free packages they import). The API documentation takes about 10 minutes
+# and 300 MB, so it is built only on request (Actions → Pages → Run workflow, "api" ticked); other
+# runs republish the most recently built copy from the Actions cache.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'literate/**'
+      - 'packages/**'
+      - 'scripts/check_quotes.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+    inputs:
+      api:
+        description: Rebuild the API documentation
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every quotation is verbatim, and the Oracle quotations within budget
+        run: python3 -I scripts/check_quotes.py
+
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: literate
+          use-mathlib-cache: false
+          build: true
+          test: false
+          lint: false
+      - name: Build the literate pages
+        working-directory: literate
+        run: lake exe literate --output _out
+
+      - name: Restore the API documentation
+        if: ${{ !inputs.api }}
+        id: api-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: docbuild/.lake/build/doc
+          key: api-docs-${{ github.sha }}
+          restore-keys: api-docs-
+      - uses: leanprover/lean-action@v1
+        if: ${{ inputs.api }}
+        with:
+          use-mathlib-cache: true
+          build: true
+          test: false
+          lint: false
+      - name: Build the API documentation
+        if: ${{ inputs.api }}
+        working-directory: docbuild
+        run: lake build All:docs
+      - uses: actions/cache/save@v4
+        if: ${{ inputs.api }}
+        with:
+          path: docbuild/.lake/build/doc
+          key: api-docs-${{ github.sha }}
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -R literate/_out/html-multi/. _site/
+          if [ -d docbuild/.lake/build/doc ]; then
+            cp -R docbuild/.lake/build/doc _site/api
+          else
+            echo "::warning::No API documentation in the cache: run this workflow with 'api' ticked."
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
