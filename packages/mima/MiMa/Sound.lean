@@ -7,7 +7,7 @@ do not report leaves every client of `spaceB` that linked still linking. Kernel 
 and class, the unreported variants are pinned and the rest shown sound without running a client;
 then each unreported edit is run against all of `spaceB` (about 15 s and 6 GB each). So this
 module is not imported by `BinCompat` and is built on demand: `lake build MiMa.Sound` (about
-half an hour). This is
+45 minutes). This is
 enumeration as testing (`docs/specification.md`), not a proof for all libraries.
 -/
 

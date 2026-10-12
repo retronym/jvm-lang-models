@@ -5,4 +5,4 @@ import MiMa.Fixed
 import MiMa.Reversed
 import MiMa.Spec
 
-/-! `MiMa.Sound` (the corrected rules, proved) is outside the default target: `lake build MiMa.Sound`, about half an hour. -/
+/-! `MiMa.Sound` (the corrected rules, proved) is outside the default target: `lake build MiMa.Sound`, about 45 minutes. -/
