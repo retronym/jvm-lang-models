@@ -50,9 +50,9 @@ jobs:
 
   mima-sound:
     name: MiMa.Sound (slow)
-    # The corrected MiMa rules, checked by kernel `decide` over the edit space: about half an hour,
-    # so only on main and on demand.
-    if: github.event_name != 'pull_request'
+    # The corrected MiMa rules, checked by kernel `decide` over the edit space: about 35 minutes,
+    # so only on demand (Actions → Lean → Run workflow), not on pushes or pull requests.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
