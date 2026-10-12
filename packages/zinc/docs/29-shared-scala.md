@@ -39,7 +39,7 @@ Rejected: keeping the coarse query and keying `D` on whole declarations (loses t
 | 3 | `Hier`, `HierSound`, `HierShared` (template) | steps 1–2 | DONE: see below |
 | 4 | `Flat`, `FlatShared` | stored linearization over `header`; refchecks prelude against `Members` (its gaps: `var`, the 2.13 re-check, Scala 3's direct-parent rule are already characterised in `FlatShared`) | DONE: see below |
 | 5 | `Erasure` | `Lower.erase`; additions: `Long`, intersection types (`W with Z`, erasing by trait-or-class), so `header` must carry the kind | DONE: see below; its own two-parameter walk stays local |
-| 6 | `ImplicitScope` | base classes from the shared walk; implicit search over companions is not in the shared layer (decision below) | TODO |
+| 6 | `ImplicitScope` | base classes from the shared walk; implicit search over companions is not in the shared layer (decision below) | DONE: see below |
 | 7 | Track B4's explicit-interface T3 into [`General.lean`](../../inc-comp/IncComp/General.lean) (roadmap item) | — | TODO |
 
 Each step builds, keeps its theorems, and is one commit.
@@ -96,3 +96,11 @@ Results unchanged: `Flat`'s 45 scenario reports and value checks (forwarders, st
 - **Not ported: `Erasure`'s own walk** (`linT` and `Ty.subst` over two type parameters). Its `parent` query answers parents only, keyed by the inheritance and class-name keys, which do not hash kinds; answering the shared `header` from it would have to invent the kind. Porting it needs the walk's congruence up to kind (the result reads only names and parents), a shared lemma like [`lin_fine`](../../scala-types/ScalaTypes/Fine.lean#L167). Left as remaining work of this phase.
 
 Results unchanged: every scenario report and the per-name witnesses, [`Er_obligations`](../Zinc/Features/Erasure.lean#L1199), [`fresh_obligations`](../Zinc/Features/Erasure.lean#L1314), [`dep_obligations`](../Zinc/Features/Erasure.lean#L1318), [`dep_sound`](../Zinc/Features/Erasure.lean#L1322), [`asf_of_decl`](../Zinc/Features/Erasure.lean#L627); the erasure values of the intersection scenarios are pinned (`LW;`, `LZ;`, `LZ;`).
+
+## Step 6: `ImplicitScope`
+
+- **Base classes are the shared walk.** `chainT` runs [`Scala.linH`](../../scala-types/ScalaTypes/Resolve.lean#L179) through `Task.interp toQ`, where a class's `header` is its `parents` answer (an object's kind is `obj`), and reads the result by class with the object flags. The private parent loop is gone. Its trace, [`trace_chainT`](../Zinc/Features/ImplicitScope.lean#L515), is [`Scala.asks_linWith_chain`](../../scala-types/ScalaTypes/Fine.lean#L397) through `toQ`, with `chainOf_envOf` (the chain through the headers is `chainP`); the base classes it returns are on that chain by [`Scala.linWith_chain`](../../scala-types/ScalaTypes/Fine.lean#L438) ([`mem_chainT`](../Zinc/Features/ImplicitScope.lean#L529)).
+- **The pure views read one class beyond the walk.** The walk's fuel is four (`walkFuel`) and `depth` five: the walk asks up to five headers and succeeds on chains of up to four classes, where the loop it replaces truncated at four. A chain longer than four now has no base classes (the walk fails) rather than a cut-off list; no scenario or program of the space has a chain longer than three.
+- **The companion search stays local**, as decided: `cscT`, `select` and `bases` are this file's. The shared implicit-scope search is listed in [`docs/roadmap.md`](../../../docs/roadmap.md).
+
+Results unchanged: every scenario, [`is_obligations`](../Zinc/Features/ImplicitScope.lean#L675), [`is_sound`](../Zinc/Features/ImplicitScope.lean#L731), [`stored_eq_recomputed`](../Zinc/Features/ImplicitScope.lean#L835) (now for heights below five) and [`consistent_of_upToDate`](../Zinc/Features/ImplicitScope.lean#L850).
