@@ -85,7 +85,7 @@ def clsJson (c : Cls) (s : Src) : String :=
 
 /-- The classes of a program; `V` only where it is declared (the value-class space). -/
 def progJson (src : Cls → Src) (withV : Bool := false) : String :=
-  jarr ((all.filter fun c => c != V || withV).map fun c => clsJson c (src c))
+  jarr ((Zinc.Flat.all.filter fun c => c != V || withV).map fun c => clsJson c (src c))
 
 def errStr : Err → String
   | .override n => "override " ++ nameStr n
@@ -96,21 +96,12 @@ def errStr : Err → String
 /-- The model's errors of a clean build, by class. -/
 def modelErrs (src : Cls → Src) : List String :=
   let o := clean src
-  all.flatMap fun c => (o c).errs.map fun e => clsName c ++ ": " ++ errStr e
+  Zinc.Flat.all.flatMap fun c => (o c).errs.map fun e => clsName c ++ ": " ++ errStr e
 
 /-- Does every selection resolve in the model's clean build? Scala rejects one that does not. -/
 def resolves (src : Cls → Src) : Bool :=
   let o := clean src
-  all.all fun c => (o c).descs.all (·.2.1.isSome)
-
-/-- Does no class inherit two instances of one ancestor, `M[Int]` and `M[String]`? Scala rejects
-that ("illegal inheritance"); the model's linearization merge keeps the first. -/
-def coherent (src : Cls → Src) : Bool :=
-  let o := clean src
-  all.all fun c =>
-    let es := (src c).decl.parents.flatMap fun (p, a) =>
-      (p, a) :: (o p).iface.lin.map fun e => (e.1, Ty.subst a e.2)
-    es.all fun e => es.all fun e' => e.1 != e'.1 || e.2 == e'.2
+  Zinc.Flat.all.all fun c => (o c).descs.all (·.2.1.isSome)
 
 def optStr : Opt → String
   | .none => "-" | .int => "int" | .str => "str" | .par => "par" | .dfr => "dfr"

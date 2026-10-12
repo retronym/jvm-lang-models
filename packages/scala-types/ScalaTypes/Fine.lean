@@ -310,29 +310,46 @@ theorem Asks.pure {e : Env} {P : Q → Prop} (a : α) : Asks e P (Pure.pure a : 
 theorem Asks.throw {e : Env} {P : Q → Prop} (s : String) : Asks e P (throw s : M α) := by
   intro q hq; simp at hq
 
-theorem asks_fetchH (e : Env) (p : String) : Asks e Walky (Node.header.fetch p) := by
-  show Asks e Walky (do Pure.pure (p, ← needHeader p))
+/-- A query the header walk's linearization asks: only `header`. -/
+def Heady : Q → Prop
+  | .header _ => True
+  | _ => False
+
+section AsksHeader
+variable {P : Q → Prop} (hP : ∀ n, P (.header n))
+include hP
+
+theorem asks_fetchH_of (e : Env) (p : String) : Asks e P (Node.header.fetch p) := by
+  show Asks e P (do Pure.pure (p, ← needHeader p))
   refine Asks.bind (Asks.bind ?_ fun o => ?_) fun _ => Asks.pure _
-  · intro q hq; simp only [tq_askHeader, List.mem_singleton] at hq; subst hq; trivial
+  · intro q hq; simp only [tq_askHeader, List.mem_singleton] at hq; subst hq; exact hP p
   · cases o
     · exact Asks.throw _
     · exact Asks.pure _
 
-theorem asks_linMerge (e : Env) (self : String)
+theorem asks_linMerge_of (e : Env) (self : String)
     (rec : String × Header → M (List ((String × Header) × List Ty)))
-    (hrec : ∀ h, Asks e Walky (rec h)) :
-    ∀ ps acc, Asks e Walky (linMerge Node.header self rec acc ps)
+    (hrec : ∀ h, Asks e P (rec h)) :
+    ∀ ps acc, Asks e P (linMerge Node.header self rec acc ps)
   | [], _ => Asks.pure _
   | (p, _) :: rest, _ => by
     simp only [linMerge]
-    exact Asks.bind (asks_fetchH e p) fun h => Asks.bind (hrec h) fun _ =>
-      asks_linMerge e self rec hrec rest _
+    exact Asks.bind (asks_fetchH_of hP e p) fun h => Asks.bind (hrec h) fun _ =>
+      asks_linMerge_of e self rec hrec rest _
 
-theorem asks_linH (e : Env) : ∀ k h, Asks e Walky (linH k h)
+/-- Linearization over headers asks only `header` queries. -/
+theorem asks_linH_of (e : Env) : ∀ k h, Asks e P (linH k h)
   | 0, _ => Asks.throw _
   | k + 1, h => by
     simp only [linH, linWith]
-    exact Asks.bind (asks_linMerge e _ _ (asks_linH e k) _ []) fun _ => Asks.pure _
+    exact Asks.bind (asks_linMerge_of hP e _ _ (asks_linH_of e k) _ []) fun _ => Asks.pure _
+
+end AsksHeader
+
+theorem asks_fetchH (e : Env) (p : String) : Asks e Walky (Node.header.fetch p) :=
+  asks_fetchH_of (fun _ => trivial) e p
+
+theorem asks_linH (e : Env) : ∀ k h, Asks e Walky (linH k h) := asks_linH_of (fun _ => trivial) e
 
 theorem asks_firstHitH (e : Env) (n self : String) :
     ∀ l, Asks e Walky (firstHitWith Node.header (fun h n => askMember h.1 n) self n l)

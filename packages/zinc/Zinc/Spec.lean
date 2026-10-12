@@ -2,7 +2,7 @@ import Zinc.Loop.PingPong
 import Zinc.Loop.Cycles
 import Zinc.Loop.Files
 import Zinc.Bridges.HierShared
-import Zinc.Bridges.Flat
+import Zinc.Bridges.FlatShared
 import Zinc.Features.Erasure
 import Zinc.Features.ImplicitScope
 import Zinc.Features.Sam
@@ -27,6 +27,8 @@ every program. `Zinc.Features.Sam` is the template for a new one.
 `Zinc.Hier.Mk_obligations`: declarations with a walk, materialised members and Merkle hashes all
 meet the obligations. `Zinc.Hier.Shared.toy_eq_shared`: their member lookup is the shared Scala
 semantics, for every program. `Zinc.Flat.flat_sound`: the Merkle PoC's descendant rules are sound.
+`Zinc.Flat.Shared.lin_eq_shared`, `Zinc.Flat.Shared.sel_eq_shared`: its stored linearization and its
+selections are the shared Scala semantics, for every program.
 
 **Features.** `Zinc.Erasure.Er_obligations` (erasure through inheritance, as declared, with the
 class kind in the class-name hash); `Zinc.ImplicitScope.is_sound` (implicit scope through an
@@ -44,5 +46,7 @@ def Zinc.spec : List Lean.Name :=
    ``Zinc.Hier.Mk_obligations,
    ``Zinc.Hier.Shared.toy_eq_shared,
    ``Zinc.Flat.flat_sound,
+   ``Zinc.Flat.Shared.lin_eq_shared,
+   ``Zinc.Flat.Shared.sel_eq_shared,
    ``Zinc.Erasure.Er_obligations,
    ``Zinc.ImplicitScope.is_sound]

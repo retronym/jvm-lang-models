@@ -99,3 +99,6 @@ import Links.ZincBridgeLibs
 #print axioms Scala.lookupH_eq
 #print axioms Scala.asks_lookupH
 #print axioms Zinc.Hier.Shared.toy_eq_shared
+#print axioms Zinc.Flat.Fl_obligations
+#print axioms Zinc.Flat.Shared.lin_eq_shared
+#print axioms Zinc.Flat.Shared.sel_eq_shared
