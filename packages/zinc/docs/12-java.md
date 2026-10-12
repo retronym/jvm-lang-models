@@ -1,6 +1,6 @@
 # Phase 12 — Java in mixed builds: name resolution and sealed hierarchies (`JavaSpec.lean`, `JavaSealedSpec.lean`; checks in `JavaNames.lean`, `JavaSealed.lean`)
 
-Phase 10 of `docs/PLAN.md` covered Scala clients over Scala bindings. Java sources take another path through Zinc: javac compiles them, and `JavaAnalyze` reads the products back. The question is the same (does an edit change what a client resolved, or what it may assume about a sealed hierarchy, without Zinc invalidating the client?), but Java's rules and Zinc's Java-side edges differ.
+Phase 10 of `docs/status.md` covered Scala clients over Scala bindings. Java sources take another path through Zinc: javac compiles them, and `JavaAnalyze` reads the products back. The question is the same (does an edit change what a client resolved, or what it may assume about a sealed hierarchy, without Zinc invalidating the client?), but Java's rules and Zinc's Java-side edges differ.
 
 ## Question
 
@@ -31,7 +31,7 @@ Modes: `today`; for names `cheap` (#34) and `fix` (#34 with a Java class's used 
 
 ## Specification (`JavaSpec.lean`, `JavaSealedSpec.lean`)
 
-Following `docs/DESIGN-spec.md`, each half is an instance of `Tree.lean`'s `TCompiler` (`Model.lean`'s `Compiler` with keys read off the output, which is where javac's dependencies come from: the classfile, and for the fix the attributed tree). Everything is over arbitrary finite packages, names and classes, and arbitrary programs and edits, not the bounded space.
+Following `docs/specification.md`, each half is an instance of `Tree.lean`'s `TCompiler` (`Model.lean`'s `Compiler` with keys read off the output, which is where javac's dependencies come from: the classfile, and for the fix the attributed tree). Everything is over arbitrary finite packages, names and classes, and arbitrary programs and edits, not the bounded space.
 
 * **Names.** Units are top-level classes `Pkg × N`; queries ask whether a class exists and whether it has a member type `m`. The client's task is JLS 6.4.1/7.5 by levels (superinterfaces' member types; single-type and single-static imports; the package; on-demand imports with `java.lang`), every probe of a level asked, the first level with a hit deciding: one hit resolves (`shadows`), two are an error (`ambiguous`), none defers (`defers`). javac first checks that every single-type import exists. Keys: `today` is the constant pool (superinterfaces and the resolved class or its outer class), hashed as the whole interface since a Java dependent is not name-filtered; #34 adds nothing for a Java client (no used names), so `cheap` = `today`; `names` adds #34's key as existence keys on every unit with a used simple name; `fix` adds an edge to every imported class.
 * **Sealed.** Units are classes whose interface is their permitted subclasses; the client's task is the exhaustivity walk from the scrutinee (a case covers its subtree; a sealed class asks its children). Hashing `noChildren` (`ClassToAPI` before #21) or `children`; keys `cases` (Zinc's Scala client: scrutinee and pattern classes) or `visited` (every sealed class the walk descended through).

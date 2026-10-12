@@ -1,49 +1,6 @@
-# Zinc soundness in Lean 4 — plan
+# Phase history
 
-A small Lean 4 + Mathlib model of §22 of `talk.md`: Zinc's invalidation loop is sound *relative to stated obligations on the compiler bridge*. Nothing here verifies scalac; the hypotheses of the theorems are the deliverable. They are the written spec for `ExtractAPI` / `ExtractUsedNames`.
-
-## Status: proved generally, and checked on a space
-
-The model is a specification (`docs/DESIGN-spec.md`). A compiler is an instance of the framework: its algorithm is a task whose trace is what compilation read, and its bridge is `keys`, `π` and `covers`. Zinc's soundness (T3a, and T5 across subprojects) follows from the obligations on that instance; the obligations and T1–T5 are stated in [README.md](README.md#the-theorems). A family of incremental-compilation bugs is a failed obligation with a witness; a fix is a key with the obligations proved.
-
-Enumerations over bounded program spaces (`native_decide`) and the Zinc conformance harness check the instances against scalac, dotc, javac and Zinc, and measure costs. They are checks, not theorems. `docs/REVIEW-2026-10-11.md` reviews the framework and lists what to do next.
-
-| Phase | Topic | Proved, for every program | Checked on a space, or by the harness |
-|---|---|---|---|
-| 1 | The framework | T1 `Task.run_eq_of_trace`; T2, T3a, T4 (monotone) and T5 once for the general form `XCompiler` (`General.lean`), every variant's as corollaries through its lift (`packages/inc-comp/docs/PLAN-framework.md`); T2 and T3a (`Soundness`); T3b, incremental equals clean under acyclic dependencies or source-determined interfaces (`Uniqueness`); T4, termination per regime (`Termination`); the toy's obligations (`Toy`) | §15a/§15b counterexamples (`Examples`) |
-| 2 | Members, declarations, Merkle | `NonLocal` (T2′, non-local hash); `Stale`: `obligations`, and T2-stale by kernel `decide` (`stale_unsound`, `stale_none_invalidated`, `stale_affected`, `stale_repaired`); `HierSound`: `D_obligations`, `W_obligations`, `Mk_obligations` | scenarios 1–3 (`Hier`) |
-| 3 | The Merkle PoC's design | `NonLocalAns` (T2″, T3a″); `Flat`: `Fl_obligations`, `flat_sound` | the rule table over 7,500 programs (`FlatRules`, `lake exe exhaustive`); the conformance harness |
-| 6 | Erasure through inheritance | `Erasure`: `asf_of_decl`, `Er_obligations`, `dep_obligations`, `dep_sound` | `lake exe exhaustive erasure`; the scripted cases |
-| 7 | Implicit scope across projects (sbt/zinc#1845) | `ImplicitScope`: `is_obligations`, `is_sound`, `stored_eq_recomputed` | `lake exe exhaustive implicit` |
-| 8 | Classpath, pipelining, keys from the tree | T5 `Classpath.downstream_sound`; `Tree` (T2, T3a for keys from the output); `Snapshot.obligations`; `Inline.obligations_withBodies`, `not_obligations_today`; failed upstream: proved in Phase 19 (`PipelineLifecycle`) | refresh after revert (`Snapshot`), `pipelined_ne_final` (`Inline`) |
-| 9 | Termination, additions, sealed | `PingPong.zinc_diverges` (no `transitiveStep`: Zinc's loop need not terminate); `Added.obligations_fixed`, `not_obligations_today`; `Sealed.obligations_withChildren`, `not_obligations_noChildren` | `transitiveStep_stops` and the run (`PingPong`); `Added`, `Sealed` scenarios |
-| 10 | Name resolution and implicits (`packages/zinc/docs/PLAN-names.md`) | `SplitProof.Spec`: `rules_obligations`, `global_obligations`, `narrowed_obligations` (given recorded package imports); witnesses F2, F3, narrowed without imports; precision (`necessary_invalidated`, `searched_exact`, `narrowed_le_global`, `rules_over`); F4/F5 as `joint_not_comp`. `SpecGivens`: the G rule's obligations, witnesses G1/G2 (`g12_today`), `g_narrowed_without_imports`, `g_decls_not_abstraction` | resolution per version, F6, F7, recompiled sets, cost (`Names`, `Givens`, `NamesRules`); the harness on develop and #34 |
-| 11 | Scala 3 `inline` and opaque types (`packages/zinc/docs/PLAN-inline.md`) | `InlineOpaqueSpec` (a `TCompiler`): `faithful`, `obligations_fix`, `fix_sound`, `obligations_refine`, `refine_sound`, witnesses I1–I3, O1 (coverage); precision `keys_traced`, `name_exact`, `cls_coarse`. `InlineOpaqueSound` (`NCompiler`): `obligations_denot`, `denot_sound` (fresh denotation hash), `recompiles_or_unchanged`, `I1_abstraction` | counts and recompiled sets (`InlineOpaque.check_*`); which reads dotc folds (probes); the harness, both layouts |
-| 12 | Java in mixed builds (`packages/zinc/docs/PLAN-java.md`) | `JavaSpec`: `obligations_fix`, `fix_sound`, witnesses J1–J4; `JavaSealedSpec` | `JavaNames`, `JavaSealed`; the harness |
-| 13 | The split layout (`packages/zinc/docs/PLAN-split.md`) | `SplitProof`: `proposed_sound`, `cheap_sound_of_local`; `Spec`: `today_not_obligations`, `cheap_not_obligations`, `cross_obligations`, `cross_downstream_sound` (T5) | `Split.check_*` (the slot language matches the concrete model on the bases); the harness |
-| 14 | Compile order and pipelining (`packages/zinc/docs/PLAN-order.md`) | `JavaOrder`: `obligations_mixed`, `mixed_sound`, `exclusion_exact`, `flip_spurious`; witnesses JO-V1, JO-V2, JO-O1, JO-O2 | none needed so far |
-| 15 | Inferred types in a cycle (`packages/zinc/docs/PLAN-cycles.md`, talks#31) | `Cycles`: `obligations`; `zinc_ne_clean` (Zinc stops at a per-unit fixed point that is not the clean build, C1, C2), `two_fixpoints`; `annotated_eq_clean` (T3 with every member annotated) | sbt/zinc#1284's and #1780's rules on Zinc's real loop; the harness (36 edits) |
-| 16 | Class-name agreement between the bridge and Zinc (`packages/zinc/docs/PLAN-naming.md`) | `Naming`: `run_rename`, `trace_rename`, `coverage_named`, `not_coverage_named`, `collision` (#1553); witnesses `spelling_bugs` (#1812, #127, #1351, #9694, #716/#1233) and `default_package_1812` on `JavaSpec`, by kernel `decide` | the cluster's scripted tests mapped, all passing on develop |
-| 17 | Hash stability across source, pickle and classfile forms (`packages/zinc/docs/PLAN-hash.md`) | `HashForms`: `abstraction_formed_iff`, `stable_precise`, `stable_not_spurious`, `unstable_spurious`, `canonical_stable`, `canonical_noMasking`, `skip_unsound`, `conservative_sound`, `conservative_spurious`; witnesses `artefact_bugs` (#1782, #88, scala3#18080, #9133, #9730), `masking_237` | the cluster's scripted tests mapped |
-| 18 | Annotations as API and as dependencies (`packages/zinc/docs/PLAN-annotations.md`) | `Annotations`: `obligations_comp`, `obligations_fix`, `fix_sound` (sbt/zinc#1842's keys, a macro annotation's body hashed); witnesses `today_not_coverage` (#1842), `noBody_not_abstraction` (scala3#22999) | the cluster's scripted tests mapped |
-| 19 | Pipelining's early-output lifecycle (`packages/zinc/docs/PLAN-pipelining.md`) | `PipelineLifecycle`: `rollback_preserves`, `noRollback_breaks`, `stale_after_revert`, `rollback_detects` (sbt/zinc#1843), `downstream_reads_built`, `partial_write` (scala3#27139) | the cluster's scripted tests mapped |
-| 20 | Constructors and synthetic case-class members (`packages/zinc/docs/PLAN-synthetic.md`) | `Synthetic`: `sound_of_agree`; witnesses `under_of_disagree` (#19910), `under_12401`, `over_plain` (#97), `over_default` (#1324), `unapply_26231`, `apply_572` | the cluster's scripted tests mapped |
-| 21 | Derived API: export forwarders and used types' supertypes (`packages/zinc/docs/PLAN-derived.md`) | `DerivedApi`: `obligations_comp`, `obligations_fix`, `fix_sound` (#10182's and #87's edges); witnesses `export_not_coverage`, `usedType_not_coverage` | the clusters' scripted tests mapped; #18216 across subprojects stated, not proved |
-| 22 | Scala 3 macro dependencies (`packages/zinc/docs/PLAN-macros.md`) | `MacroDeps` (a `TCompiler`): `faithful`, `obligations_fix`, `fix_sound`; witnesses `gen_pre24969` (#23852), `targ_pre23900`, `private_today` (abstraction), `annot_today` (#22999), `crossProject_today` (sbt/zinc#1478), `early_violates` (#27125); cost `bytecode_coarse`, `private_coarse` | the `today` rules against dotc 3.9 and Zinc `develop` (sources, not the harness) |
-| 23 | The extraHash lineage and the companion namespace (`packages/zinc/docs/PLAN-extrahash.md`) | `ExtraHash`: `merged_spurious`, `qualified_precise`, `qualified_sound`, `noFold_misses` (#542, #662), `coldWarm_spurious` (#1794) | #1793, #1795, #1796 as kernel-`decide` examples; the cluster's scripted tests mapped |
-| 24 | Member selection through extensions (`packages/zinc/docs/PLAN-extensions.md`) | `Extensions`: `ext_rule_obligations` (the G rule, every layout without an ancestor companion); witnesses `ext_today_pkgObject`, `ext_today_topLevel`, `ext_narrowed_without_imports`, `ext_rule_ancestorCompanion` | precedence probed on Scala 3.9.0 and 2.13.16; the four predicted tests fail on develop (retronym/zinc#53) |
-| 25 | Companion pairs in a hierarchy space (`packages/zinc/docs/PLAN-companions.md`) | none (a checked space) | `Companions.check_*` by kernel `decide`; the harness on develop and on the Merkle PoC before and after retronym/zinc#56 agrees with the model on all 135 edits |
-| 26 | Files as a layer (`packages/zinc/docs/PLAN-files.md`) | `Files`: charged coverage (`ChargedCoverage`, `charged_of_obligations`); T2 and T3a under charging for file-closed policies (`round_preserves_charged`, `zinc_sound_charged`); F3 on `Spec`'s lookup with a two-class client file: `today_not_charged`, the fix `every_obligations` and `every_sound`; T5 under charging: `inv_external_charged`, `downstream_sound_charged`; sbt/zinc#417: `fi_not_covered`, `fi_loop`, the fix for every program `kept_obligations`, `kept_sound` | none needed so far |
-| 27 | Import selectors and Scala 3.7 given prioritisation (`packages/zinc/docs/PLAN-imports.md`) | `Spec`: `sel_check_covered`, `sel_cross_obligations`, witness `hide_unrecorded_not_obligations`; `SpecGivens`: `gP_rule_obligations`, `gP_global_obligations`, `gP_searched_obligations` under both rules; `prio_differs`, `general_added_stale`, `type_widened_stale` | selectors add no family; the 3.7 rule changes selection, not the trace; one bounded example; precedence probed on Scala 3.9.0 and 2.13.16; the two predicted tests fail on develop (retronym/zinc#58) |
-| 28 | SAM conversion and local classes (`packages/zinc/docs/PLAN-sam.md`) | `Sam` (a `TCompiler`): `obligations_fix`, `fix_sound`; `obligations_today_argFree`, `today_sound_argFree`; cost `today_sub_fix`, `fix_eq_today`; witnesses `w830_pre` (#830), `w192_pre` (#192), predictions `p1_today`, `p2_today` | javac, scalac and dotc behind P1 and P2 (probes); the predicted tests fail on develop (retronym/zinc#58) |
-
-Phases 4 and 5 are design notes; their results are in phases 6 to 8.
-
-Against Zinc's bug tracker (`docs/BUG-MAP.md`, counted from its rows): of 145 catalogued bugs, 56 are covered by an instance, 38 partially, and 50 are gaps, 35 of them compiler `comp` or snapshot-bookkeeping rows with no phase. An instance has a witness with the bug's trace for 52 and the family without this witness for 26; most instances of phases 15 to 28 were built after the bug, so these are not predictions. 16 pending and 3 disabled scripted tests are mapped the same way.
-
-No `theorem` is proved by `native_decide`: the enumerated facts are `example`s. CI (`.github/workflows/lean.yml`) lints this (`scripts/lint_native_decide.py`) and checks that the core theorems T1–T5, per framework variant, and a selection of instance theorems (`packages/inc-comp/docs/PLAN-framework.md`) use only `propext`, `Classical.choice` and `Quot.sound` (`scripts/Axioms.lean`, `scripts/check_axioms.py`). `PingPong.zinc_diverges` had leaned on `native_decide` through its step lemmas; they are now kernel `decide`.
-
-Every witness and obligation in the table uses kernel `decide` or a proof.
+The Zinc model's plan as it was worked through, phase by phase, from 8 October 2026: the first findings, the encoding choices, the definitions, and phases 2 to 9 in full. From phase 10 on each phase has its own record in `packages/zinc/docs/`. The current state is `docs/status.md`.
 
 ## Two findings from working out the proof (for the talk)
 
@@ -116,7 +73,7 @@ def clean (src) : CUnit → Out := group S src ext      -- ext: the external/lib
 
 ## Obligations and theorems
 
-The canonical statement of the obligations on the compiler bridge and of T1–T5 is in [README.md](README.md#the-theorems); `General.lean` proves T2, T3a, T4 (monotone) and T5 once for `XCompiler`. This plan's original design statements of them are superseded and were removed. Precision, planned here as optional, is still not defined in the framework (REVIEW-2026-10-11, finding 4).
+The canonical statement of the obligations on the compiler bridge and of T1–T5 is in [the root README](../../README.md#the-theorems); `General.lean` proves T2, T3a, T4 (monotone) and T5 once for `XCompiler`. This plan's original design statements of them are superseded and were removed. Precision, planned here as optional, is still not defined in the framework (REVIEW-2026-10-11, finding 4).
 
 ## Toy instance — `packages/zinc/Zinc/Toy.lean`, `packages/zinc/Zinc/Examples.lean`
 
@@ -385,7 +342,7 @@ Each step adds a layout or a dimension that the harness (retronym/zinc#25) alrea
 - **P8.1, T5** (`Classpath.lean`). External units, a stored snapshot per downstream, Zinc's initial external invalidation (`extInvalidated`). `inv_external` (T5a): from an up-to-date downstream with fresh snapshots, the new classpath leaves dirty only the changed sources and the holders of keys whose hash moved; `downstream_sound` (T5) composes it with T3a″. A library is the instance whose every key hashes the stamp: coarse, sound by the abstraction obligation alone.
 - **P8.2, snapshot refresh** (`Classpath.lean`, `Snapshot.lean`). `fresh_refreshAll`: refreshing every upstream class keeps snapshots fresh. `fresh_refreshRef_local`: with local hashes, Zinc's rule (refresh the classes a recompiled unit references) is enough, and needs no freshness before the build. With a non-local hash (a key on `C` reading its ancestor `A`), it is not: `stale_after_revert` (edit `A`, `X` recompiles, `A`'s record is not refreshed, revert `A`, nothing is seen). Zinc today stores local APIs (materialised members), so its rule is sound; the Merkle PoC composes across subprojects, which made `macro-upstream-member-removed` possible, and its fix `9904df698` refreshes every changed upstream class (`refreshAll`). P8.0 (a scripted test for the gap on develop) is dropped: on develop the gap only re-detects a change, it cannot hide one.
 - **P8.3, composed vs single loop** (`ImplicitScope.lean` `reportComposed`, `lake exe exhaustive composed`). One loop per project, upstream first, starting from Zinc's external walk as the bridge records it: direct parents only (`Dependency.scala` records `parents`), then transitive inheritors in the project, name-filtered clients, and nothing unless the upstream class's `apiHash` moved (`detectAPIChanges`). Over 1,080 runs per layout: develop and the fix agree with the single-loop encoding run for run (wrong sets and client recompiles), in `lib → app` and `lib → mid → app`. Without the `apiHash` fold they differ: 384 unclean composed against 312 in the single loop, which compares every key's hash across projects and so sees a summary change that Zinc's `apiHash` gate hides (smallest: `A` gains an implicit, `Z`, a client of `D extends A`, stays stale). The single-loop encoding is sound to use for the designs that publish everything through `apiHash`; ablations that move a name hash without `apiHash` need the composed run.
-- **P8.4, pipelining** (`Pipelining.lean`, `Inline.lean`). `early_agreement` (T1 restated). `stale_after_failed_upstream`: an upstream fails after writing its early output, the downstream compiles against it, the upstream is reverted and sees no change against its last successful build, and the downstream keeps the failed output; `rollback_after_failed_upstream`: rolling the early output back with the rest fixes it (Zinc's pending `pipelining-failed-upstream-revert`). `Pipelining.lean` has since been deleted: `early_agreement` was `Task.run_congr` restated, and the two scenarios are Phase 19's `stale_after_revert` and `rollback_detects`, proved for every interface and hash (`packages/zinc/docs/PLAN-pipelining.md`). `pipelined_ne_final`: with a Scala 2 `@inline` body or a Java constant, a pipelined clean build differs from a non-pipelined one; Scala 3 `inline` agrees.
+- **P8.4, pipelining** (`Pipelining.lean`, `Inline.lean`). `early_agreement` (T1 restated). `stale_after_failed_upstream`: an upstream fails after writing its early output, the downstream compiles against it, the upstream is reverted and sees no change against its last successful build, and the downstream keeps the failed output; `rollback_after_failed_upstream`: rolling the early output back with the rest fixes it (Zinc's pending `pipelining-failed-upstream-revert`). `Pipelining.lean` has since been deleted: `early_agreement` was `Task.run_congr` restated, and the two scenarios are Phase 19's `stale_after_revert` and `rollback_detects`, proved for every interface and hash (`packages/zinc/docs/19-pipelining.md`). `pipelined_ne_final`: with a Scala 2 `@inline` body or a Java constant, a pipelined clean build differs from a non-pipelined one; Scala 3 `inline` agrees.
 - **P8.5, keys from the tree** (`Tree.lean`, `TreeToy.lean`). `TCompiler`: `keysOf : Out → Keys`; T2 and T3a with the same proofs. Toy with `x += 1` (desugared through a failed lookup of `+=`) and a two-binder extractor pattern (the pattern matcher's `_1`, `_2` and an arity check on `_3` after extraction). Zinc's extractor (`today`) fails coverage (`not_obligations_today`) and misses all three edits; recording the selectors fixes the field-type edit only; recording the failed lookup and the `_3` sentinel (`fixed`) meets the obligations (`obligations_fixed`) and is clean on all three.
 - **P8.7, bodies as API** (`Inline.lean`). Today's hash leaves a Scala 2 `@inline` body out (`not_obligations_today`, sbt/zinc#537): a body-only edit leaves `C` with the old inlined value, and is hidden whenever another hashed body changes too. Hashing every body meets the obligations in either view (`obligations_withBodies`).
 
@@ -407,43 +364,43 @@ Each step adds a layout or a dimension that the harness (retronym/zinc#25) alrea
 - [x] P9.2 `Embed.lean`: the local `Compiler` lifts to `NCompiler`, ported from the talk's V2 snapshot. Since deleted: superseded by the `toX` lifts into `XCompiler` (`Compiler.toX_obligations`, Phase 1).
 - [x] P9.3 `Added.lean`: added and deleted classes as edits from and to an absent source. Keys from the tree (`TCompiler`). A class added in an inner package scope (`a.b.Foo` for a client in `package a; package b` that resolved `a.Foo`) is missed: the tree shows the resolved class only, and Zinc invalidates only the added class's dependents (`invalidateInitial` schedules added sources and nothing else). Recording the scopes searched meets the obligations. Deletion is caught by the key on the resolved class. **Confirmed on Zinc `develop`**, Scala 2.13 and 3, for an inner package scope and for a wildcard import that now supplies the name (over the client's package, or over `scala.Option`); not for an import over a class added to the client's package (the import wins). Pending scripted tests `added-class-*` (retronym/zinc branch `claude/added-class-inner-package`); probes showed the incremental build compiling only the added file and succeeding, and a clean build failing. Cheap fix: on an addition, invalidate the users of the added class's simple name.
 - [x] P9.4 `Sealed.lean`: exhaustivity reads a sealed parent's children; the same-file rule (and Java's `permits`) keeps the query local to the parent, and a hash covering the children meets the obligations. A hash without them (Zinc's `ClassToAPI` for Java before retronym/zinc#21) fails abstraction; adding a permitted subclass leaves the client without its warning (`java_permits_wrong`).
-- [x] Files as recompilation units: see `packages/zinc/docs/PLAN-files.md` (Phase 26).
+- [x] Files as recompilation units: see `packages/zinc/docs/26-files.md` (Phase 26).
 - [ ] Future: a scripted variant of P9.3 under Scala 3 and with an explicit import (precedence rules differ); class vs companion keys (sbt/zinc#1796).
 
-## Phase 10 — name resolution and implicits: see `packages/zinc/docs/PLAN-names.md`
+## Phase 10 — name resolution and implicits: see `packages/zinc/docs/10-names.md`
 
-## Phase 11 — Scala 3 `inline` and opaque types: see `packages/zinc/docs/PLAN-inline.md`
+## Phase 11 — Scala 3 `inline` and opaque types: see `packages/zinc/docs/11-inline.md`
 
-## Phase 12 — Java in mixed builds, name resolution and sealed hierarchies: see `packages/zinc/docs/PLAN-java.md`
+## Phase 12 — Java in mixed builds, name resolution and sealed hierarchies: see `packages/zinc/docs/12-java.md`
 
-## Phase 13 — name resolution and givens across subprojects (the `split` layout): see `packages/zinc/docs/PLAN-split.md`
+## Phase 13 — name resolution and givens across subprojects (the `split` layout): see `packages/zinc/docs/13-split.md`
 
-## Phase 14 — compile order and pipelining, a Java unit's two interfaces: see `packages/zinc/docs/PLAN-order.md`
+## Phase 14 — compile order and pipelining, a Java unit's two interfaces: see `packages/zinc/docs/14-order.md`
 
-## Phase 15 — inferred types in a cycle, T3a without T3: see `packages/zinc/docs/PLAN-cycles.md`
+## Phase 15 — inferred types in a cycle, T3a without T3: see `packages/zinc/docs/15-cycles.md`
 
-## Phase 16 — class-name agreement between the bridge and Zinc: see `packages/zinc/docs/PLAN-naming.md`
+## Phase 16 — class-name agreement between the bridge and Zinc: see `packages/zinc/docs/16-naming.md`
 
-## Phase 17 — hash stability across source, pickle and classfile forms: see `packages/zinc/docs/PLAN-hash.md`
+## Phase 17 — hash stability across source, pickle and classfile forms: see `packages/zinc/docs/17-hash.md`
 
-## Phase 18 — annotations as API and as dependencies: see `packages/zinc/docs/PLAN-annotations.md`
+## Phase 18 — annotations as API and as dependencies: see `packages/zinc/docs/18-annotations.md`
 
-## Phase 19 — pipelining's early-output lifecycle: see `packages/zinc/docs/PLAN-pipelining.md`
+## Phase 19 — pipelining's early-output lifecycle: see `packages/zinc/docs/19-pipelining.md`
 
-## Phase 20 — constructors and synthetic case-class members: see `packages/zinc/docs/PLAN-synthetic.md`
+## Phase 20 — constructors and synthetic case-class members: see `packages/zinc/docs/20-synthetic.md`
 
-## Phase 21 — derived API, export forwarders and used types' supertypes: see `packages/zinc/docs/PLAN-derived.md`
+## Phase 21 — derived API, export forwarders and used types' supertypes: see `packages/zinc/docs/21-derived.md`
 
-## Phase 22 — Scala 3 macro dependencies: see `packages/zinc/docs/PLAN-macros.md`
+## Phase 22 — Scala 3 macro dependencies: see `packages/zinc/docs/22-macros.md`
 
-## Phase 23 — the extraHash lineage and the companion namespace: see `packages/zinc/docs/PLAN-extrahash.md`
+## Phase 23 — the extraHash lineage and the companion namespace: see `packages/zinc/docs/23-extrahash.md`
 
-## Phase 24 — member selection through extensions: see `packages/zinc/docs/PLAN-extensions.md`
+## Phase 24 — member selection through extensions: see `packages/zinc/docs/24-extensions.md`
 
-## Phase 25 — companion pairs in a hierarchy space: see `packages/zinc/docs/PLAN-companions.md`
+## Phase 25 — companion pairs in a hierarchy space: see `packages/zinc/docs/25-companions.md`
 
-## Phase 26 — files as a layer: see `packages/zinc/docs/PLAN-files.md`
+## Phase 26 — files as a layer: see `packages/zinc/docs/26-files.md`
 
-## Phase 27 — import selectors (renames, hiding, givens) and Scala 3.7's given prioritisation: see `packages/zinc/docs/PLAN-imports.md`
+## Phase 27 — import selectors (renames, hiding, givens) and Scala 3.7's given prioritisation: see `packages/zinc/docs/27-imports.md`
 
-## Phase 28 — SAM conversion and local classes: see `packages/zinc/docs/PLAN-sam.md`
+## Phase 28 — SAM conversion and local classes: see `packages/zinc/docs/28-sam.md`

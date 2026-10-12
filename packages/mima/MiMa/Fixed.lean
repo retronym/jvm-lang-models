@@ -16,7 +16,7 @@ MiMa's keys plus four, one per gap in `packages/mima/MiMa/Keys.lean`:
   new default can conflict; in the model's client space, clients implement only library interfaces.
 
 Soundness on the space: every edit in `BinCompat.edits` that breaks a client of `spaceB` is
-reported. Checked by kernel `decide` (enumeration as testing, per `docs/DESIGN-spec.md`; not a proof for
+reported. Checked by kernel `decide` (enumeration as testing, per `docs/specification.md`; not a proof for
 all libraries).
 -/
 

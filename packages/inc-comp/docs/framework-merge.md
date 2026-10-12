@@ -41,7 +41,7 @@ The design originally said to change `NCompiler.keys` in place. That would have 
 
 Not moved: T4's explicit-interface and acyclic regimes (`zinc_some_of_explicit`, `zinc_some_of_wf`). They read the round's recorded keys, and no `TCompiler` instance needs them yet. Moving them is the same pattern when one does.
 
-**`Model.lean` stays the first page.** Its docstring introduces the variants and the general form they lift into. docs/DESIGN-spec.md and the README point there first.
+**`Model.lean` stays the first page.** Its docstring introduces the variants and the general form they lift into. docs/specification.md and the README point there first.
 
 **Step 2** (merged, talks#46): implicit search on `SplitProof.Spec`'s scopes as an `XCompiler` (`SpecGivens.lean`). Its search asks the whole level of its hit, its keys read the resolved scope from the output, and `GivensSpec.lean` (the separate `TCompiler` over `Pkg × N`) is gone. Names stay on `Spec`'s `NCompiler`: it already lifts into `XCompiler`, and moving it would change only its declaration, against an open PR's file.
 

@@ -2,11 +2,11 @@
 
 Zinc as instances of `IncComp`: its loop and policies (`Zinc.Loop`), its bridges and their variants (`Zinc.Bridges`: Scala 2's as-seen-from members, Scala 3's as-declared ones, the Merkle PoC, hash forms, naming, companions), and each Scala and Java feature (`Zinc.Features`). For each: the compiler's algorithm as the task, today's bridge as keys, each bug family as a failed obligation with a witness, each fix as keys with the obligations proved.
 
-**Start here.** `Zinc/Features/Sam.lean` is the template for a feature; `docs/PLAN-sam.md` the question behind it. `docs/BUG-MAP.md` (repository root) maps 145 Zinc and compiler bugs to these files.
+**Start here.** `Zinc/Features/Sam.lean` is the template for a feature; `docs/28-sam.md` the question behind it. `docs/evidence/bug-map.md` (repository root) maps 145 Zinc and compiler bugs to these files.
 
 **Calibration.** The conformance harness (retronym/zinc#25, #36) runs these spaces through real Zinc and compares classfiles with a clean build; on the names and givens spaces the model and Zinc agree on every verdict and recompiled set (2,331 + 2,372 cases). 20 failures the model predicted all failed on Zinc `develop`.
 
-**Gaps.** `Hier`, `Erasure`, `Flat` and `ImplicitScope` each carry their own toy Scala instead of `scala-types`; see `docs/ROADMAP.md` at the repository root.
+**Gaps.** `Hier`, `Erasure`, `Flat` and `ImplicitScope` each carry their own toy Scala instead of `scala-types`; see `docs/roadmap.md` at the repository root.
 
 ## Files
 

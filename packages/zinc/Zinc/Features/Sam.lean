@@ -11,7 +11,7 @@ methods and types share it) and arbitrary programs.
 parents, and its methods (name, parameter types, result, abstract or not). **The query** `info`
 returns that declaration; `member m` returns its methods named `m`.
 
-**The task** (`packages/zinc/docs/PLAN-sam.md`). A lambda of arity `n` to a target `t`, and an anonymous class
+**The task** (`packages/zinc/docs/28-sam.md`). A lambda of arity `n` to a target `t`, and an anonymous class
 extending `t`, walk `t`'s ancestry, asking `info` of each class. Merging the walk (the first
 declaration of a name wins) gives the abstract members: a lambda converts if exactly one remains
 and takes `n` parameters, through `invokedynamic` if every class of the walk is an interface and
@@ -20,7 +20,7 @@ implement them all. A lambda passed to `o.m` asks `o` for the alternatives named
 alternative's parameter type, and converts to the one that is functional at that arity.
 
 **Keys** per design (`Design`), read off the output, for the edges each bridge records
-(`packages/zinc/docs/PLAN-sam.md`'s table). An inheritance or local-inheritance edge on `t` stands for `(x, api)` for
+(`packages/zinc/docs/28-sam.md`'s table). An inheritance or local-inheritance edge on `t` stands for `(x, api)` for
 every class `x` of `t`'s walk, because Zinc invalidates the transitive inheritors of a changed
 class and their local inheritors; a Scala member-ref edge with used name `t` is `(t, present)`,
 which covers no member.

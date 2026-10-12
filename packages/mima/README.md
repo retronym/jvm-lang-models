@@ -4,7 +4,7 @@ Which library edits MiMa reports, which it misses, and corrected rules. MiMa (`m
 
 **Start here.** `MiMa/Keys.lean`.
 
-**Calibration.** `probes/` runs MiMa on the rendered cases and compares: five gaps (MiMa-F1, M1, F2, D1, P1), 40 false negatives on the edit space. `docs/PLAN-track-b.md`.
+**Calibration.** `probes/` runs MiMa on the rendered cases and compares: five gaps (MiMa-F1, M1, F2, D1, P1), 40 false negatives on the edit space. `docs/track-b.md`.
 
 **Gaps.** `MiMa/Sound.lean` checks the corrected rules on the edit space only; a proof for every library is open. 17 `ReversedMissingMethodProblem` reports need method bodies (Track J4).
 

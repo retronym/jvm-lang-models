@@ -3,7 +3,7 @@ import Scala.Lower
 /-!
 # Bounded program spaces for calibrating lowering against scalac
 
-Enumeration here is testing (`docs/DESIGN-spec.md`): `ScalaProbe` prints each program as Scala source
+Enumeration here is testing (`docs/specification.md`): `ScalaProbe` prints each program as Scala source
 and its lowered classfiles, and `packages/scala/probes/probe.py` diffs those against scalac's.
 
 * `mixinSpace`: a trait `T`, a second trait `U` (extending `T` or not), a superclass `B`, a class

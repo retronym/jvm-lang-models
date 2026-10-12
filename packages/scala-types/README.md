@@ -6,7 +6,7 @@ Scala's types as scalac computes them: `asSeenFrom` once for any type language w
 
 **Calibration.** `Members` against scalac's and dotc's override errors, including rejected programs (`../scala/probes/members.py`); `asSeenFrom` through the IntelliJ TCK.
 
-**Gaps.** Type members, `var`, `protected` and qualified access, `abstract override` (`docs/ROADMAP.md` at the repository root).
+**Gaps.** Type members, `var`, `protected` and qualified access, `abstract override` (`docs/roadmap.md` at the repository root).
 
 ## Files
 

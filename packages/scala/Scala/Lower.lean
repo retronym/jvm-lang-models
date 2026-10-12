@@ -126,7 +126,7 @@ def setterName (t : String) (v : String) : String := s!"{t}$_setter_${v}_$eq"
 to initialise; here, a concrete `val`. Also, *when the trait is compiled in the same run*, if it has
 a `lazy val` or an extension method (even an abstract one). Read from TASTy, such a trait has
 `NoInits`, so a subclass compiled apart from it does not call the `$init$` the trait has (F6 in
-`docs/PLAN.md`; the extension case is new). -/
+`docs/status.md`; the extension case is new). -/
 def hasInit (dl : Dialect) (inRun : Bool) (t : Decl) : Bool :=
   match dl with
   | .s212 | .s213 => t.members.any (!·.abs)

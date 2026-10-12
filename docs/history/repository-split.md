@@ -62,7 +62,7 @@ flowchart BT
 
 Inside `Zinc`, the instances group by what the reader is looking for, not by phase number: `Zinc.Loop` (the policies, `transitiveStep`, subprojects, classpath, pipelining), `Zinc.Bridges` (Scala 2 as seen from, Scala 3 as declared, Merkle, bridge-side hashing), and `Zinc.Features` (names, implicits and givens, erasure, inline and opaque types, macros, annotations, SAM, Java, sealed, companions). The phase numbers stay in the documents as history.
 
-Each package carries the same files: a `README.md` (the question it answers, its key definitions and theorems, its calibration, its gaps), the Lean, its probes if it has a real tool, and a `docs/` folder for its PLAN and track notes. The cross-cutting documents (`docs/BUG-MAP.md`, the catalogues, `docs/DESIGN-spec.md`, the reviews) go to the root `docs/`.
+Each package carries the same files: a `README.md` (the question it answers, its key definitions and theorems, its calibration, its gaps), the Lean, its probes if it has a real tool, and a `docs/` folder for its PLAN and track notes. The cross-cutting documents (`docs/evidence/bug-map.md`, the catalogues, `docs/specification.md`, the reviews) go to the root `docs/`.
 
 **Repository name.** Something that does not say Zinc or Scala alone. Candidates: `retronym/jvm-lang-models`, `retronym/build-semantics`, `retronym/models`. My recommendation is `jvm-lang-models`: it names the platform that ties the layers together and leaves room for Kotlin or Bazel later.
 
@@ -122,7 +122,7 @@ A 27,000-line model is read by people who arrive with a question: a bug they hit
 
 - **Start from the reader's question.** The root README has a "start here, by goal" section (understand the theory, add a feature, test Zinc, binary compatibility). Keep it, and add one entry per package: "I maintain javac / scalac / MiMa / the IntelliJ plugin".
 - **One card per package.** Each package README has the same five parts: the question it answers; at most five definitions and five theorems, each with a one-line statement in prose and its hypotheses; what it is calibrated against and how many programs agree; known gaps; where to start reading.
-- **Enter from a known bug.** `docs/BUG-MAP.md` already maps 145 real bugs to the part of the model that expresses them. Make it the index: a reader who knows sbt/zinc#1796 finds `ExtraHash.lean` and the theorem stating its fix.
+- **Enter from a known bug.** `docs/evidence/bug-map.md` already maps 145 real bugs to the part of the model that expresses them. Make it the index: a reader who knows sbt/zinc#1796 finds `ExtraHash.lean` and the theorem stating its fix.
 - **One template for every instance.** Every feature instance has the same shape: the compiler's algorithm as a task, today's bridge as keys, the bug as a witness, the fix as keys with the obligations proved. Document the shape once, with `Sam.lean` as the worked example, and a reader who has read one instance can read all of them.
 - **Statements before proofs.** Put each file's definitions and theorem statements first and the proofs after, or in a separate `Proofs` module, so the statements read as a specification. Lean has no signature files; a `Spec` module per package that re-states the key theorems with `#check` and a doc comment does the same job.
 - **Generated, not hand-maintained, numbers.** Sizes, theorem and example counts per facet, calibration counts, the axioms report and the `native_decide` lint run in CI and write one status page. Hand-written numbers went stale within days twice this week.

@@ -368,7 +368,7 @@ origin/claude/inline-opaque-pending (retronym/zinc#40) adds four pending tests. 
 - inline-transparent-reference-scala3 (a transparent inline expands in typer to a call of `h`; `h`'s result type changes; the expansion's references are not collected).
 - opaque-type-mixin-forwarder-scala3 (a mixin forwarder erases an opaque type to its right-hand side; the right-hand side changes; the subclass uses neither the object nor the type).
 
-retronym/zinc#42 (branch claude/java-names-pending) adds seven pending tests, run without pipelining (with pipelining every Java source is recompiled in every cycle and the Java-client cases disappear). Family: Java name resolution and sealed hierarchies, found by the Java spaces of the Lean model (packages/zinc/docs/PLAN-java.md).
+retronym/zinc#42 (branch claude/java-names-pending) adds seven pending tests, run without pipelining (with pipelining every Java source is recompiled in every cycle and the Java-client cases disappear). Family: Java name resolution and sealed hierarchies, found by the Java spaces of the Lean model (packages/zinc/docs/12-java.md).
 
 - J1 java-added-class-same-package: a Java client resolves `Foo` through `import a.q.*`; `a.b.Foo` added to its own package shadows it (the classfile names only a.q.Foo; a Java class records no used names).
 - J2 java-static-import-member-added: `import static a.X.Foo` imported only a method; a member class `X.Foo` now shadows the package's Foo (an import leaves nothing in the classfile).

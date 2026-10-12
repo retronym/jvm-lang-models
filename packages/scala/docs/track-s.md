@@ -10,7 +10,7 @@ Each Zinc feature file has its own toy Scala, sized to what Zinc hashes, and non
 
 **Scala 2.12, 2.13 and 3 are one parameter,** `Dialect`, read only where the probe found the compilers differ.
 
-**Calibration is by probe, not by reading the spec.** A Lean exe enumerates a bounded space, prints each program as Scala source and as the model's classfiles; `packages/scala/probes/probe.py` compiles them with each scalac (one run per dialect, two for separate-compilation cases), parses the classfiles and diffs. Enumeration is testing, per `docs/DESIGN-spec.md`.
+**Calibration is by probe, not by reading the spec.** A Lean exe enumerates a bounded space, prints each program as Scala source and as the model's classfiles; `packages/scala/probes/probe.py` compiles them with each scalac (one run per dialect, two for separate-compilation cases), parses the classfiles and diffs. Enumeration is testing, per `docs/specification.md`.
 
 Steps:
 - Track S1: lowering for Scala 2.12+: classes, traits (defaults, `$init$`, static `m$`, trait fields), mixin forwarders, objects (`MODULE$`, static forwarders), bridges, value classes.
@@ -48,7 +48,7 @@ The model started from the textbook rules. The probe corrected it here, each now
 Consumers:
 - **Lowering.** `lin` computes each base type's arguments as `asSeenFrom(C.this, P)` (scalac's `baseType`), replacing an ad hoc substitution; members are grouped by `memberType` (`sigGroups`), and bridges and forwarders work per group. The new `asf` probe family found two corrections: a bridge to an override at a value class unboxes and boxes, and an overload next to an inherited generic method is not an override (name-only lookup had dropped a mixin forwarder).
 - **The TCK.** On retronym/scala-type-system-tck branch `claude/shared-asf`, `lean/AsSeenFrom/Shared.lean` is a vendored copy, and `Port.lean` makes the TCK's `Ty` an instance and proves its `Scalac.asf` *is* the shared map (`asf_eq` in that file). `Chain.compose` now follows from the shared `compose`; the other TCK results build unchanged.
-- **`Zinc/Hier`, `Zinc/Erasure`:** not yet; see `docs/ROADMAP.md`.
+- **`Zinc/Hier`, `Zinc/Erasure`:** not yet; see `docs/roadmap.md`.
 
 ### Membership and overriding (Track S5)
 
@@ -67,7 +67,7 @@ The rules the probe forced, beyond the textbook:
 - **Accidental override needs a real override;** otherwise it is "inherits conflicting members".
 - **Re-abstraction.** An abstract member of a *class* re-abstracts the concrete one it extends; one in a *trait* does not. Scala 3 forms a pair there; Scala 2 doesn't.
 
-**A scalac 2 bug, found by the runtime check** (the 4 disagreements). `trait T { val m = "T" }; abstract class B extends T { def m: String }; class C extends B with T { override val m = "C" }` compiles with 2.12.21 and 2.13.18, and `new C` throws `AbstractMethodError`: `T.$init$` calls the trait setter, which `C` does not implement. Scala 3 runs it. Nearest report: scala/bug#12456. Not yet filed (`docs/ROADMAP.md`).
+**A scalac 2 bug, found by the runtime check** (the 4 disagreements). `trait T { val m = "T" }; abstract class B extends T { def m: String }; class C extends B with T { override val m = "C" }` compiles with 2.12.21 and 2.13.18, and `new C` throws `AbstractMethodError`: `T.$init$` calls the trait setter, which `C` does not implement. Scala 3 runs it. Nearest report: scala/bug#12456. Not yet filed (`docs/roadmap.md`).
 
 **Java's rules (JLS 8.4.8), the spec Track V diffs against:**
 - **Order.** No linearization: a class method always beats an interface default; among interfaces the maximally specific default wins, and two unrelated defaults are an error unless the class declares the method.
@@ -106,7 +106,7 @@ And from Track S6: `caseFieldAdded` (accessor links; constructor, `apply`, `copy
 
 ## Out of scope
 
-Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in `docs/ROADMAP.md`.
+Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in `docs/roadmap.md`.
 
 ## PRs
 
