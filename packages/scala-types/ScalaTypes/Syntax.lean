@@ -18,8 +18,10 @@ inductive Dialect | s212 | s213 | s3
 parameter of a definition `D`. Classes are owner paths, innermost first, as in `AsSeenFrom`; a
 top-level definition `D` is `[D]`. -/
 inductive Ty
-  | int | bool | unit | str | obj | any
+  | int | bool | unit | str | obj | any | long
   | ref (d : String)
+  /-- An intersection `a with b` (Scala 3 `a & b`) of two definitions by name. -/
+  | inter (a b : String)
   /-- `Array[d]`, of a definition. -/
   | arr (d : String)
   /-- A Scala 3 opaque type alias `n` of `rep`, as seen outside its defining scope. -/
@@ -151,6 +153,8 @@ def Ty.show : Ty → String
   | .str => "String"
   | .obj => "Object"
   | .any => "Any"
+  | .long => "Long"
+  | .inter a b => s!"{a} with {b}"
   | .tp _ 0 => "X"
   | .tp _ i => s!"X{i}"
   | .this c => s!"{c.headD ""}.this.type"
@@ -169,6 +173,8 @@ def body : Ty → String
   | .str => "\"\""
   | .obj => "null"
   | .any => "null"
+  | .long => "0L"
+  | .inter .. => "null"
   | .tp _ _ => "null.asInstanceOf[X]"
   | .this _ => "this"
   | .ref _ | .arr _ => "???"

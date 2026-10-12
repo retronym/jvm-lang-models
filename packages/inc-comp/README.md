@@ -13,7 +13,7 @@ When does an incremental build equal a clean one, for any compiler and any inval
 | File | Contents |
 |---|---|
 | `Model.lean` | `Compiler` (task, joint compiler, `iface`, `answer`, `π`, `keys`, `covers`), its three `Obligations`, `State`, `round`, `invalidated`, `Policy` and [`Policy.Sound`](IncComp/Model.lean#L119), the fuelled `zinc` loop |
-| [`General.lean`](IncComp/General.lean) | [`XCompiler`](IncComp/General.lean#L22), the general form: non-local answers and hashes, keys from output and trace; T2, T3a, T4 (monotone), T5a, T5 and snapshot refresh, proved once |
+| [`General.lean`](IncComp/General.lean) | [`XCompiler`](IncComp/General.lean#L22), the general form: non-local answers and hashes, keys from output and trace; T2, T3a, T4 (monotone), T5a, T5 and snapshot refresh, proved once; T3b under explicit interfaces and Track B4's untouched units ([`untouched_eq_clean`](IncComp/General.lean#L506)) |
 | [`Soundness.lean`](IncComp/Soundness.lean) | `UpToDate` and `Inv` for `Compiler`; T2 and T3a through the lift `toX` (`zinc_toX`) |
 | [`Uniqueness.lean`](IncComp/Uniqueness.lean) | T3b [`fixpoint_unique_of_wf`](IncComp/Uniqueness.lean#L66), `_of_explicit`; T3 `zinc_eq_clean_of_*`, for `Compiler` and [`TCompiler`](IncComp/Tree.lean#L26) |
 | [`Termination.lean`](IncComp/Termination.lean) | T4: monotone policies, explicit interfaces (2 rounds), acyclic (height + 2) |

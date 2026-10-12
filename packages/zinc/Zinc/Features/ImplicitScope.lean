@@ -1,5 +1,7 @@
 import IncComp.NonLocalAns
 import IncComp.Termination
+import ScalaTypes.Fine
+import Query.Interp
 /-!
 # Implicit scope through an ancestor's companion, across projects (sbt/zinc#1845)
 
@@ -26,6 +28,10 @@ the class's `apiHash`. Parents in the project are read from this cycle (or the p
 if not recompiled), external parents from the inheritance dependency.
 
 ## The model
+
+A search's base classes are Scala's linearization of `t`, the shared walk over headers
+(`Scala.linH` through `Task.interp`, `chainT`); its trace is the shared single-parent lemma
+(`Scala.asks_linWith_chain`). The companion search is this file's own.
 
 Classes have one parent (a trait parent behaves the same), companion implicits, class-side
 implicits, an optional parent of the companion (`object C extends L`), and a non-implicit
@@ -158,9 +164,13 @@ inductive AnsV
   | pub (p : Pub)
   deriving DecidableEq, Repr
 
-@[irreducible] def depth : ℕ := 4
+/-- How many base classes the pure views read: the shared walk's (`walkFuel`), and the class. -/
+@[irreducible] def depth : ℕ := 5
 
-theorem depth_eq : depth = 3 + 1 := by unfold depth; rfl
+theorem depth_eq : depth = 4 + 1 := by unfold depth; rfl
+
+/-- The fuel of the shared walk: chains of up to four classes. -/
+def walkFuel : ℕ := 4
 
 /-- The class side, inherited members included. -/
 def clsP (I : Cls → Pub) : ℕ → Cls → List Imp
@@ -195,16 +205,54 @@ def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
 /-! ## The compiler -/
 
-/-- The base classes of `c`, with their object flags. -/
-def chainT (t : Cls) : ℕ → Cls → T (List (Cls × Bool))
-  | 0, _ => pure []
-  | f + 1, c => do
-    match ← askQ c (.parents (.srch t)) with
-    | .par o (some p) => do
-      let l ← chainT t f p
-      pure ((c, o) :: l)
-    | .par o none => pure [(c, o)]
-    | _ => pure []
+/-! ### Base classes: the shared walk
+
+A search's base classes are Scala's linearization of `t`, the shared walk over headers
+(`Scala.linH`). `toQ` asks a class's `parents` for its `header` (an object's kind is `obj`); over
+this single-parent language the walk reads the headers of `t`'s parent chain
+(`Scala.asks_linWith_chain`). -/
+
+def Cls.name : Cls → String
+  | .A => "A" | .B => "B" | .C => "C" | .D => "D" | .L => "L" | .O => "O" | .X => "X"
+  | .W => "W" | .Y => "Y" | .Z => "Z"
+
+def Cls.ofName? (s : String) : Option Cls := allCls.find? (·.name = s)
+
+theorem Cls.ofName?_name (c : Cls) : Cls.ofName? c.name = some c := by cases c <;> rfl
+
+theorem Cls.name_of_ofName? {s : String} {c : Cls} (h : Cls.ofName? s = some c) : c.name = s := by
+  simpa using List.find?_some h
+
+/-- A class's header: an object or a class, with its parent. -/
+def hdrOf (c : Cls) (o : Bool) (p : Option Cls) : Scala.Header :=
+  ⟨c.name, 0, if o then .obj else .cls, p.toList.map fun p => (p.name, [])⟩
+
+/-- The header a `parents` answer gives. -/
+def AnsV.hdr? (c : Cls) : AnsV → Option Scala.Header
+  | .par o p => some (hdrOf c o p)
+  | _ => none
+
+/-- The shared layer's queries as a search's: a header is the class's `parents`. -/
+def toQ (t : Cls) : (q : Scala.Q) → T (Scala.Ans q)
+  | .header s => match Cls.ofName? s with
+    | some c => do pure ((← askQ c (.parents (.srch t))).hdr? c)
+    | none => pure none
+  | .decl .. => pure none
+  | .member .. => pure none
+
+/-- The walk's result by class, with the object flags; a failed walk has no base classes. -/
+def ofLin : Except String (List ((String × Scala.Header) × List Scala.Ty)) → List (Cls × Bool)
+  | .ok l => l.filterMap fun ((s, h), _) => (Cls.ofName? s).map (·, h.kind == .obj)
+  | .error _ => []
+
+/-- The shared walk from `c`, its header fetched. -/
+def walk (c : Cls) : Scala.M (List ((String × Scala.Header) × List Scala.Ty)) := do
+  Scala.linH walkFuel (← Scala.Node.header.fetch c.name)
+
+/-- The base classes of `c`, with their object flags, in linearization order. -/
+def chainT (t c : Cls) : T (List (Cls × Bool)) := do
+  let r ← Query.Task.interp (toQ t) (walk c).run
+  pure (ofLin r)
 
 def cscT (t : Cls) : List Cls → T (List (Cls × List Imp))
   | [] => pure []
@@ -227,7 +275,7 @@ def bases : List (Cls × Bool) → List Cls
   | l => l.map (·.1)
 
 def searchT (g : Cls × Bool) : T (Option (Cls × Imp)) := do
-  let ch ← chainT g.1 depth g.1
+  let ch ← chainT g.1 g.1
   let cs ← cscT g.1 (bases ch)
   match select (ch.map (·.1)) g.2 cs with
   | some (o, i) => do
@@ -381,29 +429,136 @@ open Query.Task
 
 abbrev Env := Query.Task.Env (Cls × Q) (fun _ => AnsV)
 
-theorem run_chainT (I : Cls → Pub) (t : Cls) :
-    ∀ f c, (chainT t f c).run (answer I) = (chainP I f c).map fun e => (e, (I e).decl.obj) := by
-  intro f
-  induction f with
-  | zero => intro c; rfl
-  | succ f ih =>
-    intro c
-    simp only [chainT, chainP, bind_eq, Query.Task.run_bind, run_askQ, answer]
-    cases (I c).decl.parent with
-    | none => rfl
-    | some p => simp [ih]
+/-- The program's headers, as `toQ` reads them. -/
+def envOf (I : Cls → Pub) : Scala.Env
+  | .header n => (Cls.ofName? n).map fun c => hdrOf c (I c).decl.obj (I c).decl.parent
+  | .decl .. => none
+  | .member .. => none
 
-theorem trace_chainT (I : Cls → Pub) (t : Cls) :
-    ∀ f c, (chainT t f c).trace (answer I) = (chainP I f c).map fun e => (e, Q.parents (.srch t)) := by
-  intro f
-  induction f with
-  | zero => intro c; rfl
-  | succ f ih =>
-    intro c
-    simp only [chainT, chainP, bind_eq, Query.Task.trace_bind, trace_askQ, run_askQ, answer]
+theorem through_eq (I : Cls → Pub) (t : Cls) : Env.through (toQ t) (answer I) = envOf I := by
+  funext q
+  cases q with
+  | header s =>
+    simp only [Env.through, toQ, envOf]
+    cases Cls.ofName? s <;> rfl
+  | decl n o => rfl
+  | member n m => rfl
+
+theorem run_chainT (I : Cls → Pub) (t c : Cls) :
+    (chainT t c).run (answer I) = ofLin (Scala.ex (envOf I) (walk c)) := by
+  simp only [chainT, bind_eq, Query.Task.run_bind, pure_eq, Query.Task.run_pure, run_interp,
+    through_eq]
+
+theorem single_envOf (I : Cls → Pub) : Scala.SingleParent (envOf I) := by
+  intro n h hn
+  simp only [envOf] at hn
+  obtain ⟨c, _, rfl⟩ := Option.map_eq_some_iff.1 hn
+  simp only [hdrOf]; cases (I c).decl.parent <;> simp
+
+/-- The parent chain through the headers is `chainP`. -/
+theorem chainOf_envOf (I : Cls → Pub) : ∀ f (c : Cls),
+    Scala.chainOf (envOf I) f c.name = (chainP I f c).map Cls.name
+  | 0, _ => rfl
+  | f + 1, c => by
+    simp only [Scala.chainOf, envOf, Cls.ofName?_name, Option.map_some, Option.bind_some, chainP,
+      List.map_cons, hdrOf]
+    congr 1
     cases (I c).decl.parent with
     | none => rfl
-    | some p => simp [ih]
+    | some p => simp only [Option.toList_some, List.map_cons, List.map_nil, List.head?_cons]; exact chainOf_envOf I f p
+
+theorem chainP_mono (I : Cls → Pub) : ∀ f (c e : Cls), e ∈ chainP I f c → e ∈ chainP I (f + 1) c
+  | 0, _, _, h => by simp [chainP] at h
+  | f + 1, c, e, h => by
+    rw [chainP] at h ⊢
+    rcases List.mem_cons.1 h with rfl | h
+    · exact List.mem_cons_self
+    · refine List.mem_cons_of_mem _ ?_
+      cases hp : (I c).decl.parent with
+      | none => simp [hp] at h
+      | some p => simp only [hp] at h ⊢; exact chainP_mono I f p e h
+
+theorem envOf_header (I : Cls → Pub) (c : Cls) :
+    envOf I (.header c.name) = some (hdrOf c (I c).decl.obj (I c).decl.parent) := by
+  simp only [envOf, Cls.ofName?_name, Option.map_some]
+  rfl
+
+/-- The walk from `c` asks the headers of `c`'s chain (`Scala.asks_linWith_chain`). -/
+theorem asks_walk (I : Cls → Pub) (c : Cls) :
+    Scala.Asks (envOf I) (fun q => ∃ e ∈ chainP I depth c, q = .header e.name) (walk c) := by
+  have hmem : ∀ m ∈ Scala.chainOf (envOf I) depth c.name, ∃ e ∈ chainP I depth c, m = e.name := by
+    intro m hm
+    rw [chainOf_envOf] at hm
+    obtain ⟨e, he, rfl⟩ := List.mem_map.1 hm
+    exact ⟨e, he, rfl⟩
+  unfold walk
+  refine Scala.Asks.bind_ok ?_ fun h hh => ?_
+  · refine Scala.Asks.bind ?_ fun _ => Scala.Asks.pure _
+    unfold Scala.needHeader
+    refine Scala.Asks.bind ?_ fun o => ?_
+    · intro q hq
+      simp only [Scala.tq_askHeader, List.mem_singleton] at hq
+      exact ⟨c, by rw [depth_eq, chainP]; exact List.mem_cons_self, hq⟩
+    · cases o
+      · exact Scala.Asks.throw _
+      · exact Scala.Asks.pure _
+  · obtain ⟨h1, h2⟩ := Scala.ex_fetch_ok _ _ _ hh
+    obtain ⟨n, hd⟩ := h
+    simp only at h1 h2
+    subst h1
+    refine (Scala.asks_linWith_chain (envOf I) (single_envOf I) walkFuel c.name hd h2).mono ?_
+    rintro q ⟨m, hm, rfl⟩
+    obtain ⟨e, he, rfl⟩ := hmem m (by rw [depth_eq]; exact hm)
+    exact ⟨e, he, rfl⟩
+
+/-- A search for `Show[t]` asks the `parents` of `t`'s chain. -/
+theorem trace_chainT (I : Cls → Pub) (t c : Cls) :
+    ∀ q ∈ (chainT t c).trace (answer I), q.2 = .parents (.srch t) ∧ q.1 ∈ chainP I depth c := by
+  intro q hq
+  simp only [chainT, bind_eq, trace_bind, pure_eq, trace_pure, List.append_nil] at hq
+  obtain ⟨q', hq', hq⟩ := (mem_trace_interp (toQ t) (answer I) _ q).1 hq
+  rw [through_eq] at hq'
+  obtain ⟨e, he, rfl⟩ := asks_walk I c q' hq'
+  have htr : (toQ t (.header e.name)).trace (answer I) = [(e, .parents (.srch t))] := by
+    simp only [toQ, Cls.ofName?_name]; rfl
+  rw [htr, List.mem_singleton] at hq
+  subst hq
+  exact ⟨rfl, he⟩
+
+/-- The base classes found are on `t`'s chain. -/
+theorem mem_chainT (I : Cls → Pub) (t c e : Cls)
+    (he : e ∈ ((chainT t c).run (answer I)).map (·.1)) : e ∈ chainP I depth c := by
+  rw [run_chainT] at he
+  unfold walk at he
+  revert he
+  cases hw : Scala.ex (envOf I) (do Scala.linH walkFuel (← Scala.Node.header.fetch c.name)) with
+  | error _ => simp [ofLin]
+  | ok l =>
+    intro he
+    simp only [ofLin, List.mem_map, List.mem_filterMap] at he
+    obtain ⟨⟨e₀, b⟩, ⟨⟨⟨s, h⟩, ts⟩, hx, hs⟩, rfl⟩ := he
+    obtain ⟨e', he', hpair⟩ := Option.map_eq_some_iff.1 hs
+    simp only [Prod.mk.injEq] at hpair
+    obtain ⟨rfl, -⟩ := hpair
+    show e' ∈ chainP I depth c
+    rw [Scala.ex_bind] at hw
+    revert hw
+    cases hf : Scala.ex (envOf I) (Scala.Node.header.fetch c.name) with
+    | error _ => intro hw; cases hw
+    | ok r =>
+      intro hw
+      obtain ⟨h1, h2⟩ := Scala.ex_fetch_ok _ _ _ hf
+      obtain ⟨n, hd⟩ := r
+      simp only at h1 h2 hw
+      subst h1
+      have := Scala.linWith_chain (envOf I) (single_envOf I) walkFuel c.name hd l h2 hw _ hx
+      rw [chainOf_envOf] at this
+      obtain ⟨e, he, hn⟩ := List.mem_map.1 this
+      simp only at hn
+      have : e' = e := by
+        have := Cls.ofName?_name e; rw [hn, he'] at this; exact Option.some.inj this
+      subst this
+      rw [depth_eq]; exact chainP_mono I _ _ _ he
 
 theorem trace_cscT (I : Cls → Pub) (t : Cls) :
     ∀ es, (cscT t es).trace (answer I) = es.map fun e => (e, Q.cscope (.srch t)) := by
@@ -421,17 +576,17 @@ theorem scope_searchT (I : Cls → Pub) (g : Cls × Bool) :
     ∀ q ∈ (searchT g).trace (answer I), scope I q := by
   intro q hq
   unfold searchT at hq
-  rw [bind_eq, trace_bind, trace_chainT, run_chainT, List.mem_append] at hq
+  rw [bind_eq, trace_bind, List.mem_append] at hq
   rcases hq with hq | hq
-  · obtain ⟨e, he, rfl⟩ := List.mem_map.1 hq
-    exact he
+  · obtain ⟨e, q⟩ := q
+    obtain ⟨h1, h2⟩ := trace_chainT I g.1 g.1 _ hq
+    simp only at h1 h2
+    subst h1
+    exact h2
   rw [bind_eq, trace_bind, trace_cscT, List.mem_append] at hq
   rcases hq with hq | hq
   · obtain ⟨e, he, rfl⟩ := List.mem_map.1 hq
-    have := mem_bases he
-    rw [List.map_map] at this
-    show e ∈ chainP I depth g.1
-    simpa using this
+    exact mem_chainT I g.1 g.1 e (mem_bases he)
   split at hq
   · rw [bind_eq, trace_bind, trace_askQ, List.mem_append, List.mem_singleton] at hq
     rcases hq with rfl | hq

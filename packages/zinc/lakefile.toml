@@ -15,6 +15,11 @@ path = "../inc-comp"
 name = "scala-types"
 path = "../scala-types"
 
+# Lowering and erasure (`Scala.Lower`), which `Erasure` erases through.
+[[require]]
+name = "scala"
+path = "../scala"
+
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"

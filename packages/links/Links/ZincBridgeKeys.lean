@@ -76,6 +76,7 @@ def π (I : String → Iface) (u : String) : ZKey → List Iface
 def tyRefs : Ty → List String
   | .ref n => [n]
   | .arr n => [n]
+  | .inter a b => [a, b]
   | .opq _ r => tyRefs r
   | _ => []
 

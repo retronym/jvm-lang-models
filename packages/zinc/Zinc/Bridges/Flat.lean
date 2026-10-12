@@ -12,16 +12,18 @@ ancestor's parents change; the argument for soundness is that such a header chan
 every transitive descendant, which refreshes the stored `lin`.
 
 The model: the language of `Hier.lean` (one type parameter, parents with a type argument) with
-Scala's linearization. A class's compilation computes its linearization by asking every ancestor
-for its `parents` and stores it in its interface. A client selects `c.n` with one `member` query
+Scala's linearization, lowered to the shared syntax (`declToScala`). A class's compilation computes
+its linearization with the shared walk over headers (`Scala.linH`, through `Task.interp`), asking
+every ancestor for its `header`, and stores it in its interface; member types are seen from a
+class by the shared `asSeenFrom`. `FlatShared` proves both are the shared semantics. A client selects `c.n` with one `member` query
 whose answer is the lookup along `c`'s *stored* linearization, which is a function of the
 flattened hash by construction. Keys:
 
 * `(c, name n)`, hashed by the flattened composition and `c`'s kind (a trait receiver is
   `invokeinterface`), for a selection `c.n` (`client`, or `uses`
   when a class selects its own member: Zinc drops those self-references);
-* `(p, parents)`, hashed by `p`'s parents, for every `parents` query a class asks while
-  linearizing (`header`). Since a class asks this of *every* ancestor, the keys say "recompile
+* `(p, parents)`, hashed by `p`'s parents, kind and finality, for every `header` query a class
+  asks while linearizing (`header`). Since a class asks this of *every* ancestor, the keys say "recompile
   every transitive descendant when a parents list changes": the header rule.
 
 A class's compilation also runs a refchecks prelude against its ancestors (PoC decision 3, talk
@@ -58,12 +60,6 @@ namespace Zinc.Flat
 open Zinc.Hier (Cls Name Ty allCls)
 open Zinc.Hier.Cls Zinc.Hier.Name
 
-/-- `asSeenFrom` on `Hier`'s toy types: instantiate the parameter. `Flat` keeps its own walk until
-it is restated over the shared layer (`packages/zinc/docs/29-shared-scala.md`). -/
-def _root_.Zinc.Hier.Ty.subst (arg : Ty) : Ty → Ty
-  | .param => arg
-  | t => t
-
 instance : Fintype Cls := ⟨allCls, by intro x; cases x <;> decide⟩
 
 def names : List Name := [m, g]
@@ -99,8 +95,9 @@ structure Decl where
   under : Option Ty := none
   deriving DecidableEq, Repr
 
-/-- Proper ancestors, most derived first, with type arguments as seen from the class. -/
-abbrev Lin := List (Cls × Ty)
+/-- Proper ancestors, most derived first, with type arguments as seen from the class: the shared
+linearization's (`Scala.linH`). -/
+abbrev Lin := List (Cls × List Scala.Ty)
 
 structure Src where
   decl : Decl
@@ -109,11 +106,54 @@ structure Src where
   observes : List Cls := []
   deriving DecidableEq, Repr
 
+/-- A unit: the class and its source. -/
+abbrev USrc := Cls × Src
+
+def lowerAll (src : Cls → Src) : Cls → USrc := fun c => (c, src c)
+
 /-- The interface stores the declaration and the linearization computed when it was compiled. -/
 @[ext] structure Iface where
   decl : Decl
   lin : Lin := []
   deriving DecidableEq, Repr
+
+/-! ## Lowering to the shared syntax
+
+The front end: a declaration of `Flat` as a `Scala.Decl`. A type parameter is the class's first;
+an object has none. `Members` has no `var`: it lowers to a `def` (`FlatShared` counts those
+programs apart). -/
+
+def memToScala (self : Cls) (n : Name) (mm : Mem) : Scala.Mem :=
+  { name := n.str, res := Ty.toScala self mm.ty, abs := mm.deferred, priv := mm.priv,
+    isVal := mm.mod == .val || mm.mod == .lzy, lzy := mm.mod == .lzy, nullary := true }
+
+def kindToScala : CKind → Scala.Kind
+  | .cls => .cls | .trt => .trt | .obj => .obj
+
+def tparamsOf (d : Decl) : Nat := if d.kind == .obj then 0 else 1
+
+def parentToScala (c : Cls) : Cls × Ty → Scala.Parent := fun (p, a) => (p.name, [Ty.toScala c a])
+
+def declToScala (c : Cls) (d : Decl) : Scala.Decl :=
+  { name := c.name, kind := kindToScala d.kind, abs := d.abstract, final := d.final,
+    tparams := tparamsOf d
+    super := d.parents.head?.map (parentToScala c), traits := d.parents.tail.map (parentToScala c)
+    members := d.decls.map fun (n, mm) => memToScala c n mm }
+
+theorem header_declToScala (c : Cls) (d : Decl) :
+    (declToScala c d).header =
+      ⟨c.name, tparamsOf d, kindToScala d.kind, d.parents.map (parentToScala c)⟩ := by
+  simp only [declToScala, Scala.Decl.header, Scala.Decl.parents]
+  congr 1
+  cases d.parents <;> rfl
+
+/-- `c`'s own type arguments: its parameters, as the shared linearization lists `c` itself. -/
+def selfArgs (c : Cls) (d : Decl) : List Scala.Ty := (List.range (tparamsOf d)).map (Scala.Ty.tp [c.name])
+
+/-- A member type `t` declared in `o`, as seen from `c`, where `o`'s type arguments as seen from
+`c` are `ts`: the shared `asSeenFrom`. -/
+def seen (c o : Cls) (ts : List Scala.Ty) (t : Ty) : Scala.Ty :=
+  Scala.seenFromN c.name [(o.name, ts)] o.name (Ty.toScala o t)
 
 /-- A refchecks verdict. Errors stand in for everything a descendant's own compilation derives
 from its ancestors (also bridges and forwarders in a legal program). -/
@@ -130,43 +170,48 @@ structure Out where
   errs : List Err
   /-- The resolved and erased type of each selection, and the receiver's kind:
   `invokeinterface` for a trait, `invokevirtual` for a class. -/
-  descs : List (CKind × Option Ty × Option Ty)
+  descs : List (CKind × Option Scala.Ty × Option Scala.Ty)
   /-- Mixin forwarders: a concrete trait member that the class's linearization resolves to, for
   a trait it mixes in (one not already in its superclass's linearization), as seen from it. -/
-  fwds : List (Name × Ty × Ty) := []
+  fwds : List (Name × Scala.Ty × Scala.Ty) := []
   /-- Static forwarders of an object's mirror class: every member, resolved, as seen from it,
   and erased. -/
-  statics : List (Name × Ty × Ty) := []
+  statics : List (Name × Scala.Ty × Scala.Ty) := []
   /-- Fields implemented for the traits mixed in directly, private ones included. -/
-  fields : List (Name × Ty × Mod × Bool) := []
+  fields : List (Name × Scala.Ty × Mod × Bool) := []
   /-- Bridges: an own member whose erasure differs from that of a member it overrides. -/
-  bridges : List (Name × Ty) := []
+  bridges : List (Name × Scala.Ty) := []
   /-- Each whole-class observation: every member of the class, resolved, as seen from it. -/
-  obs : List (List (Option Ty × Option Ty)) := []
+  obs : List (List (Option Scala.Ty × Option Ty)) := []
   deriving DecidableEq, Repr
 
 /-- The public declarations: what clients, descendants and the API see. -/
 def pub (d : Decl) : List (Name × Mem) := d.decls.filter fun e => !e.2.priv
 
-def own (i : Iface) (n : Name) : Option Mem := (pub i.decl).lookup n
+/-- A definition's own member `n` as clients and descendants see it: the first declaration of
+`n`, unless private (the shared `Decl.member`, without the class's own view of its privates). -/
+def ownD (d : Decl) (n : Name) : Option Mem := (d.decls.lookup n).filter fun mm => !mm.priv
+
+def own (i : Iface) (n : Name) : Option Mem := ownD i.decl n
 
 /-- The flattened composition: `own_C(n)`, then each ancestor of the stored linearization that
-declares `n`, with its type argument as seen from `c`. -/
-def flatOf (I : Cls → Iface) (c : Cls) (n : Name) : List (Cls × Ty × Mem) :=
-  ((c, Ty.param) :: (I c).lin).filterMap fun e => (own (I e.1) n).map fun m => (e.1, e.2, m)
+declares `n`, with its type arguments as seen from `c`. -/
+def flatOf (I : Cls → Iface) (c : Cls) (n : Name) : List (Cls × List Scala.Ty × Mem) :=
+  ((c, selfArgs c (I c).decl) :: (I c).lin).filterMap fun e =>
+    (own (I e.1) n).map fun m => (e.1, e.2, m)
 
 /-- Lookup along the stored linearization: the first declaration, as seen from `c`. -/
-def lookupFlat (l : List (Cls × Ty × Mem)) : Option Ty :=
-  l.head?.map fun e => Ty.subst e.2.1 e.2.2.ty
+def lookupFlat (c : Cls) (l : List (Cls × List Scala.Ty × Mem)) : Option Scala.Ty :=
+  l.head?.map fun e => seen c e.1 e.2.1 e.2.2.ty
 
-/-- The erasure of the member found: its declared type, where the type parameter erases to
-`Object`. A client's descriptor and its unboxing depend on both. -/
-def erasedFlat (l : List (Cls × Ty × Mem)) : Option Ty :=
+/-- The declared type of the member found, which erasure reads. A client's descriptor and its
+unboxing depend on both. -/
+def erasedFlat (l : List (Cls × List Scala.Ty × Mem)) : Option Ty :=
   l.head?.map fun e => e.2.2.ty
 
-/-- A whole-class observation: every member, resolved and erased. -/
-def allFlat (I : Cls → Iface) (c : Cls) : List (Option Ty × Option Ty) :=
-  names.map fun n => (lookupFlat (flatOf I c n), erasedFlat (flatOf I c n))
+/-- A whole-class observation: every member, resolved, and its declared type. -/
+def allFlat (I : Cls → Iface) (c : Cls) : List (Option Scala.Ty × Option Ty) :=
+  names.map fun n => (lookupFlat c (flatOf I c n), erasedFlat (flatOf I c n))
 
 /-! ## Queries -/
 
@@ -176,7 +221,8 @@ inductive UCtx | sel | fwd | mir | ovr
   deriving DecidableEq, Repr
 
 inductive Q
-  | parents
+  /-- What linearization reads: type parameters, kind, parents (`Scala.Q.header`). -/
+  | header
   /-- Select member `n` of the addressed class: a lookup along its stored linearization. -/
   | member (n : Name)
   /-- Refchecks, override conformance: the addressed ancestor's own member `n`. -/
@@ -204,11 +250,11 @@ inductive Q
   deriving DecidableEq, Repr
 
 inductive AnsV
-  | ps (l : List (Cls × Ty))
+  | header (h : Option Scala.Header)
   | ty (t : Option Ty)
-  | sel (k : CKind) (t : Option Ty) (e : Option Ty)
+  | sel (k : CKind) (t : Option Scala.Ty) (e : Option Ty)
   | ex (k : CKind) (f : Bool) (ps : List (Cls × Ty)) (l : Lin)
-  | obs (k : CKind) (l : List (Option Ty × Option Ty))
+  | obs (k : CKind) (l : List (Option Scala.Ty × Option Ty))
   | mem (m : Option Mem)
   | b (x : Bool)
   | ob (x : Option Bool)
@@ -217,8 +263,8 @@ inductive AnsV
   deriving DecidableEq, Repr
 
 def answer (I : Cls → Iface) : Cls × Q → AnsV
-  | (c, .parents) => .ps (I c).decl.parents
-  | (c, .member n) => .sel (I c).decl.kind (lookupFlat (flatOf I c n)) (erasedFlat (flatOf I c n))
+  | (c, .header) => .header (some (declToScala c (I c).decl).header)
+  | (c, .member n) => .sel (I c).decl.kind (lookupFlat c (flatOf I c n)) (erasedFlat (flatOf I c n))
   | (c, .ovr n) => .mem (own (I c) n)
   | (c, .cfl n) => .mem (own (I c) n)
   | (c, .has n) => .b (own (I c) n).isSome
@@ -232,56 +278,73 @@ def answer (I : Cls → Iface) : Cls × Q → AnsV
   | (c, .under _) => .ty (I c).decl.under
 
 abbrev T := Query.Task (Cls × Q) (fun _ => AnsV)
+abbrev Env := Query.Task.Env (Cls × Q) (fun _ => AnsV)
 
 def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
-@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
-    (askQ c q).run e = e (c, q) := rfl
-@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
-    (askQ c q).trace e = [(c, q)] := rfl
+@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).run e = e (c, q) := rfl
+@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).trace e = [(c, q)] := rfl
 
-/-! ## Linearization -/
+/-! ## Linearization: the shared walk
 
-/-- Scala's rule: `L(C) = C, L(Pₙ) ⃗+ … ⃗+ L(P₁)`, where elements of the right operand win. -/
-def merge (ls : List Lin) : Lin :=
-  ls.foldl (fun acc l => l.filter (fun e => !acc.any (·.1 == e.1)) ++ acc) []
+`Scala.linH` asks one `header` query per class it visits (`Scala.asks_linH`); `toQ` asks it of the
+class it names, and a name that is no class of the program is not found. -/
 
-/-- The linearization of each parent, the parent included, as seen from the child. -/
-def parentLins (r : Cls → T Lin) : List (Cls × Ty) → T (List Lin)
+def AnsV.hdr? : AnsV → Option Scala.Header | .header h => h | _ => none
+
+/-- The shared layer's queries as `Flat`'s. The walk asks only `header`. -/
+def toQ : (q : Scala.Q) → T (Scala.Ans q)
+  | .decl .. => pure none
+  | .header s => match Cls.ofName? s with
+    | some c => do pure (← askQ c .header).hdr?
+    | none => pure none
+  | .member .. => pure none
+
+/-- The shared linearization by class; a failed walk (too deep, a class not found) is empty. -/
+def ofLin : Except String (List ((String × Scala.Header) × List Scala.Ty)) → Lin
+  | .ok l => l.filterMap fun (h, ts) => (Cls.ofName? h.2.name).map (·, ts)
+  | .error _ => []
+
+/-- The linearization of `c`, whose header is `h`, `c` first. -/
+def linOf (c : Cls) (h : Scala.Header) : T Lin := do
+  let r ← Query.Task.interp toQ (Scala.linH Scala.fuel (c.name, h)).run
+  pure (ofLin r)
+
+/-- The linearization of `p`, `p` first, its header asked of `p`. -/
+def linOfName (p : Cls) : T Lin := do
+  let r ← Query.Task.interp toQ (do Scala.linH Scala.fuel (← Scala.Node.header.fetch p.name)).run
+  pure (ofLin r)
+
+/-- The classes of each parent's linearization, the parent first. -/
+def parentLins : List (Cls × Ty) → T (List (List Cls))
   | [] => pure []
-  | (p, a) :: rest => do
-    let l ← r p
-    let ls ← parentLins r rest
-    pure (((p, a) :: l.map fun e => (e.1, Ty.subst a e.2)) :: ls)
-
-/-- Proper ancestors of `c` in linearization order, asking each for its parents. -/
-def ancestors : ℕ → Cls → T Lin
-  | 0, _ => pure []
-  | fuel + 1, c => do
-    match ← askQ c .parents with
-    | .ps ps => do
-      let ls ← parentLins (ancestors fuel) ps
-      pure (merge ls)
-    | _ => pure []
-
-def depth : ℕ := 6
+  | (p, _) :: rest => do
+    let l ← linOfName p
+    let ls ← parentLins rest
+    pure (l.map (·.1) :: ls)
 
 /-! ## Per-unit task -/
 
-/-- Erasure: `V` erases to its underlying type if it is a value class; the type parameter
-erases to `Object` (`param`). -/
-def erase (ctx : UCtx) (t : Ty) : T Ty :=
+/-- The erasure of a type other than `V`: the type parameter erases to `Object`. -/
+def eraseTy : Ty → Scala.Ty
+  | .int => .int
+  | .string => .str
+  | .param => .obj
+  | .v => .ref "V"
+
+/-- Erasure: `V` erases to its underlying type if it is a value class. -/
+def erase (ctx : UCtx) (t : Ty) : T Scala.Ty :=
   if t == .v then do
     match ← askQ V (.under ctx) with
-    | .ty (some u) => pure u
-    | _ => pure .v
-  else pure t
+    | .ty (some u) => pure (eraseTy u)
+    | _ => pure (eraseTy .v)
+  else pure (eraseTy t)
 
-def eraseO (ctx : UCtx) : Option Ty → T (Option Ty)
+def eraseO (ctx : UCtx) : Option Ty → T (Option Scala.Ty)
   | some t => do pure (some (← erase ctx t))
   | none => pure none
 
-def selects : List (Cls × Name) → T (List (CKind × Option Ty × Option Ty))
+def selects : List (Cls × Name) → T (List (CKind × Option Scala.Ty × Option Scala.Ty))
   | [] => pure []
   | (c, n) :: rest => do
     let r ← askQ c (.member n)
@@ -292,7 +355,7 @@ def selects : List (Cls × Name) → T (List (CKind × Option Ty × Option Ty))
     pure (d :: ts)
 
 /-- Whole-class observations (macros). -/
-def observe : List Cls → T (List (List (Option Ty × Option Ty)))
+def observe : List Cls → T (List (List (Option Scala.Ty × Option Ty)))
   | [] => pure []
   | c :: rest => do
     let r ← askQ c .all
@@ -323,17 +386,18 @@ def modOk (k : Mod) (m' : Mem) : Bool :=
   | .lzy, _ => false
   | .dfn, _ => true
 
-/-- Override conformance of each own (public) member against every ancestor's member of that
-name, and the bridges it needs: one per erasure of an overridden member that differs from its
-own (the type parameter erases to `Object`). -/
-def checkOverrides (ds : List (Name × Mem)) (L : Lin) : T (List Err × List (Name × Ty)) := do
+/-- Override conformance of each own (public) member of `c` against every ancestor's member of
+that name, as seen from `c`, and the bridges it needs: one per erasure of an overridden member
+that differs from its own. -/
+def checkOverrides (c : Cls) (ds : List (Name × Mem)) (L : Lin) :
+    T (List Err × List (Name × Scala.Ty)) := do
   let mut errs := []
   let mut brs := []
   for (n, mm) in ds.filter (fun e => !e.2.priv) do
     for (p, a) in L do
       match ← askQ p (.ovr n) with
       | .mem (some m') =>
-        if Ty.subst a m'.ty != mm.ty || !modOk mm.mod m' then errs := errs ++ [Err.override n]
+        if seen c p a m'.ty != Ty.toScala c mm.ty || !modOk mm.mod m' then errs := errs ++ [Err.override n]
         let e' ← erase .ovr m'.ty
         let e ← erase .ovr mm.ty
         if !mm.deferred && e' != e && !brs.contains (n, e') then
@@ -343,24 +407,24 @@ def checkOverrides (ds : List (Name × Mem)) (L : Lin) : T (List Err × List (Na
 
 /-- Both in the linearization of one parent: the pair was checked when that parent compiled
 (scalac's `OverridingPairs` skips it). -/
-def sameSide (pls : List Lin) (q₁ q₂ : Cls) : Bool :=
-  pls.any fun l => l.any (·.1 == q₁) && l.any (·.1 == q₂)
+def sameSide (pls : List (List Cls)) (q₁ q₂ : Cls) : Bool :=
+  pls.any fun l => l.contains q₁ && l.contains q₂
 
 /-- Inherited-member reconciliation: for a name the class does not declare, find the ancestors
 declaring it; for pairs coming through different parents, two concrete members conflict, and
 the types (as seen from the class) must agree. -/
-def checkConflicts (d : Decl) (pls : List Lin) (L : Lin) : T (List Err) := do
+def checkConflicts (c : Cls) (d : Decl) (pls : List (List Cls)) (L : Lin) : T (List Err) := do
   let mut errs := []
   for n in names do
-    if ((pub d).lookup n).isNone then
+    if (ownD d n).isNone then
       let mut decl : Lin := []
       for (q, a) in L do
         if (← askQ q (.has n)) == .b true then decl := decl ++ [(q, a)]
       let cross := decl.filter fun e₁ => decl.any fun e₂ => e₁.1 != e₂.1 && !sameSide pls e₁.1 e₂.1
-      let mut ms : List (Cls × Ty × Bool) := []
+      let mut ms : List (Cls × Scala.Ty × Bool) := []
       for (q, a) in cross do
         match ← askQ q (.cfl n) with
-        | .mem (some mm) => ms := ms ++ [(q, Ty.subst a mm.ty, mm.deferred)]
+        | .mem (some mm) => ms := ms ++ [(q, seen c q a mm.ty, mm.deferred)]
         | _ => pure ()
       let bad := ms.any fun e₁ => ms.any fun e₂ =>
         e₁.1 != e₂.1 && !sameSide pls e₁.1 e₂.1 && ((!e₁.2.2 && !e₂.2.2) || e₁.2.1 != e₂.2.1)
@@ -376,7 +440,7 @@ def checkAbstract (d : Decl) (L : Lin) : T (List Err) := do
   if d.abstract then return []
   let mut errs := []
   for n in names do
-    match (pub d).lookup n with
+    match ownD d n with
     | some mm => if mm.deferred then errs := errs ++ [Err.abstract n]
     | none =>
       let mut conc : List Cls := []
@@ -389,8 +453,8 @@ def checkAbstract (d : Decl) (L : Lin) : T (List Err) := do
       if !dfrd.isEmpty then
         let mut hidden : List Cls := []
         for q in dfrd do
-          let lq ← ancestors depth q
-          hidden := hidden ++ lq.map (·.1)
+          let lq ← linOfName q
+          hidden := hidden ++ (lq.drop 1).map (·.1)
         if conc.all hidden.contains then errs := errs ++ [Err.abstract n]
   pure errs
 
@@ -422,16 +486,16 @@ def firstDecl (n : Name) : Lin → T (Option Cls)
 
 /-- The traits mixed in here: those not in the superclass's linearization. The superclass is
 the first parent, unless that is a trait. -/
-def mixins (d : Decl) (pls : List Lin) (L : Lin) (hs : List (Cls × CKind × Bool)) : Lin :=
+def mixins (d : Decl) (pls : List (List Cls)) (L : Lin) (hs : List (Cls × CKind × Bool)) : Lin :=
   let sup : List Cls := match d.parents, pls with
-    | (p, _) :: _, l :: _ => if isTrait hs p then [] else l.map (·.1)
+    | (p, _) :: _, l :: _ => if isTrait hs p then [] else l
     | _, _ => []
   L.filter fun e => isTrait hs e.1 && !sup.contains e.1
 
 /-- Mixin forwarders for the public concrete members of the traits mixed in directly, and the
 fields of their `val`s, `var`s and `lazy val`s, private ones included. -/
-def mixinFwds (d : Decl) (pls : List Lin) (L : Lin) (hs : List (Cls × CKind × Bool)) :
-    T (List (Name × Ty × Ty) × List (Name × Ty × Mod × Bool)) := do
+def mixinFwds (c : Cls) (d : Decl) (pls : List (List Cls)) (L : Lin) (hs : List (Cls × CKind × Bool)) :
+    T (List (Name × Scala.Ty × Scala.Ty) × List (Name × Scala.Ty × Mod × Bool)) := do
   if d.kind == .trt then return ([], [])
   let mut fs := []
   let mut fl := []
@@ -440,42 +504,44 @@ def mixinFwds (d : Decl) (pls : List Lin) (L : Lin) (hs : List (Cls × CKind × 
     | .ds ds =>
       for (n, mm) in ds do
         if !mm.deferred && mm.priv && mm.mod != .dfn then
-          fl := fl ++ [(n, Ty.subst a mm.ty, mm.mod, true)]
-        if !mm.deferred && !mm.priv && ((pub d).lookup n).isNone then
+          fl := fl ++ [(n, seen c t a mm.ty, mm.mod, true)]
+        if !mm.deferred && !mm.priv && (ownD d n).isNone then
           if (← firstDecl n L) == some t then
-            fs := fs ++ [(n, Ty.subst a mm.ty, ← erase .fwd mm.ty)]
-            if mm.mod != .dfn then fl := fl ++ [(n, Ty.subst a mm.ty, mm.mod, false)]
+            fs := fs ++ [(n, seen c t a mm.ty, ← erase .fwd mm.ty)]
+            if mm.mod != .dfn then fl := fl ++ [(n, seen c t a mm.ty, mm.mod, false)]
     | _ => pure ()
   pure (fs, fl)
 
-def staticFwds (d : Decl) (L : Lin) : T (List (Name × Ty × Ty)) := do
+def staticFwds (c : Cls) (d : Decl) (L : Lin) : T (List (Name × Scala.Ty × Scala.Ty)) := do
   if d.kind != .obj then return []
-  let mut seen : List (Cls × Ty × List (Name × Mem)) := []
+  let mut seenDs : List (Cls × List Scala.Ty × List (Name × Mem)) := []
   for (q, a) in L do
     match ← askQ q .mirror with
-    | .ds ds => seen := seen ++ [(q, a, ds.filter fun e => !e.2.priv)]
+    | .ds ds => seenDs := seenDs ++ [(q, a, ds.filter fun e => !e.2.priv)]
     | _ => pure ()
   let found := names.filterMap fun n =>
-    match (pub d).lookup n with
-    | some mm => some (n, mm.ty, mm.ty)
-    | none => (seen.findSome? fun (_, a, ds) =>
-        (ds.lookup n).map fun mm => (n, Ty.subst a mm.ty, mm.ty))
+    match ownD d n with
+    | some mm => some (n, Ty.toScala c mm.ty, mm.ty)
+    | none => (seenDs.findSome? fun (q, a, ds) =>
+        (ds.lookup n).map fun mm => (n, seen c q a mm.ty, mm.ty))
   let mut out := []
   for (n, t, dt) in found do
     out := out ++ [(n, t, ← erase .mir dt)]
   pure out
 
-def unitF (s : Src) : T Out := do
-  let pls ← parentLins (ancestors depth) s.decl.parents
-  let L := merge pls
+def unitF (u : USrc) : T Out := do
+  let c := u.1
+  let s := u.2
+  let L := (← linOf c (declToScala c s.decl).header).drop 1
+  let pls ← parentLins s.decl.parents
   let hs ← headers L
   extendsClause s.decl.parents
-  let (e₁, brs) ← checkOverrides s.decl.decls L
-  let e₂ ← checkConflicts s.decl pls L
+  let (e₁, brs) ← checkOverrides c s.decl.decls L
+  let e₂ ← checkConflicts c s.decl pls L
   let e₃ ← checkAbstract s.decl L
   let ts ← selects s.body
-  let (fs, fl) ← mixinFwds s.decl pls L hs
-  let ss ← staticFwds s.decl L
+  let (fs, fl) ← mixinFwds c s.decl pls L hs
+  let ss ← staticFwds c s.decl L
   let os ← observe s.observes
   pure ⟨⟨s.decl, L⟩, checkFinal s.decl hs ++ e₁ ++ e₂ ++ e₃, ts, fs, ss, fl, brs, os⟩
 
@@ -502,14 +568,14 @@ inductive K
   deriving DecidableEq, Repr
 
 inductive H
-  | flat (k : CKind) (l : List (Cls × Ty × Mem))
+  | flat (k : CKind) (l : List (Cls × List Scala.Ty × Mem))
   | ps (k : CKind) (f : Bool) (l : List (Cls × Ty))
   | ds (l : List (Name × Mem))
   | own (m : Option Mem)
   | has (b : Bool)
   | dfr (o : Option Bool)
   | ex (k : CKind) (f : Bool) (ps : List (Cls × Ty)) (l : Lin)
-  | all (k : CKind) (l : List (List (Cls × Ty × Mem)))
+  | all (k : CKind) (l : List (List (Cls × List Scala.Ty × Mem)))
   | under (o : Option Ty)
   deriving DecidableEq, Repr
 
@@ -526,7 +592,7 @@ def π (I : Cls → Iface) (c : Cls) : K → H
 
 /-- The key covering a query. -/
 def keyOf : Q → K
-  | .parents => .parents
+  | .header => .parents
   | .member n => .name n
   | .ovr n => .own n
   | .cfl n => .own n
@@ -552,7 +618,7 @@ inductive Kind
   deriving DecidableEq, Repr
 
 def kindOf (d : Cls) : Cls × Q → Kind
-  | (_, .parents) => .header
+  | (_, .header) => .header
   | (c, .member _) => if c = d then .uses else .client
   | (_, .ovr _) => .overrides
   | (_, .has _) => .conflicts
@@ -576,15 +642,19 @@ def hashDeps (I : Cls → Iface) (c : Cls) : Finset Cls :=
 
 /-! ## Joint compilation -/
 
-/-- The interfaces of a group: linearizations need only the group's source declarations. -/
-def matIface (G : Finset Cls) (src : Cls → Src) (I : Cls → Iface) (u : Cls) : Iface :=
-  ⟨(src u).decl, merge ((parentLins (ancestors depth) (src u).decl.parents).run
-    (answer fun v => if v ∈ G then ⟨(src v).decl, []⟩ else I v))⟩
+/-- The declarations of a group, with nothing stored: what linearization reads. -/
+def declEnv (G : Finset Cls) (src : Cls → USrc) (I : Cls → Iface) : Cls → Iface :=
+  fun v => if v ∈ G then ⟨(src v).2.decl, []⟩ else I v
 
-def group (G : Finset Cls) (src : Cls → Src) (I : Cls → Iface) (u : Cls) : Out :=
+/-- The interfaces of a group: linearizations need only the group's source declarations. -/
+def matIface (G : Finset Cls) (src : Cls → USrc) (I : Cls → Iface) (u : Cls) : Iface :=
+  ⟨(src u).2.decl, ((linOf (src u).1 (declToScala (src u).1 (src u).2.decl).header).run
+    (answer (declEnv G src I))).drop 1⟩
+
+def group (G : Finset Cls) (src : Cls → USrc) (I : Cls → Iface) (u : Cls) : Out :=
   (unitF (src u)).run (answer fun v => if v ∈ G then matIface G src I v else I v)
 
-def Fl (E : Kind → Bool) : NCompiler Cls Src Out Iface K H Q (fun _ => AnsV) where
+def Fl (E : Kind → Bool) : NCompiler Cls USrc Out Iface K H Q (fun _ => AnsV) where
   unit := unitF
   group := group
   iface := Out.iface
@@ -598,64 +668,69 @@ def full : Kind → Bool := fun _ => true
 
 /-! ## Obligations -/
 
-theorem trace_parentLins (r : Cls → T Lin) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV))
-    (hr : ∀ p q, q ∈ (r p).trace e → q.2 = .parents) :
-    ∀ ps q, q ∈ (parentLins r ps).trace e → q.2 = .parents := by
-  intro ps
-  induction ps with
-  | nil => intro q hq; simp [parentLins] at hq
-  | cons p rest ih =>
+open Query.Task in
+theorem trace_toQ (e : Env) : ∀ q', Scala.Walky q' → ∀ q ∈ (toQ q').trace e, q.2 = .header
+  | .decl .., h => h.elim
+  | .header s, _ => by
     intro q hq
-    obtain ⟨c, a⟩ := p
-    simp only [parentLins, Query.Task.bind_eq, Query.Task.pure_eq, Query.Task.trace_bind, Query.Task.trace_pure,
-      List.append_nil, List.mem_append] at hq
-    rcases hq with hq | hq
-    · exact hr c q hq
-    · exact ih q hq
+    simp only [toQ] at hq
+    split at hq
+    · simp only [bind_eq, trace_bind, trace_askQ, List.mem_append, List.mem_singleton] at hq
+      rcases hq with rfl | hq
+      · rfl
+      · exact (List.not_mem_nil hq).elim
+    · exact (List.not_mem_nil hq).elim
+  | .member .., _ => by intro q hq; exact (List.not_mem_nil hq).elim
 
-theorem trace_ancestors (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
-    ∀ fuel c q, q ∈ (ancestors fuel c).trace e → q.2 = .parents := by
-  intro fuel
-  induction fuel with
-  | zero => intro c q hq; simp [ancestors] at hq
-  | succ fuel ih =>
-    intro c q hq
-    simp only [ancestors, Query.Task.bind_eq, Query.Task.trace_bind, trace_askQ, List.singleton_append,
-      List.mem_cons] at hq
-    rcases hq with rfl | hq
-    · rfl
-    · split at hq
-      · simp only [Query.Task.pure_eq, Query.Task.trace_bind, Query.Task.trace_pure,
-          List.append_nil] at hq
-        exact trace_parentLins _ e (fun p q hq => ih p q hq) _ q hq
-      · simp at hq
+/-- A computation of the shared layer that asks only `header` and `member` queries asks, through
+`toQ`, only `header` queries. -/
+theorem trace_interp_walky {α : Type} (x : Scala.M α) (hx : ∀ e', Scala.Asks e' Scala.Walky x)
+    (e : Env) : ∀ q ∈ (Query.Task.interp toQ x.run).trace e, q.2 = .header := by
+  intro q hq
+  obtain ⟨q', hq', hq⟩ := (Query.Task.mem_trace_interp toQ e _ q).1 hq
+  exact trace_toQ e q' (hx _ q' hq') q hq
 
-/-- Two interface maps with the same parents lists give the same linearizations. -/
-theorem parentLins_congr (I I' : Cls → Iface) (h : ∀ c, (I c).decl.parents = (I' c).decl.parents)
-    (ps : List (Cls × Ty)) :
-    (parentLins (ancestors depth) ps).run (answer I) =
-      (parentLins (ancestors depth) ps).run (answer I') := by
+open Query.Task in
+theorem trace_linOf (e : Env) (c : Cls) (h : Scala.Header) :
+    ∀ q ∈ (linOf c h).trace e, q.2 = .header := by
+  intro q hq
+  simp only [linOf, bind_eq, trace_bind, pure_eq, trace_pure, List.append_nil] at hq
+  exact trace_interp_walky _ (fun e' => Scala.asks_linH e' _ _) e q hq
+
+open Query.Task in
+theorem trace_linOfName (e : Env) (p : Cls) : ∀ q ∈ (linOfName p).trace e, q.2 = .header := by
+  intro q hq
+  simp only [linOfName, bind_eq, trace_bind, pure_eq, trace_pure, List.append_nil] at hq
+  exact trace_interp_walky _ (fun e' => Scala.Asks.bind (Scala.asks_fetchH e' _)
+    fun h => Scala.asks_linH e' _ h) e q hq
+
+/-- Two interface maps with the same headers give the same linearization. -/
+theorem linOf_congr (I I' : Cls → Iface)
+    (h : ∀ c, (declToScala c (I c).decl).header = (declToScala c (I' c).decl).header)
+    (c : Cls) (hd : Scala.Header) :
+    (linOf c hd).run (answer I) = (linOf c hd).run (answer I') := by
   apply Query.Task.run_congr
   intro q hq
-  have := trace_parentLins _ _ (fun p q hq => trace_ancestors _ _ p q hq) ps q hq
+  have := trace_linOf _ c hd q hq
   obtain ⟨c, q⟩ := q
   simp only at this
   subst this
-  simp [answer, h c]
+  simp only [answer, h c]
 
-theorem iface_unitF (s : Src) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
-    ((unitF s).run e).iface = ⟨s.decl, merge ((parentLins (ancestors depth) s.decl.parents).run e)⟩ := by
+theorem iface_unitF (u : USrc) (e : Env) :
+    ((unitF u).run e).iface =
+      ⟨u.2.decl, ((linOf u.1 (declToScala u.1 u.2.decl).header).run e).drop 1⟩ := by
   simp [unitF]
 
-theorem group_iface (G : Finset Cls) (src : Cls → Src) (I : Cls → Iface) (u : Cls) :
+theorem group_iface (G : Finset Cls) (src : Cls → USrc) (I : Cls → Iface) (u : Cls) :
     (group G src I u).iface = matIface G src I u := by
   simp only [group, iface_unitF, matIface]
   congr 2
-  apply parentLins_congr
+  apply linOf_congr
   intro c
-  by_cases hc : c ∈ G <;> simp [hc]
+  by_cases hc : c ∈ G <;> simp [hc, declEnv]
 
-theorem Fl_comp (E : Kind → Bool) : ∀ (G : Finset Cls) (src : Cls → Src) (I : Cls → Iface), ∀ d ∈ G,
+theorem Fl_comp (E : Kind → Bool) : ∀ (G : Finset Cls) (src : Cls → USrc) (I : Cls → Iface), ∀ d ∈ G,
     (Fl E).group G src I d = ((Fl E).unit (src d)).run
       ((Fl E).answer (NCompiler.override I G ((Fl E).iface ∘ (Fl E).group G src I))) := by
   intro G src I d _
@@ -697,9 +772,9 @@ theorem Fl_obligations : (Fl full).Obligations where
     obtain ⟨c, q⟩ := q
     change π I c (keyOf q) = π I' c (keyOf q) at h
     cases q with
-    | parents =>
+    | header =>
       simp only [keyOf, π, H.ps.injEq] at h
-      simp [Fl, answer, h]
+      simp [Fl, answer, header_declToScala, tparamsOf, h]
     | member n =>
       simp only [keyOf, π, H.flat.injEq] at h
       simp [Fl, answer, h]
@@ -765,7 +840,7 @@ theorem Fl_obligations : (Fl full).Obligations where
 /-- **Decision 1 is sound**: with every key kind recorded, any sound policy, and `Δ` over the
 classes whose stored linearization meets the recompiled set, a terminating run leaves no class
 dirty. -/
-theorem flat_sound (S : Finset Cls) (src : Cls → Src) (P : Compiler.Policy Cls Out K)
+theorem flat_sound (S : Finset Cls) (src : Cls → USrc) (P : Compiler.Policy Cls Out K)
     (hP : P.Sound S) (fuel n : ℕ) (R : Finset Cls) (s : Compiler.State Cls Out K)
     (D : Finset Cls) (hD : D ⊆ R) (hInv : (Fl full).Inv S src s D) (s' : Compiler.State Cls Out K)
     (h : (Fl full).zinc S src P fuel n R s = some s') : (Fl full).Inv S src s' ∅ :=
@@ -819,7 +894,7 @@ def runF (E : Kind → Bool) (dom : Dom) (src : Cls → Src) (P : Policy Cls Out
     ℕ → ℕ → Finset Cls → Finset Cls → St → Option Run
   | 0, _, _, _, _ => none
   | fuel + 1, n, acc, R, s =>
-    let s' := memo ((Fl E).round src R s)
+    let s' := memo ((Fl E).round (lowerAll src) R s)
     let I := P n R s s' ((Fl E).invalidated Finset.univ (domain E dom R s s') s s')
     if I ⊆ R then some ⟨s', n + 1, acc ∪ R⟩
     else runF E dom src P fuel (n + 1) (acc ∪ R) I s'
@@ -837,9 +912,9 @@ def headerPolicy (transitive : Bool) : Policy Cls Out K := fun _ R s s' I =>
 
 def dummy : St := { out := fun _ => { iface := ⟨{}, []⟩, errs := [], descs := [] }, U := fun _ => ∅ }
 
-def init (E : Kind → Bool) (src : Cls → Src) : St := memo ((Fl E).round src Finset.univ dummy)
+def init (E : Kind → Bool) (src : Cls → Src) : St := memo ((Fl E).round (lowerAll src) Finset.univ dummy)
 
-def clean (src : Cls → Src) : Cls → Out := group Finset.univ src fun _ => ⟨{}, []⟩
+def clean (src : Cls → Src) : Cls → Out := group Finset.univ (lowerAll src) fun _ => ⟨{}, []⟩
 
 structure Report where
   recompiled : List Cls
@@ -854,6 +929,19 @@ def report (E : Kind → Bool) (dom : Dom) (P : Policy Cls Out K) (src₀ src₁
       rounds := r.rounds
       clean := let cl := memo { out := clean src₁, U := fun _ => ∅ }
         all.all fun c => r.state.out c == cl.out c }
+
+/-- Does no class inherit two instances of one ancestor, `M[Int]` and `M[String]`? Scala rejects
+that ("illegal inheritance"); the linearization keeps the first. Each parent's stored
+linearization is seen from the class through the parent's type argument (`asSeenFrom`, as the
+shared walk's merge does). -/
+def coherent (src : Cls → Src) : Bool :=
+  let o := clean src
+  all.all fun c =>
+    let es := (src c).decl.parents.flatMap fun (p, a) =>
+      let ta := Ty.toScala c a
+      (p, [ta]) :: (o p).iface.lin.map fun (q, ts) =>
+        (q, ts.map (AsSeenFrom.asf (Scala.namedWorld c.name [(p.name, [ta])]) (.this [c.name]) [p.name]))
+    es.all fun e => es.all fun e' => e.1 != e'.1 || e.2 == e'.2
 
 end runs
 
@@ -1104,7 +1192,7 @@ def editP : Cls → Src
                      abstract := true, kind := .trt } }
   | c => baseP c
 
-example : ((clean editP) C).fields = [(g, .string, .val, true)] := by native_decide
+example : ((clean editP) C).fields = [(g, .str, .val, true)] := by native_decide
 example : report full .zinc plain baseP editP {M} = some ⟨[C], 2, true⟩ := by native_decide
 example : report (without .trait) .zinc plain baseP editP {M} = some ⟨[], 1, false⟩ := by
   native_decide
@@ -1132,7 +1220,7 @@ def editBr : Cls → Src
   | M => { decl := { decls := [(m, par)], abstract := true, kind := .trt } }
   | c => baseBr c
 
-example : ((clean editBr) B).bridges = [(m, .param)] := by native_decide
+example : ((clean editBr) B).bridges = [(m, .obj)] := by native_decide
 example : report full .zinc plain baseBr editBr {M} = some ⟨[A, B], 2, true⟩ := by native_decide
 example : report (without .overrides) .zinc plain baseBr editBr {M} = some ⟨[A], 2, false⟩ := by
   native_decide
@@ -1160,8 +1248,8 @@ def editV : Cls → Src
   | V => { decl := { under := some .string } }
   | c => baseV c
 
-example : ((clean editV) C).fwds = [(g, .v, .string)] := by native_decide
-example : ((clean editV) X).statics = [(m, .v, .string), (g, .v, .string)] := by native_decide
+example : ((clean editV) C).fwds = [(g, .ref "V", .str)] := by native_decide
+example : ((clean editV) X).statics = [(m, .ref "V", .str), (g, .ref "V", .str)] := by native_decide
 example : report full .zinc plain baseV editV {V} = some ⟨[C, X, Y], 2, true⟩ := by native_decide
 
 /-- Without the erasure keys only the client `Y` recompiles: `C`'s forwarder and `X`'s static

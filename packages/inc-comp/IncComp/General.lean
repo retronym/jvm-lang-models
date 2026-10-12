@@ -403,3 +403,131 @@ theorem fresh_refreshRef_local (ob : C.Obligations) (hloc : ∀ I c, C.hashDeps 
     simp only [snapView, hkUp, ite_false]
 
 end IncComp.XCompiler
+
+/-! ## Explicit interfaces: T3b, and units the loop never touches
+
+With interfaces determined by the source (`ifaceSrc`), separate compilation has one fixed point
+(`fixpoint_unique_of_explicit`), so a unit no round recompiles keeps the output the clean build of
+the new sources gives it (`untouched_eq_clean`). Track B4 (`Links.ZincBridge`) applies this to Scala
+lowering: such a unit's old classfiles link as a fresh build's do. -/
+
+namespace IncComp.XCompiler
+
+open IncComp.Compiler (State Policy)
+
+variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
+variable (C : XCompiler CUnit Src Out Iface K Hash Q A)
+variable [DecidableEq CUnit] [DecidableEq K] [DecidableEq Hash]
+
+/-- The units the loop recompiles: the union of its rounds, by the same recursion as `zinc`. -/
+def recompiled (S : Finset CUnit) (src : CUnit → Src) (P : Policy CUnit Out K) :
+    ℕ → ℕ → Finset CUnit → State CUnit Out K → Finset CUnit
+  | 0, _, R, _ => R
+  | fuel + 1, n, R, s =>
+    let s' := C.round src R s
+    let I := C.invalidated S R s s'
+    if I ⊆ R then R else R ∪ recompiled S src P fuel (n + 1) (P n R s s' I) s'
+
+/-- A unit no round recompiles keeps its output. -/
+theorem out_of_not_recompiled (S : Finset CUnit) (src : CUnit → Src) (P : Policy CUnit Out K) :
+    ∀ (fuel n : ℕ) (R : Finset CUnit) (s s' : State CUnit Out K) (c : CUnit),
+      C.zinc S src P fuel n R s = some s' → c ∉ C.recompiled S src P fuel n R s →
+        s'.out c = s.out c := by
+  intro fuel
+  induction fuel with
+  | zero => intro n R s s' c h; simp [zinc] at h
+  | succ fuel ih =>
+    intro n R s s' c h hc
+    simp only [zinc] at h
+    simp only [recompiled] at hc
+    split at h
+    · rename_i hsub
+      cases h
+      rw [if_pos hsub] at hc
+      simp [round, hc]
+    · rename_i hsub
+      rw [if_neg hsub, Finset.mem_union, not_or] at hc
+      rw [ih _ _ _ _ c h hc.2]
+      simp [round, hc.1]
+
+/-- A per-unit fixed point of separate compilation on `S`. -/
+def Fixpoint (S : Finset CUnit) (src : CUnit → Src) (o : CUnit → Out) : Prop :=
+  ∀ u ∈ S, o u = (C.unit (src u)).run (C.answer (C.iface ∘ o))
+
+/-- The clean build of `S` against `s`'s outputs for everything else. -/
+def cleanFrom (S : Finset CUnit) (src : CUnit → Src) (s : State CUnit Out K) : CUnit → Out :=
+  fun u => if u ∈ S then C.group S src (C.ifaces s) u else s.out u
+
+omit [DecidableEq K] [DecidableEq Hash] in
+theorem cleanFrom_fixpoint (ob : C.Obligations) (S : Finset CUnit) (src : CUnit → Src)
+    (s : State CUnit Out K) : C.Fixpoint S src (C.cleanFrom S src s) := by
+  intro u hu
+  have h := ob.comp S src (C.ifaces s) u hu
+  have hout : C.cleanFrom S src s u = C.group S src (C.ifaces s) u := by simp [cleanFrom, hu]
+  rw [hout, h]
+  congr 2
+  funext v
+  simp only [override, cleanFrom, Function.comp, ifaces]
+  split <;> rfl
+
+omit [DecidableEq K] [DecidableEq Hash] in
+/-- **Uniqueness under explicit interfaces** (T3b), for the general form. -/
+theorem fixpoint_unique_of_explicit (S : Finset CUnit) (src : CUnit → Src) (ifaceSrc : Src → Iface)
+    (hex : ∀ (sr : Src) (I : CUnit → Iface), C.iface ((C.unit sr).run (C.answer I)) = ifaceSrc sr)
+    (o₁ o₂ : CUnit → Out) (h₁ : C.Fixpoint S src o₁) (h₂ : C.Fixpoint S src o₂)
+    (hext : ∀ u ∉ S, o₁ u = o₂ u) : o₁ = o₂ := by
+  have hi : C.iface ∘ o₁ = C.iface ∘ o₂ := by
+    funext p
+    simp only [Function.comp]
+    by_cases hp : p ∈ S
+    · rw [h₁ _ hp, h₂ _ hp, hex, hex]
+    · rw [hext _ hp]
+  funext u
+  by_cases hu : u ∈ S
+  · rw [h₁ u hu, h₂ u hu, hi]
+  · exact hext u hu
+
+omit [DecidableEq K] [DecidableEq Hash] in
+/-- An up-to-date build, edited at `D`: every other unit is still up to date. -/
+theorem inv_of_edit (S : Finset CUnit) (src₀ src : CUnit → Src) (s : State CUnit Out K)
+    (D : Finset CUnit) (hInv : C.Inv S src₀ s ∅) (hD : ∀ u, src₀ u ≠ src u → u ∈ D) :
+    C.Inv S src s D := by
+  intro u hu huD
+  have h := hInv u hu (Finset.notMem_empty u)
+  have : src₀ u = src u := by by_contra hne; exact huD (hD u hne)
+  unfold UpToDate at h ⊢
+  rw [this] at h
+  exact h
+
+/-- **Track B4.** After an edit (the dirty set `D` ⊆ the first round `R₀`), if Zinc's loop stops and a
+unit `c` was in none of its rounds, `c`'s old output is its output in the clean build of the new
+sources. Hypotheses: the obligations; interfaces determined by the source; a sound policy that
+stays inside `S`. -/
+theorem untouched_eq_clean (ob : C.Obligations) (ifaceSrc : Src → Iface)
+    (hex : ∀ (sr : Src) (I : CUnit → Iface), C.iface ((C.unit sr).run (C.answer I)) = ifaceSrc sr)
+    (S : Finset CUnit) (src : CUnit → Src) (P : Policy CUnit Out K) (hP : P.Sound S)
+    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset CUnit) (s : State CUnit Out K)
+    (hD : D ⊆ R₀) (hR₀ : R₀ ⊆ S) (hInv : C.Inv S src s D)
+    (s' : State CUnit Out K) (h : C.zinc S src P fuel 0 R₀ s = some s') (c : CUnit)
+    (hc : c ∉ C.recompiled S src P fuel 0 R₀ s) :
+    s.out c = C.cleanFrom S src s c := by
+  have hfin := C.zinc_sound ob S src P hP fuel 0 R₀ s D hD hInv s' h
+  have hfix : C.Fixpoint S src s'.out := fun u hu => (hfin u hu (Finset.notMem_empty u)).1
+  have hclean := C.fixpoint_unique_of_explicit S src ifaceSrc hex s'.out (C.cleanFrom S src s)
+    hfix (C.cleanFrom_fixpoint ob S src s) (fun u hu => by
+      rw [C.zinc_out_outside S src P hPS fuel 0 R₀ s hR₀ s' h u hu]
+      simp [cleanFrom, hu])
+  rw [← C.out_of_not_recompiled S src P fuel 0 R₀ s s' c h hc, hclean]
+
+/-- Contrapositive: a unit whose old output differs from its clean output is recompiled. -/
+theorem must_recompile (ob : C.Obligations) (ifaceSrc : Src → Iface)
+    (hex : ∀ (sr : Src) (I : CUnit → Iface), C.iface ((C.unit sr).run (C.answer I)) = ifaceSrc sr)
+    (S : Finset CUnit) (src : CUnit → Src) (P : Policy CUnit Out K) (hP : P.Sound S)
+    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset CUnit) (s : State CUnit Out K)
+    (hD : D ⊆ R₀) (hR₀ : R₀ ⊆ S) (hInv : C.Inv S src s D)
+    (s' : State CUnit Out K) (h : C.zinc S src P fuel 0 R₀ s = some s') (c : CUnit)
+    (hne : s.out c ≠ C.cleanFrom S src s c) : c ∈ C.recompiled S src P fuel 0 R₀ s := by
+  by_contra hc
+  exact hne (C.untouched_eq_clean ob ifaceSrc hex S src P hP hPS fuel R₀ D s hD hR₀ hInv s' h c hc)
+
+end IncComp.XCompiler

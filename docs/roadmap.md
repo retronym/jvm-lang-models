@@ -67,7 +67,13 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Why.** These four `Zinc/` files each have their own toy Scala, their own `asSeenFrom` and their own query plumbing. No `Zinc/` file imports [`packages/scala-types/ScalaTypes/AsSeenFrom.lean`](../packages/scala-types/ScalaTypes/AsSeenFrom.lean) or [`packages/scala/Scala/Lower.lean`](../packages/scala/Scala/Lower.lean). Until they do, Zinc's bridge instances, Track B4 and the MiMa model don't share one Scala semantics, and Track B4's key model ([`ZincBridgeKeys.lean`](../packages/links/Links/ZincBridgeKeys.lean)) stays separate from the Zinc one.
 
-**Done looks like.** The four files restated over `ScalaTypes.AsSeenFrom`, `ScalaTypes.Resolve` and `Scala.Lower`, with their theorems kept (`Task` is already in its own package, `query`); the explicit-interface T3 that Track B4 restates in [`packages/links/Links/ZincBridge.lean`](../packages/links/Links/ZincBridge.lean) moved into [`General.lean`](../packages/inc-comp/IncComp/General.lean). Single-writer work, since it touches `Zinc/`. Track: [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md).
+**Done looks like.** The four files restated over `ScalaTypes.AsSeenFrom`, `ScalaTypes.Resolve` and `Scala.Lower`, with their theorems kept (`Task` is already in its own package, `query`); the explicit-interface T3 that Track B4 restates in [`packages/links/Links/ZincBridge.lean`](../packages/links/Links/ZincBridge.lean) moved into [`General.lean`](../packages/inc-comp/IncComp/General.lean). Single-writer work, since it touches `Zinc/`. Track: [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md). Status: `Hier`, `Flat`, `Erasure`'s erasure and `ImplicitScope`'s base classes are on the shared layer, and the explicit-interface T3 is in [`General.lean`](../packages/inc-comp/IncComp/General.lean) ([`packages/zinc/docs/29-shared-scala.md`](../packages/zinc/docs/29-shared-scala.md), steps 1 to 7); left: `Erasure`'s own two-parameter walk.
+
+### Implicit scope in the shared layer
+
+**Why.** `ImplicitScope` reads its base classes from the shared walk, but the search itself (each base class's companion, the implicits declared or inherited there, the most derived applicable one) is its own. Implicit search is real Scala semantics that Zinc's name hashes must cover ([sbt/zinc#1845](https://github.com/sbt/zinc/issues/1845)), and the names and givens spaces (`ZincNames`) have their own search too.
+
+**Done looks like.** Implicit definitions in `ScalaTypes` and a companion-based implicit-scope search over the shared walk, calibrated against scalac and dotc; `ImplicitScope`'s search and its trace lemma restated over it, with [`is_obligations`](../packages/zinc/Zinc/Features/ImplicitScope.lean#L675) kept. Single-writer work on `Zinc/`. Design: [`packages/zinc/docs/29-shared-scala.md`](../packages/zinc/docs/29-shared-scala.md).
 
 ### Scala and Java layer remainders
 

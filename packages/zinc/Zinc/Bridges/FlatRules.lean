@@ -33,9 +33,9 @@ def declares (s : St) (q : Cls) (n : Name) : Bool := (own (ifc s q) n).isSome
 def deferredIn (s : St) (q : Cls) (n : Name) : Bool :=
   (own (ifc s q) n).map (·.deferred) == some true
 
-/-- `d`'s parents with their stored linearizations. -/
-def sides (s : St) (d : Cls) : List Lin :=
-  (ifc s d).decl.parents.map fun e => e :: (ifc s e.1).lin
+/-- The classes of `d`'s parents' stored linearizations, each parent first. -/
+def sides (s : St) (d : Cls) : List (List Cls) :=
+  (ifc s d).decl.parents.map fun e => e.1 :: (ifc s e.1).lin.map (·.1)
 
 /-- Does `d` mix the trait `p` in directly (and so hold its forwarders and fields)? -/
 def mixesDirectly (s : St) (p d : Cls) : Bool :=
