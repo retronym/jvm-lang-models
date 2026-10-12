@@ -14,7 +14,7 @@ sites of `Jvm.Clients.space`. This is the space MiMa's verdicts are compared on;
 here is testing, per `docs/specification.md`.
 -/
 
-namespace BinCompat
+namespace MiMa
 
 open Jvm Jvm.Catalogue Jvm.Clients
 
@@ -124,4 +124,4 @@ def spaceB : List Client :=
   (sitesB.map fun s => ([], { sites := [s] })) ++
   (xClassesB.flatMap fun x => sitesB.map fun s => ([(.X, x)], { loads := [.X], sites := [s] }))
 
-end BinCompat
+end MiMa

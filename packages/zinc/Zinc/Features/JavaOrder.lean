@@ -34,11 +34,13 @@ Results:
   build needs the same direction of dependencies.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.JavaOrder
 
-open Compiler (State Policy)
+open IncComp.Compiler (State Policy)
 open Zinc.JavaSpec (CU Q Ans Client Out Iface Env K)
 
 variable {Pkg N : Type} [DecidableEq Pkg] [DecidableEq N]
@@ -193,7 +195,7 @@ theorem early_view (t : JavaSpec.T Pkg N (Out Pkg N)) (up : CU Pkg N → Src Pkg
       JavaSpec.answer (srcIface (up q.1)) q.2 = JavaSpec.answer (cfIface (up q.1)) q.2) :
     t.run (fun p => JavaSpec.answer (srcIface (up p.1)) p.2) =
       t.run (fun p => JavaSpec.answer (cfIface (up p.1)) p.2) :=
-  (Task.run_eq_of_trace t _ _ h).1
+  (Query.Task.run_eq_of_trace t _ _ h).1
 
 end Zinc.JavaOrder
 
@@ -234,9 +236,9 @@ order (`JavaThenScala` does not today); javac's view needs javac's output before
 so pipelining's cycles would wait for javac, which is what pipelining avoids; both views need both.
 -/
 
-namespace Zinc.TCompiler
+namespace IncComp.TCompiler
 
-open Compiler (State)
+open IncComp.Compiler (State)
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : TCompiler CUnit Src Out Iface K Hash Q A) [DecidableEq CUnit]
@@ -261,11 +263,11 @@ theorem exclusion_exact (ob : C.Obligations) (S : Finset CUnit) (src : CUnit →
       exact ob.abstraction _ _ k.2 this q.2 hcovers
     · have : s'.out q.1 = s.out q.1 := by simp only [hs', round_out, hqR, ite_false]
       rw [this]
-  have hrun := (Task.run_eq_of_trace _ _ _ hagree).1
+  have hrun := (Query.Task.run_eq_of_trace _ _ _ hagree).1
   have h2 : s'.out u = C.group R src (C.env s) u := by simp only [hs', round_out, huR, ite_true]
   rw [h2, ob.comp R src (C.env s) u huR, ← env_round, ← hs', hout, hrun]
 
-end Zinc.TCompiler
+end IncComp.TCompiler
 
 namespace Zinc.JavaOrder
 

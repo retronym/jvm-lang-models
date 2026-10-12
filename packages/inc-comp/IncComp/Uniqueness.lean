@@ -16,7 +16,9 @@ This is the sbt/zinc#1284 situation. Two sufficient conditions, each a Scala bes
 `zinc_eq_clean_of_wf` / `zinc_eq_clean_of_explicit` are the resulting T3 statements.
 -/
 
-namespace Zinc.Compiler
+open Query
+
+namespace IncComp.Compiler
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : Compiler CUnit Src Out Iface K Hash Q A)
@@ -71,7 +73,7 @@ theorem fixpoint_unique_of_wf (S : Finset CUnit) (src : CUnit → Src)
   | _ u ih =>
     by_cases hu : u ∈ S
     · rw [h₁ u hu, h₂ u hu]
-      apply Task.run_congr
+      apply Query.Task.run_congr
       intro q hq
       simp only [envOf, Function.comp]
       rw [ih q.1 (hdep u hu _ q hq)]
@@ -146,14 +148,14 @@ theorem zinc_eq_clean_of_explicit (ob : C.Obligations) (S : Finset CUnit) (src :
   · intro u hu
     rw [C.zinc_out_outside S src P hPS fuel n R s hR s' h u hu, C.cleanFrom_outside S src s u hu]
 
-end Zinc.Compiler
+end IncComp.Compiler
 
 /-! ## Keys from the tree
 
 A per-unit fixed point and the clean build do not mention keys, so a `TCompiler` reaches T3b
 through `toCompiler`, which forgets them; with its own T3a, that gives T3. -/
 
-namespace Zinc.TCompiler
+namespace IncComp.TCompiler
 
 open Compiler (State Policy)
 
@@ -238,4 +240,4 @@ theorem zinc_some_of_monotoneFrom (S : Finset CUnit) (src : CUnit → Src) (P : 
   rw [← zinc_toX]
   exact C.toX.zinc_some_of_monotoneFrom S src P hPS k hM fuel n R s hR hfuel
 
-end Zinc.TCompiler
+end IncComp.TCompiler

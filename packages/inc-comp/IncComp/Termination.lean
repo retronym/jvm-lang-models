@@ -14,7 +14,7 @@ The fuelled loop returns `some` with enough fuel, under three regimes:
   round `r`, so at most `height + 2` rounds.
 -/
 
-namespace Zinc.Compiler
+namespace IncComp.Compiler
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : Compiler CUnit Src Out Iface K Hash Q A)
@@ -208,4 +208,4 @@ theorem zinc_some_of_wf (S : Finset CUnit) (src : CUnit → Src)
         omega
       exact ih (n + 1) _ _ hIS hI hrec' (by clear ih; omega) (by clear ih; omega)
 
-end Zinc.Compiler
+end IncComp.Compiler

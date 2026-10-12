@@ -84,6 +84,8 @@ Results (checked below; counts from `lake exe exhaustive erasure`, see the end o
 `erasure` keys (codegen's reads of `V`, kind `.erasure`) are the dependency edge here.
 -/
 
+open Query IncComp
+
 namespace Zinc.Erasure
 
 inductive Cls | V | W | Z | M | A | B | X | Y
@@ -247,13 +249,13 @@ def homeC : Ty → Cls
   | .wz => .Z
   | _ => .V
 
-abbrev T := Task (Cls × Q) (fun _ => AnsV)
+abbrev T := Query.Task (Cls × Q) (fun _ => AnsV)
 
-def askQ (c : Cls) (q : Q) : T AnsV := Task.ask (c, q) Task.pure
+def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
-@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).run e = e (c, q) := rfl
-@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).trace e = [(c, q)] := rfl
 
 /-! ## The compiler -/
@@ -613,7 +615,7 @@ As declared, with faithful macro keys and a kind-covering class-name hash, meets
 
 section obligations
 
-abbrev Env := Task.Env (Cls × Q) (fun _ => AnsV)
+abbrev Env := Query.Task.Env (Cls × Q) (fun _ => AnsV)
 
 theorem run_linT (I : Cls → Iface) (x : Ctx) :
     ∀ f c a, (linT x f c a).run (answer I) = linP I f c a := by
@@ -622,7 +624,7 @@ theorem run_linT (I : Cls → Iface) (x : Ctx) :
   | zero => intro c a; rfl
   | succ f ih =>
     intro c a
-    simp only [linT, linP, Task.bind_eq, Task.run_bind, run_askQ, answer]
+    simp only [linT, linP, Query.Task.bind_eq, Query.Task.run_bind, run_askQ, answer]
     rcases h : (I c).decl.parent with _ | ⟨q, qa⟩
     · simp
     · simp [ih]
@@ -635,14 +637,14 @@ theorem trace_linT (I : Cls → Iface) (x : Ctx) :
   | zero => intro c a q hq; simp [linT] at hq
   | succ f ih =>
     intro c a q hq
-    simp only [linT, Task.bind_eq, Task.trace_bind, trace_askQ, run_askQ, answer,
+    simp only [linT, Query.Task.bind_eq, Query.Task.trace_bind, trace_askQ, run_askQ, answer,
       List.singleton_append, List.mem_cons] at hq
     rcases hq with rfl | hq
     · refine ⟨rfl, ?_⟩
       simp only [linP]; split <;> simp
     · rcases h : (I c).decl.parent with _ | ⟨p, pa⟩
       · simp [h] at hq
-      · simp only [h, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+      · simp only [h, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
           List.append_nil] at hq
         obtain ⟨h1, h2⟩ := ih _ _ q hq
         refine ⟨h1, ?_⟩
@@ -666,8 +668,8 @@ theorem trace_entriesT (I : Cls → Iface) (x : Ctx) (n : Name) :
   | cons e rest ih =>
     intro q hq
     obtain ⟨c, a⟩ := e
-    simp only [entriesT, Task.bind_eq, Task.trace_bind, trace_askQ, run_askQ, Task.pure_eq,
-      Task.trace_pure, List.append_nil, List.singleton_append, List.mem_cons] at hq
+    simp only [entriesT, Query.Task.bind_eq, Query.Task.trace_bind, trace_askQ, run_askQ, Query.Task.pure_eq,
+      Query.Task.trace_pure, List.append_nil, List.singleton_append, List.mem_cons] at hq
     rcases hq with rfl | hq
     · simp
     · obtain ⟨h1, h2⟩ := ih q hq
@@ -684,8 +686,8 @@ theorem run_erasT (I : Cls → Iface) (x : Ctx) :
   | cons p rest ih =>
     obtain ⟨n, t⟩ := p
     cases ht : special t
-    · simp [erasT, ht, Task.bind, ih, eraseT_base I t ht]
-    · simp [erasT, ht, Task.bind, answer, askQ, ih]
+    · simp [erasT, ht, Query.Task.bind, ih, eraseT_base I t ht]
+    · simp [erasT, ht, Query.Task.bind, answer, askQ, ih]
 
 theorem trace_erasT (I : Cls → Iface) (x : Ctx) :
     ∀ ns q, q ∈ (erasT x ns).trace (answer I) →
@@ -697,10 +699,10 @@ theorem trace_erasT (I : Cls → Iface) (x : Ctx) :
     intro q hq
     obtain ⟨n, t⟩ := p
     cases ht : special t
-    · simp [erasT, ht, Task.bind] at hq
+    · simp [erasT, ht, Query.Task.bind] at hq
       obtain ⟨n', t', h1, h2, h3⟩ := ih q hq
       exact ⟨n', t', h1, h2, List.mem_cons_of_mem _ h3⟩
-    · simp [erasT, ht, answer, askQ, Task.bind] at hq
+    · simp [erasT, ht, answer, askQ, Query.Task.bind] at hq
       rcases hq with rfl | hq
       · exact ⟨n, t, rfl, ht, List.mem_cons_self⟩
       · obtain ⟨n', t', h1, h2, h3⟩ := ih q hq
@@ -728,7 +730,7 @@ theorem trace_nameT (I : Cls → Iface) (d : Decl) (p : Cls) (a : List Ty)
     (ownJ : List (Name × JTy)) (n : Name) (q : Cls × Q)
     (hq : q ∈ (nameT d p (linP I depth p a) ownJ n).trace (answer I)) : inhScope I p q := by
   have hch : (linP I depth p a).map (·.1) = chainP I p := chain_fst I depth p a ids
-  simp only [nameT, Task.bind_eq, Task.trace_bind, List.mem_append] at hq
+  simp only [nameT, Query.Task.bind_eq, Query.Task.trace_bind, List.mem_append] at hq
   rcases hq with hq | hq | hq
   · obtain ⟨h1, h2⟩ := trace_entriesT I _ n _ q hq
     exact Or.inl ⟨Or.inr ⟨n, h1⟩, hch ▸ h2⟩
@@ -749,7 +751,7 @@ theorem trace_namesT (I : Cls → Iface) (d : Decl) (p : Cls) (a : List Ty)
   | nil => intro q hq; simp [namesT] at hq
   | cons n rest ih =>
     intro q hq
-    simp only [namesT, Task.bind_eq, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+    simp only [namesT, Query.Task.bind_eq, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
       List.append_nil, List.mem_append] at hq
     rcases hq with hq | hq
     · exact trace_nameT I d p a ownJ n q hq
@@ -763,7 +765,7 @@ theorem trace_descT (I : Cls → Iface) (d : Decl) (ownJ : List (Name × JTy)) (
   · rename_i p a _
     refine ⟨p, ?_⟩
     have hch : (linP I depth p a).map (·.1) = chainP I p := chain_fst I depth p a ids
-    simp only [Task.bind_eq, Task.trace_bind, List.mem_append] at hq
+    simp only [Query.Task.bind_eq, Query.Task.trace_bind, List.mem_append] at hq
     rcases hq with hq | hq
     · obtain ⟨h1, h2⟩ := trace_linT I _ _ _ _ q hq
       exact Or.inl ⟨Or.inl h1, hch ▸ h2⟩
@@ -793,13 +795,13 @@ theorem trace_descOf (I : Cls → Iface) (c : Cls) (n : Name) (oo : Option Cls)
   cases oo with
   | none => simp [descOf] at hq
   | some o =>
-    simp only [descOf, Task.bind_eq, Task.trace_bind, trace_askQ, run_askQ, answer,
+    simp only [descOf, Query.Task.bind_eq, Query.Task.trace_bind, trace_askQ, run_askQ, answer,
       List.singleton_append, List.mem_cons] at hq
     rcases hq with rfl | hq
     · exact Or.inr (Or.inl rfl)
     · rcases hlk : (I o).decl.decls.lookup n with _ | t
       · simp [hlk] at hq
-      · simp only [hlk, Task.bind_eq, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+      · simp only [hlk, Query.Task.bind_eq, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
           List.append_nil] at hq
         obtain ⟨n', t', rfl, hs, hm⟩ := trace_erasT I _ _ q hq
         simp only [List.mem_singleton, Prod.mk.injEq] at hm
@@ -814,7 +816,7 @@ theorem trace_selsT (I : Cls → Iface) :
   | cons e rest ih =>
     intro q hq
     obtain ⟨c, n⟩ := e
-    simp only [selsT, Task.bind_eq, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+    simp only [selsT, Query.Task.bind_eq, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
       List.append_nil, List.mem_append] at hq
     rcases hq with hq | hq | hq | hq
     · obtain ⟨h1, h2⟩ := trace_linT I _ _ _ _ q hq
@@ -835,7 +837,7 @@ theorem trace_obsT (I : Cls → Iface) :
   | cons e rest ih =>
     intro q hq
     obtain ⟨c, n⟩ := e
-    simp only [obsT, Task.bind_eq, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+    simp only [obsT, Query.Task.bind_eq, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
       List.append_nil, List.mem_append] at hq
     rcases hq with hq | hq | hq
     · obtain ⟨h1, h2⟩ := trace_linT I _ _ _ _ q hq
@@ -848,7 +850,7 @@ theorem trace_obsT (I : Cls → Iface) :
 theorem scope_unitF (x : Ext) (I : Cls → Iface) (s : Src) :
     ∀ q ∈ (unitF s).trace (answer I), scope x I q := by
   intro q hq
-  simp only [unitF, Task.bind_eq, Task.trace_bind, Task.pure_eq, Task.trace_pure,
+  simp only [unitF, Query.Task.bind_eq, Query.Task.trace_bind, Query.Task.pure_eq, Query.Task.trace_pure,
     List.append_nil, List.mem_append] at hq
   obtain ⟨e, q⟩ := q
   rcases hq with hq | hq | hq | hq

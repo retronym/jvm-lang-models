@@ -18,46 +18,48 @@ unit a trace reaches.
   the default package that resolves `A` in its own package asks for `A` and records `<empty>.A`.
 -/
 
+open Query IncComp
+
 namespace Zinc.Naming
 
 variable {CUnit Name Q : Type} {A : Q → Type} {α : Type}
 
 /-- The task with every query's unit replaced by its name. -/
-def rename (f : CUnit → Name) : Task (CUnit × Q) (fun p => A p.2) α → Task (Name × Q) (fun p => A p.2) α
+def rename (f : CUnit → Name) : Query.Task (CUnit × Q) (fun p => A p.2) α → Query.Task (Name × Q) (fun p => A p.2) α
   | .pure a => .pure a
   | .ask q k => .ask (f q.1, q.2) fun a => rename f (k a)
 
 /-- The oracle on units that a named oracle induces. -/
-def pull (f : CUnit → Name) (e : Task.Env (Name × Q) (fun p => A p.2)) : Task.Env (CUnit × Q) (fun p => A p.2) :=
+def pull (f : CUnit → Name) (e : Query.Task.Env (Name × Q) (fun p => A p.2)) : Query.Task.Env (CUnit × Q) (fun p => A p.2) :=
   fun p => e (f p.1, p.2)
 
-theorem run_rename (f : CUnit → Name) (e : Task.Env (Name × Q) (fun p => A p.2)) :
-    ∀ t : Task (CUnit × Q) (fun p => A p.2) α, (rename f t).run e = t.run (pull f e)
+theorem run_rename (f : CUnit → Name) (e : Query.Task.Env (Name × Q) (fun p => A p.2)) :
+    ∀ t : Query.Task (CUnit × Q) (fun p => A p.2) α, (rename f t).run e = t.run (pull f e)
   | .pure _ => rfl
   | .ask q k => by
-    simp only [rename, Task.run_ask]
+    simp only [rename, Query.Task.run_ask]
     exact run_rename f e (k (e (f q.1, q.2)))
 
-theorem trace_rename (f : CUnit → Name) (e : Task.Env (Name × Q) (fun p => A p.2)) :
-    ∀ t : Task (CUnit × Q) (fun p => A p.2) α,
+theorem trace_rename (f : CUnit → Name) (e : Query.Task.Env (Name × Q) (fun p => A p.2)) :
+    ∀ t : Query.Task (CUnit × Q) (fun p => A p.2) α,
       (rename f t).trace e = (t.trace (pull f e)).map fun p => (f p.1, p.2)
   | .pure _ => rfl
   | .ask q k => by
-    simp only [rename, Task.trace_ask, List.map_cons]
+    simp only [rename, Query.Task.trace_ask, List.map_cons]
     exact congrArg _ (trace_rename f e (k (e (f q.1, q.2))))
 
 variable {Src Out Iface K Hash : Type} [DecidableEq Name] [DecidableEq K]
 
 /-- The named compiler's coverage: every query of a unit's renamed task has a renamed key. -/
 def NamedCoverage (C : TCompiler CUnit Src Out Iface K Hash Q A) (read rec : CUnit → Name) : Prop :=
-  ∀ (s : Src) (e : Task.Env (Name × Q) (fun p => A p.2)), ∀ q ∈ (rename read (C.unit s)).trace e,
+  ∀ (s : Src) (e : Query.Task.Env (Name × Q) (fun p => A p.2)), ∀ q ∈ (rename read (C.unit s)).trace e,
     ∃ k ∈ (C.keysOf ((rename read (C.unit s)).run e)).image (fun k => (rec k.1, k.2)),
       q.1 = k.1 ∧ C.covers q.2 k.2
 
 /-- **Agreement suffices**: with one spelling, the named compiler covers what the underlying one
 covers. -/
 theorem coverage_named (C : TCompiler CUnit Src Out Iface K Hash Q A) (read rec : CUnit → Name)
-    (hcov : ∀ (s : Src) (e : Task.Env (CUnit × Q) (fun p => A p.2)), ∀ q ∈ (C.unit s).trace e,
+    (hcov : ∀ (s : Src) (e : Query.Task.Env (CUnit × Q) (fun p => A p.2)), ∀ q ∈ (C.unit s).trace e,
       ∃ k ∈ C.keysOf ((C.unit s).run e), q.1 = k.1 ∧ C.covers q.2 k.2)
     (hagree : ∀ u, read u = rec u) : NamedCoverage C read rec := by
   intro s e q hq
@@ -70,7 +72,7 @@ theorem coverage_named (C : TCompiler CUnit Src Out Iface K Hash Q A) (read rec 
 
 /-- **Disagreement breaks coverage**: a traced unit whose read spelling no covering key carries. -/
 theorem not_coverage_named (C : TCompiler CUnit Src Out Iface K Hash Q A) (read rec : CUnit → Name)
-    (s : Src) (e : Task.Env (Name × Q) (fun p => A p.2)) (q : CUnit × Q)
+    (s : Src) (e : Query.Task.Env (Name × Q) (fun p => A p.2)) (q : CUnit × Q)
     (hq : q ∈ (C.unit s).trace (pull read e))
     (hnot : ∀ k ∈ C.keysOf ((C.unit s).run (pull read e)), C.covers q.2 k.2 → rec k.1 ≠ read q.1) :
     ¬ NamedCoverage C read rec := by
@@ -85,7 +87,7 @@ theorem not_coverage_named (C : TCompiler CUnit Src Out Iface K Hash Q A) (read 
 so none serves interfaces that answer them differently. -/
 theorem collision (read : CUnit → Name) (answer : CUnit → (q : Q) → A q) (u v : CUnit) (q : Q)
     (hname : read u = read v) (hdiff : answer u q ≠ answer v q) :
-    ¬ ∃ e : Task.Env (Name × Q) (fun p => A p.2), ∀ w (x : Q), e (read w, x) = answer w x := by
+    ¬ ∃ e : Query.Task.Env (Name × Q) (fun p => A p.2), ∀ w (x : Q), e (read w, x) = answer w x := by
   rintro ⟨e, he⟩
   apply hdiff
   rw [← he u q, ← he v q, hname]
@@ -106,7 +108,7 @@ inductive Q | get
 
 abbrev Ans (_ : Q) : Type := ℕ
 
-def unit : Bool → Task (Fin 2 × Q) (fun p => Ans p.2) ℕ
+def unit : Bool → Query.Task (Fin 2 × Q) (fun p => Ans p.2) ℕ
   | true => .ask (0, .get) .pure
   | false => .pure 0
 
@@ -149,7 +151,7 @@ example (r : String) : NamedCoverage compiler (spell r r) (spell r r) :=
     | false => simp [compiler, unit] at hq) (fun _ => rfl)
 
 /-- **sbt/zinc#1553**: `A` and `a` on a case-insensitive filesystem are one file. -/
-example : ¬ ∃ e : Task.Env (String × Q) (fun p => Ans p.2), ∀ w (x : Q),
+example : ¬ ∃ e : Query.Task.Env (String × Q) (fun p => Ans p.2), ∀ w (x : Q),
     e ((fun u : Fin 2 => "A") w, x) = (fun u _ => if u = 0 then 1 else 2) w x :=
   collision (fun _ => "A") (fun u _ => if u = 0 then 1 else 2) 0 1 .get rfl (by decide)
 
@@ -176,7 +178,7 @@ def recName (u : CU P Nm) : String := (if u.1 = 0 then "<empty>." else pkgName u
 /-- A client in the default package that names `A`. -/
 def client : Client P Nm := ⟨0, 0, [], [], [], [], []⟩
 
-def env : Task.Env (String × JavaSpec.Q Nm) (fun p => JavaSpec.Ans p.2) := fun p => decide (p = ("A", .present))
+def env : Query.Task.Env (String × JavaSpec.Q Nm) (fun p => JavaSpec.Ans p.2) := fun p => decide (p = ("A", .present))
 
 theorem default_package_1812 :
     ¬ NamedCoverage (compiler (1 : P) .fix (Pkg := P) (N := Nm)) readName recName := by

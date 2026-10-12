@@ -20,6 +20,8 @@ invalidates when the early output's hash differs from the snapshot.
   and the new is the same failure, and the same rollback restores the invariant.
 -/
 
+open IncComp
+
 namespace Zinc.PipelineLifecycle
 
 variable {Src Iface H : Type} [DecidableEq Src]

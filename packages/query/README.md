@@ -6,7 +6,7 @@ A computation that asks questions: a query tree (`Task`) that either returns or 
 
 **Calibration.** None needed: it is the free monad of *Build Systems à la Carte* with a dependent answer type.
 
-**Gaps.** `Task` still lives in the `Zinc` namespace, from before this package existed.
+**Gaps.** None specific.
 
 ## Files
 

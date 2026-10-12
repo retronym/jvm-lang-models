@@ -35,9 +35,11 @@ Zinc recompile it (`must_recompile`). MiMa reports nothing here: the gap between
 Zinc-clean is exactly such edits.
 -/
 
-namespace Zinc.XCompiler
+open Query IncComp
 
-open Compiler (State Policy)
+namespace IncComp.XCompiler
+
+open IncComp.Compiler (State Policy)
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : XCompiler CUnit Src Out Iface K Hash Q A)
@@ -154,11 +156,11 @@ theorem must_recompile (ob : C.Obligations) (ifaceSrc : Src → Iface)
   by_contra hc
   exact hne (C.untouched_eq_clean ob ifaceSrc hex S src P hP hPS fuel R₀ D s hD hR₀ hInv s' h c hc)
 
-end Zinc.XCompiler
+end IncComp.XCompiler
 
 /-! ## Scala lowering as an `XCompiler` -/
 
-namespace BinCompat.ZincBridge
+namespace Links.ZincBridge
 
 open Scala
 
@@ -168,7 +170,7 @@ abbrev FQ := String × Bool
 abbrev FAns : FQ → Type := fun _ => Option View
 
 /-- Rename lowering's queries into the framework's shape. -/
-def tr {α : Type} : Zinc.Task Scala.Q Scala.Ans α → Zinc.Task FQ FAns α
+def tr {α : Type} : Query.Task Scala.Q Scala.Ans α → Query.Task FQ FAns α
   | .pure a => .pure a
   | .ask (.decl n o) k => .ask (n, o) fun v => tr (k v)
 
@@ -176,19 +178,19 @@ def tr {α : Type} : Zinc.Task Scala.Q Scala.Ans α → Zinc.Task FQ FAns α
 def back (e : (q : FQ) → FAns q) : (q : Scala.Q) → Scala.Ans q
   | .decl n o => e (n, o)
 
-theorem run_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Zinc.Task Scala.Q Scala.Ans α,
+theorem run_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Query.Task Scala.Q Scala.Ans α,
     (tr t).run e = t.run (back e)
   | .pure _ => rfl
-  | .ask (.decl n o) k => by simp only [tr, Zinc.Task.run_ask]; exact run_tr e (k (e (n, o)))
+  | .ask (.decl n o) k => by simp only [tr, Query.Task.run_ask]; exact run_tr e (k (e (n, o)))
 
 def fq : Scala.Q → FQ
   | .decl n o => (n, o)
 
-theorem trace_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Zinc.Task Scala.Q Scala.Ans α,
+theorem trace_tr {α : Type} (e : (q : FQ) → FAns q) : ∀ t : Query.Task Scala.Q Scala.Ans α,
     (tr t).trace e = (t.trace (back e)).map fq
   | .pure _ => rfl
   | .ask (.decl n o) k => by
-    simp only [tr, Zinc.Task.trace_ask, List.map_cons]
+    simp only [tr, Query.Task.trace_ask, List.map_cons]
     exact congrArg _ (trace_tr e (k (e (n, o))))
 
 /-- A unit's interface: its class and object declarations, if it exists. -/
@@ -209,7 +211,7 @@ def side (I : String → Iface) (q : FQ) : Option Decl :=
 
 def answer (I : String → Iface) (q : FQ) : FAns q := (side I q).map fun d => { decl := d }
 
-def unit (dl : Dialect) : Option Scala.Src → Zinc.Task FQ FAns Out
+def unit (dl : Dialect) : Option Scala.Src → Query.Task FQ FAns Out
   | none => .pure ⟨none, .error "absent"⟩
   | some s => (tr (lowerSrc dl s).run).bind fun r => .pure ⟨some (s.cls, s.obj), r⟩
 
@@ -225,7 +227,7 @@ def group (dl : Dialect) (G : Finset String) (src : String → Option Scala.Src)
 
 /-- Lowering, with the `searched` bridge: a key per traced query, hashed by the declaration it read. -/
 def compiler (dl : Dialect) :
-    Zinc.XCompiler String (Option Scala.Src) Out Iface Bool (Option Decl) Bool (fun _ => Option View) where
+    IncComp.XCompiler String (Option Scala.Src) Out Iface Bool (Option Decl) Bool (fun _ => Option View) where
   unit := unit dl
   group := group dl
   iface := Out.iface
@@ -240,7 +242,7 @@ theorem searched_obligations (dl : Dialect) : (compiler dl).Obligations where
     show (unit dl (src u)).run (answer _) = (unit dl (src u)).run (answer _)
     congr 2
     funext v
-    simp only [Zinc.XCompiler.override, compiler, Function.comp, group, iface_unit]
+    simp only [IncComp.XCompiler.override, compiler, Function.comp, group, iface_unit]
   coverage I _ s q hq := ⟨q, List.mem_toFinset.2 hq, rfl⟩
   abstraction I I' k h q hc := by
     subst hc
@@ -270,13 +272,13 @@ def afterWorld (us : List String) (clean : String → Out) (c : String) (old : O
   worldOf us fun u => if u = c then old else clean u
 
 /-- **Track B4 for lowering.** Under the `searched` bridge (or any bridge meeting the obligations, by
-`Zinc.XCompiler.untouched_eq_clean`), a client `c` that Zinc's loop never recompiled links against
+`IncComp.XCompiler.untouched_eq_clean`), a client `c` that Zinc's loop never recompiled links against
 the new library exactly as a fresh build does. -/
 theorem after_eq_fresh (dl : Dialect) (us : List String) (S : Finset String)
-    (src : String → Option Scala.Src) (P : Zinc.Compiler.Policy String Out Bool) (hP : P.Sound S)
-    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : Zinc.Compiler.State String Out Bool)
+    (src : String → Option Scala.Src) (P : IncComp.Compiler.Policy String Out Bool) (hP : P.Sound S)
+    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : IncComp.Compiler.State String Out Bool)
     (hD : D ⊆ R₀) (hR₀ : R₀ ⊆ S) (hInv : (compiler dl).Inv S src s D)
-    (s' : Zinc.Compiler.State String Out Bool) (h : (compiler dl).zinc S src P fuel 0 R₀ s = some s')
+    (s' : IncComp.Compiler.State String Out Bool) (h : (compiler dl).zinc S src P fuel 0 R₀ s = some s')
     (c : String) (hc : c ∉ (compiler dl).recompiled S src P fuel 0 R₀ s)
     (p : Jvm.Program String String String) :
     Jvm.outcome (afterWorld us ((compiler dl).cleanFrom S src s) c (s.out c)) p =
@@ -293,10 +295,10 @@ theorem after_eq_fresh (dl : Dialect) (us : List String) (S : Finset String)
 /-- **Compatible, from Zinc-clean.** If the fresh build links, the old client classfiles link
 against the new library. -/
 theorem compatible_of_untouched (dl : Dialect) (us : List String) (S : Finset String)
-    (src : String → Option Scala.Src) (P : Zinc.Compiler.Policy String Out Bool) (hP : P.Sound S)
-    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : Zinc.Compiler.State String Out Bool)
+    (src : String → Option Scala.Src) (P : IncComp.Compiler.Policy String Out Bool) (hP : P.Sound S)
+    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : IncComp.Compiler.State String Out Bool)
     (hD : D ⊆ R₀) (hR₀ : R₀ ⊆ S) (hInv : (compiler dl).Inv S src s D)
-    (s' : Zinc.Compiler.State String Out Bool) (h : (compiler dl).zinc S src P fuel 0 R₀ s = some s')
+    (s' : IncComp.Compiler.State String Out Bool) (h : (compiler dl).zinc S src P fuel 0 R₀ s = some s')
     (c : String) (hc : c ∉ (compiler dl).recompiled S src P fuel 0 R₀ s)
     (p : Jvm.Program String String String) (w₀ : Jvm.World String String String)
     (hfresh : (Jvm.outcome (worldOf us ((compiler dl).cleanFrom S src s)) p).toBool = true) :
@@ -335,4 +337,4 @@ theorem gap_witness :
   intro _
   decide +kernel
 
-end BinCompat.ZincBridge
+end Links.ZincBridge

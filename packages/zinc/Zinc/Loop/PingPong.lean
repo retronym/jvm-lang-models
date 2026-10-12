@@ -43,6 +43,8 @@ next round, 180 never stop, every one on a three-class cycle; 936 stop after rou
 `transitiveStep 3` would already apply. With `transitiveStep 3`, none.
 -/
 
+open Query IncComp
+
 namespace Zinc.PingPong
 
 open Compiler (State Policy)
@@ -72,7 +74,7 @@ theorem Src.f_three (s : Src) : s.f 3 = 3 := by simp [Src.f]
 abbrev Out := ℕ
 abbrev Iface := ℕ
 
-def unit (s : Src) : Task (U × Q) (fun p => Ans p.2) Out :=
+def unit (s : Src) : Query.Task (U × Q) (fun p => Ans p.2) Out :=
   .ask (s.reads, .val) fun v => .pure (s.f v)
 
 /-- The values of a group's classes: follow the reads inside the group, from the interfaces of
@@ -89,7 +91,7 @@ theorem val_stable (G : Finset U) (rd : U → U) (f : U → ℕ → ℕ) (ext : 
     by_cases a : U.A ∈ G <;> by_cases b : U.B ∈ G <;> by_cases c : U.C ∈ G <;>
     simp [hA, hB, hC, a, b, c, hf]
 
-def group (G : Finset U) (src : U → Src) (e : Task.Env (U × Q) (fun p => Ans p.2)) : U → Out :=
+def group (G : Finset U) (src : U → Src) (e : Query.Task.Env (U × Q) (fun p => Ans p.2)) : U → Out :=
   fun u => if u ∈ G then val G (fun x => (src x).reads) (fun x => (src x).f) (fun x => e (x, .val)) 3 u
     else 0
 
@@ -106,7 +108,7 @@ theorem obligations : compiler.Obligations where
   comp := by
     intro G src e d hd
     show group G src e d = (unit (src d)).run _
-    simp only [unit, Task.run_ask, Task.run_pure, Compiler.override, compiler, Function.comp, id]
+    simp only [unit, Query.Task.run_ask, Query.Task.run_pure, Compiler.override, compiler, Function.comp, id]
     simp only [group, hd, ite_true]
     rw [show (3 : ℕ) = 2 + 1 from rfl, val]
     by_cases hr : (src d).reads ∈ G

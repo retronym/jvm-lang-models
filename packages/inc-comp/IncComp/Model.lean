@@ -20,14 +20,16 @@ from the output (`TCompiler`, `Tree.lean`), a hash that reads several units (`GC
 T5 and the monotone regimes of T4 are proved once; every variant's theorems are corollaries.
 -/
 
-namespace Zinc
+open Query
+
+namespace IncComp
 
 /-- The compiler as seen by Zinc. `CUnit` is a compilation unit (a class, for Zinc ≥ 1.0). -/
 structure Compiler (CUnit Src Out Iface K Hash Q : Type) (A : Q → Type) where
   /-- `F_d`: compile one unit against an oracle. -/
-  unit   : Src → Task (CUnit × Q) (fun p => A p.2) Out
+  unit   : Src → Query.Task (CUnit × Q) (fun p => A p.2) Out
   /-- Joint compilation of a group against an oracle for everything else. -/
-  group  : Finset CUnit → (CUnit → Src) → Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
+  group  : Finset CUnit → (CUnit → Src) → Query.Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
   /-- The interface of an output (classfile / TASTy view). -/
   iface  : Out → Iface
   /-- Answer a query from an interface. -/
@@ -44,7 +46,7 @@ namespace Compiler
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : Compiler CUnit Src Out Iface K Hash Q A)
 
-abbrev Env := Task.Env (CUnit × Q) (fun p => A p.2)
+abbrev Env := Query.Task.Env (CUnit × Q) (fun p => A p.2)
 
 /-- The oracle induced by an interface per unit. -/
 def envOf (I : CUnit → Iface) : Env (CUnit := CUnit) (Q := Q) (A := A) :=
@@ -141,4 +143,4 @@ def clean (S : Finset CUnit) (src : CUnit → Src) (ext : Env (CUnit := CUnit) (
   C.group S src ext
 
 end Compiler
-end Zinc
+end IncComp

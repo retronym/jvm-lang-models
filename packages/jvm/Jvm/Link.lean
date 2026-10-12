@@ -25,6 +25,8 @@ the first site that hits it; a class is loaded, with its loading checks, when it
 to, and each site is verified just before it runs (as if each site were its own method).
 -/
 
+open Query
+
 namespace Jvm
 
 variable {C N D : Type} [DecidableEq C] [DecidableEq N] [DecidableEq D]
@@ -123,21 +125,21 @@ inductive LinkError
   | noSuchField
   deriving DecidableEq, Repr
 
-abbrev L (C N D : Type) := Zinc.Task (Q C N D) Ans
+abbrev L (C N D : Type) := Query.Task (Q C N D) Ans
 
 abbrev M (C N D : Type) := ExceptT LinkError (L C N D)
 
 def askHeader (c : C) : M C N D (Option (Header C)) :=
-  ExceptT.lift (Zinc.Task.ask (.header c) Zinc.Task.pure : L C N D (Option (Header C)))
+  ExceptT.lift (Query.Task.ask (.header c) Query.Task.pure : L C N D (Option (Header C)))
 
 def askMethod (c : C) (n : N) (d : D) : M C N D (Option MethodInfo) :=
-  ExceptT.lift (Zinc.Task.ask (.method c n d) Zinc.Task.pure : L C N D (Option MethodInfo))
+  ExceptT.lift (Query.Task.ask (.method c n d) Query.Task.pure : L C N D (Option MethodInfo))
 
 def askDeclared (c : C) : M C N D (List (N × D × MethodInfo)) :=
-  ExceptT.lift (Zinc.Task.ask (.declared c) Zinc.Task.pure : L C N D (List (N × D × MethodInfo)))
+  ExceptT.lift (Query.Task.ask (.declared c) Query.Task.pure : L C N D (List (N × D × MethodInfo)))
 
 def askField (c : C) (n : N) (d : D) : M C N D (Option FieldInfo) :=
-  ExceptT.lift (Zinc.Task.ask (.field c n d) Zinc.Task.pure : L C N D (Option FieldInfo))
+  ExceptT.lift (Query.Task.ask (.field c n d) Query.Task.pure : L C N D (Option FieldInfo))
 
 def hdr (c : C) : M C N D (Header C) := do
   match ← askHeader c with
@@ -539,7 +541,7 @@ def footprint (w : World C N D) (p : Program C N D) : List (Q C N D) :=
 links the client the same way. -/
 theorem link_congr (w w' : World C N D) (p : Program C N D)
     (h : ∀ q ∈ footprint w p, answer w q = answer w' q) : outcome w p = outcome w' p :=
-  Zinc.Task.run_congr _ _ _ h
+  Query.Task.run_congr _ _ _ h
 
 /-- MiMa's question for one client: an edit is *linkage-compatible* for `p` if `p` still links
 whenever it did. Agreement on the footprint is sufficient (`link_congr`), not necessary: adding a

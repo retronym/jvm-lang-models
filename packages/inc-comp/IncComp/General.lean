@@ -15,10 +15,12 @@ first page; `XCompiler` is where its theorems are proved once.
 through their lifts (`toX` in `Soundness.lean`, `NonLocal.lean`, `NonLocalAns.lean` and `Tree.lean`), round for round.
 -/
 
-namespace Zinc
+open Query
+
+namespace IncComp
 
 structure XCompiler (CUnit Src Out Iface K Hash Q : Type) (A : Q → Type) where
-  unit   : Src → Task (CUnit × Q) (fun p => A p.2) Out
+  unit   : Src → Query.Task (CUnit × Q) (fun p => A p.2) Out
   /-- Joint compilation of a group against the interfaces of everything else. -/
   group  : Finset CUnit → (CUnit → Src) → (CUnit → Iface) → (CUnit → Out)
   iface  : Out → Iface
@@ -147,7 +149,7 @@ theorem round_preserves (ob : C.Obligations) (S : Finset CUnit) (src : CUnit →
       intro q hq
       obtain ⟨k, hk, hcovers⟩ := hcov q hq
       exact (ob.abstraction _ _ k (hhash k hk) q hcovers).1
-    obtain ⟨hrun, htrace⟩ := Task.run_eq_of_trace _ _ _ hagree
+    obtain ⟨hrun, htrace⟩ := Query.Task.run_eq_of_trace _ _ _ hagree
     refine ⟨?_, ?_⟩
     · rw [hout', hout, hrun]
     · rw [← htrace, hU]
@@ -232,14 +234,14 @@ theorem zinc_some_of_monotoneFrom (S : Finset CUnit) (src : CUnit → Src) (P : 
       · exact ih (n + 1) _ _ (hPS _ _ _ _ _ (Finset.filter_subset _ _)) (by omega)
 
 end XCompiler
-end Zinc
+end IncComp
 
 /-! ## The classpath: upstream subprojects, stored snapshots (T5)
 
 `Classpath.lean`'s definitions and theorems, once, for the general form; `Classpath.lean` states
 them for `NCompiler` as corollaries. -/
 
-namespace Zinc.XCompiler
+namespace IncComp.XCompiler
 
 open Compiler (State Policy)
 
@@ -300,7 +302,7 @@ theorem inv_external (hab : C.Abstraction) (Up S : Finset CUnit) (hdisj : Disjoi
     intro q hq
     obtain ⟨k, hk, hc⟩ := hcov q hq
     exact (hab _ _ k (hhash k hk) q hc).1
-  obtain ⟨hrun, htrace⟩ := Task.run_eq_of_trace _ _ _ hagree
+  obtain ⟨hrun, htrace⟩ := Query.Task.run_eq_of_trace _ _ _ hagree
   have huUp : u ∉ Up := fun h => Finset.disjoint_left.1 hdisj h huS
   refine ⟨?_, ?_⟩
   · show s₁.out u = _
@@ -400,4 +402,4 @@ theorem fresh_refreshRef_local (ob : C.Obligations) (hloc : ∀ I c, C.hashDeps 
   · apply hpt
     simp only [snapView, hkUp, ite_false]
 
-end Zinc.XCompiler
+end IncComp.XCompiler

@@ -26,7 +26,7 @@ Start from a bug you know: find it in `bug-map.md`, which names the Lean file an
 | package | notes |
 |---|---|
 | `zinc` | [one record per phase](../packages/zinc/docs/README.md), 10 to 28: the question, the design, the results; the index says what each phase proved and checked |
-| `inc-comp` | [`framework-merge.md`](../packages/inc-comp/docs/framework-merge.md): how the four compiler variants became one [`XCompiler`](../packages/inc-comp/IncComp/General.lean#L20) |
+| `inc-comp` | [`framework-merge.md`](../packages/inc-comp/docs/framework-merge.md): how the four compiler variants became one [`XCompiler`](../packages/inc-comp/IncComp/General.lean#L22) |
 | `jvm`, `java`, `scala`, `mima` | the calibration tracks: [`track-j.md`](../packages/jvm/docs/track-j.md), [`track-java.md`](../packages/java/docs/track-java.md), [`track-s.md`](../packages/scala/docs/track-s.md), [`track-b.md`](../packages/mima/docs/track-b.md) |
 
 ## History: how it got here

@@ -2,7 +2,7 @@
 
 ## Question
 
-[`Uniqueness.lean`](../../inc-comp/IncComp/Uniqueness.lean) proves a per-unit fixed point equals the clean build under acyclic traced dependencies ([`fixpoint_unique_of_wf`](../../inc-comp/IncComp/Uniqueness.lean#L64)) or source-determined interfaces (`fixpoint_unique_of_explicit`). Scala members whose result types are inferred from each other satisfy neither. Is there an edit where Zinc's keys are sound (the obligations hold, so the loop stops in a per-unit fixed point, T3a) and the result still differs from the clean build? And can any key fix it?
+[`Uniqueness.lean`](../../inc-comp/IncComp/Uniqueness.lean) proves a per-unit fixed point equals the clean build under acyclic traced dependencies ([`fixpoint_unique_of_wf`](../../inc-comp/IncComp/Uniqueness.lean#L66)) or source-determined interfaces (`fixpoint_unique_of_explicit`). Scala members whose result types are inferred from each other satisfy neither. Is there an edit where Zinc's keys are sound (the obligations hold, so the loop stops in a per-unit fixed point, T3a) and the result still differs from the clean build? And can any key fix it?
 
 ## Probed (scalac 2.13.16, 3.3.6, by scala-cli)
 
@@ -17,9 +17,9 @@ Units `a`, `b`; a unit's interface is its member's type (`none`: an error). `ann
 | Result | Status |
 |---|---|
 | `obligations`: the compiler meets comp, coverage, abstraction (on any source type, including the annotated subtype) | proved, every program |
-| [`zinc_stops_at_old`](../Zinc/Loop/Cycles.lean#L182), [`clean_fails`](../Zinc/Loop/Cycles.lean#L187), [`zinc_ne_clean`](../Zinc/Loop/Cycles.lean#L189): from the clean build of `A.x: Int = B.y`, `B.y = A.x`, removing the annotation, Zinc's loop recompiles `A`, stops with both `Int`; the clean build has both in error | proved, kernel `decide` |
-| [`two_fixpoints`](../Zinc/Loop/Cycles.lean#L194): both outcomes are per-unit fixed points of the edited sources | proved |
-| [`annotated_eq_clean`](../Zinc/Loop/Cycles.lean#L218): with every member annotated, Zinc's result is the clean build, every program, edit and sound policy (T3 via `zinc_eq_clean_of_explicit`) | proved |
+| [`zinc_stops_at_old`](../Zinc/Loop/Cycles.lean#L184), [`clean_fails`](../Zinc/Loop/Cycles.lean#L189), [`zinc_ne_clean`](../Zinc/Loop/Cycles.lean#L191): from the clean build of `A.x: Int = B.y`, `B.y = A.x`, removing the annotation, Zinc's loop recompiles `A`, stops with both `Int`; the clean build has both in error | proved, kernel `decide` |
+| [`two_fixpoints`](../Zinc/Loop/Cycles.lean#L196): both outcomes are per-unit fixed points of the edited sources | proved |
+| [`annotated_eq_clean`](../Zinc/Loop/Cycles.lean#L220): with every member annotated, Zinc's result is the clean build, every program, edit and sound policy (T3 via `zinc_eq_clean_of_explicit`) | proved |
 | C1, C2 on Zinc's real loop (next round = invalidated ∪ API-changed, abort on an error) | checked (`example`s) and on the harness |
 
 Families, on Zinc `develop` (the harness agrees with the model on all 36 edits, Scala 2.13 and 3, verdicts and recompiled classes):
@@ -31,7 +31,7 @@ Nothing is stale in either: the incremental state is a per-unit fixed point; it 
 
 ## Policies
 
-* **No key fixes this.** The obligations hold; what differs is which fixed point, and that is decided by what is compiled jointly. The remedies are joint recompilation of the cycle, or annotations ([`annotated_eq_clean`](../Zinc/Loop/Cycles.lean#L218)).
+* **No key fixes this.** The obligations hold; what differs is which fixed point, and that is decided by what is compiled jointly. The remedies are joint recompilation of the cycle, or annotations ([`annotated_eq_clean`](../Zinc/Loop/Cycles.lean#L220)).
 * [sbt/zinc#1284](https://github.com/sbt/zinc/issues/1284) (merged 2023, reverted by #1462): in the first round, add every unit with member-ref edges both to and from a changed unit. Clean on this space (`Mode.mutual`), but it fires on every edit inside a 2-cycle, a comment included (#1462: "invalidating everything based on whitespace"), and misses longer cycles.
 * The precise rule (`Mode.precise`): add the cycle through a changed unit only when the edit changes whether, or how, a member's type is written. Clean on this space with 36 unit recompilations against #1284's 48 (the body-only edits). For longer cycles it needs the strongly connected component of the member-ref graph, which Zinc can compute from its relations; it fires only on annotation edits inside a cycle, which are rare.
 * [sbt/zinc#1780](https://github.com/sbt/zinc/issues/1780) (open; retry the first round with "bridging" classes, the forward ∩ backward closure of the changed classes, when it fails; `Mode.retry`): clean on C2 (the round-1 type mismatch triggers a joint retry), not on C1 (round 1 compiles, at the wrong fixed point, so nothing triggers). Run against #1780's branch: the scripted tests `inferred-type-cycle-annotation-changed{,-scala3}` pass, `inferred-type-cycle-annotation-removed{,-scala3}` still fail. On the space: 4 of 36 edits unclean (every C1), 36 unit compilations (failed round included).

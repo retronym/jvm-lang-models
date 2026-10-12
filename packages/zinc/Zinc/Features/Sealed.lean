@@ -16,6 +16,8 @@ adding a permitted subclass leaves the client without its exhaustivity warning
 (`java_permits_wrong`, the case of retronym/zinc#21, which reads `getPermittedSubclasses`).
 -/
 
+open Query IncComp
+
 namespace Zinc.Sealed
 
 open Compiler (State Policy)
@@ -50,8 +52,8 @@ abbrev Ans (_ : Q) : Type := Iface
 inductive K | sealedChildren
   deriving DecidableEq, Repr
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
-abbrev Env := Task.Env (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (Cls × Q) (fun p => Ans p.2)
 
 def unit : Src → T Out
   | .sealedParent cs => .pure ⟨some cs, []⟩

@@ -17,6 +17,8 @@ its trait ancestors' private members); a user of `A.x` reads one half's `x`.
   forms of one hash, cold (no fold) and warm (folded): `HashForms.unstable_spurious`.
 -/
 
+open IncComp
+
 namespace Zinc.ExtraHash
 
 inductive Ns | type | term

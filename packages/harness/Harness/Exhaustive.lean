@@ -13,6 +13,7 @@ import Zinc.Loop.PingPong
 * `exhaustive implicit`: `packages/zinc/Zinc/Features/ImplicitScope.lean`, for every variant the unclean runs, the
   wasted recompiles, and the client recompiles against the in-project fallback. -/
 
+
 section rules
 open Zinc.Flat
 
@@ -321,7 +322,7 @@ section pingpong
 
 namespace PP
 open Zinc.PingPong (U compiler zincPolicy)
-open Zinc.Compiler (State Policy)
+open IncComp.Compiler (State Policy)
 
 abbrev PState := State U Zinc.PingPong.Out Zinc.PingPong.K
 

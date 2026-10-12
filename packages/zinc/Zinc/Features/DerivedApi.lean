@@ -23,6 +23,8 @@ member; `assign` names `b` and `p`); `fix` adds the exporter's edge to the expor
 * `usedType_not_coverage`: `assign`'s `parents` query on the value's type has no key today.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.DerivedApi
@@ -77,8 +79,8 @@ structure Out (U : Type) where
   /-- What the fix adds: the exported object, the type of a value used. -/
   derived : List U
 
-abbrev T (U : Type) := Task (U × Q) (fun p => Ans U p.2)
-abbrev Env (U : Type) := Task.Env (U × Q) (fun p => Ans U p.2)
+abbrev T (U : Type) := Query.Task (U × Q) (fun p => Ans U p.2)
+abbrev Env (U : Type) := Query.Task.Env (U × Q) (fun p => Ans U p.2)
 
 def unit : Src U → T U (Out U)
   | .absent => .pure ⟨.none, true, [], []⟩
@@ -137,11 +139,11 @@ theorem answer_kind (s : Src U) (e : Env U) (q : Q) (hq : q ≠ .sig) :
   | holder v => rfl
   | cls ps => rfl
   | member n => rfl
-  | exporter a => simp only [unit, Task.run_ask, Task.run_pure, kindIface]; cases q <;> simp_all [answer]
+  | exporter a => simp only [unit, Query.Task.run_ask, Query.Task.run_pure, kindIface]; cases q <;> simp_all [answer]
   | assign b p =>
-    simp only [unit, Task.run_ask, kindIface]
-    split <;> simp only [Task.run_ask, Task.run_pure] <;> cases q <;> simp_all [answer]
-  | call b => simp only [unit, Task.run_ask, Task.run_pure, kindIface]; cases q <;> simp_all [answer]
+    simp only [unit, Query.Task.run_ask, kindIface]
+    split <;> simp only [Query.Task.run_ask, Query.Task.run_pure] <;> cases q <;> simp_all [answer]
+  | call b => simp only [unit, Query.Task.run_ask, Query.Task.run_pure, kindIface]; cases q <;> simp_all [answer]
 
 /-- An exporter asks no `sig`. -/
 theorem trace_exporter (a : U) (e : Env U) : ∀ q ∈ (unit (.exporter a)).trace e, q.2 ≠ .sig := by
@@ -154,9 +156,9 @@ theorem sig_stable (s : Src U) (e e' : Env U) (h : ∀ p : U × Q, p.2 ≠ .sig 
   | holder v => rfl
   | cls ps => rfl
   | member n => rfl
-  | exporter a => rw [Task.run_congr (unit (.exporter a)) e e' (fun q hq => h q (trace_exporter a e q hq))]
+  | exporter a => rw [Query.Task.run_congr (unit (.exporter a)) e e' (fun q hq => h q (trace_exporter a e q hq))]
   | assign b p =>
-    simp only [unit, Task.run_ask]
+    simp only [unit, Query.Task.run_ask]
     split <;> split <;> simp [answer]
   | call b => simp [unit, answer]
 
@@ -193,13 +195,13 @@ theorem trace_units (s : Src U) (e : Env U) :
   | exporter a => simp [unit] at hq; subst hq; simp [unit]
   | call b => simp [unit] at hq; subst hq; simp [unit]
   | assign b p =>
-    simp only [unit, Task.trace_ask, Task.run_ask, List.mem_cons] at hq ⊢
+    simp only [unit, Query.Task.trace_ask, Query.Task.run_ask, List.mem_cons] at hq ⊢
     rcases hq with rfl | hq
     · split <;> simp
     · revert hq
       split
       · simp
-      · simp only [Task.trace_ask, Task.run_ask, Task.trace_pure, Task.run_pure, List.mem_cons,
+      · simp only [Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_pure, Query.Task.run_pure, List.mem_cons,
           List.not_mem_nil, or_false]
         rintro rfl
         simp

@@ -41,9 +41,11 @@ Two witnesses, both kernel `decide` or `simp` on concrete programs:
   obligations for every program (`kept_obligations`), hence T3a (`kept_sound`).
 -/
 
-namespace Zinc.XCompiler
+open Query IncComp
 
-open Compiler (State Policy)
+namespace IncComp.XCompiler
+
+open IncComp.Compiler (State Policy)
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : XCompiler CUnit Src Out Iface K Hash Q A)
@@ -156,7 +158,7 @@ theorem round_preserves_charged (ob : C.Charged file charge) (hcf : ∀ f, file 
       intro q hq
       obtain ⟨k, hk, hcovers⟩ := hcov q hq
       exact (ob.abstraction _ _ k (hhash k hk) q hcovers).1
-    obtain ⟨hrun, htrace⟩ := Task.run_eq_of_trace _ _ _ hagree
+    obtain ⟨hrun, htrace⟩ := Query.Task.run_eq_of_trace _ _ _ hagree
     refine ⟨?_, ?_⟩
     · rw [hout', hout, hrun]
     · rw [← htrace, hU]
@@ -165,7 +167,7 @@ theorem round_preserves_charged (ob : C.Charged file charge) (hcf : ∀ f, file 
       exact ⟨k, hk, (ob.abstraction _ _ k (hhash k hk) q hcovers).2⟩
 
 /-- A policy is file-closed when every round it chooses is. -/
-def _root_.Zinc.Compiler.Policy.FileClosed (P : Policy CUnit Out K) : Prop :=
+def _root_.IncComp.Compiler.Policy.FileClosed (P : Policy CUnit Out K) : Prop :=
   ∀ n R s s' I, Closed file (P n R s s' I)
 
 /-- **T3a under charging.** Hypotheses: the charged obligations; every representative is a class
@@ -271,7 +273,7 @@ theorem inv_external_charged (hab : C.Abstraction) (Up S : Finset CUnit) (hdisj 
     intro q hq
     obtain ⟨k, hk, hc⟩ := hcov q hq
     exact (hab _ _ k (hhash k hk) q hc).1
-  obtain ⟨hrun, htrace⟩ := Task.run_eq_of_trace _ _ _ hagree
+  obtain ⟨hrun, htrace⟩ := Query.Task.run_eq_of_trace _ _ _ hagree
   have huUp : u ∉ Up := fun h => Finset.disjoint_left.1 hdisj h huS
   refine ⟨?_, ?_⟩
   · show s₁.out u = _
@@ -301,7 +303,7 @@ theorem downstream_sound_charged (ob : C.Charged file charge) (hcf : ∀ f, file
     hR₀F (C.inv_external_charged file charge ob.abstraction Up S hdisj hS src₀ src s snap o D hD
       hInv hFresh) s' h
 
-end Zinc.XCompiler
+end IncComp.XCompiler
 
 /-! ## F3: a two-class client file on `Spec`'s lookup -/
 
@@ -321,23 +323,23 @@ inductive FSrc (n : ℕ)
 
 def liftQ (q : Spec.U n × Spec.Q) : FU n × Spec.Q := (some q.1, q.2)
 
-def lift {α : Type} : Task (Spec.U n × Spec.Q) (fun _ => Bool) α → Task (FU n × Spec.Q) (fun _ => Bool) α
+def lift {α : Type} : Query.Task (Spec.U n × Spec.Q) (fun _ => Bool) α → Query.Task (FU n × Spec.Q) (fun _ => Bool) α
   | .pure a => .pure a
   | .ask q k => .ask (liftQ q) fun x => lift (k x)
 
 theorem run_lift {α : Type} (e : FU n × Spec.Q → Bool) :
-    ∀ t : Task (Spec.U n × Spec.Q) (fun _ => Bool) α, (lift t).run e = t.run (e ∘ liftQ)
+    ∀ t : Query.Task (Spec.U n × Spec.Q) (fun _ => Bool) α, (lift t).run e = t.run (e ∘ liftQ)
   | .pure _ => rfl
-  | .ask q k => by simp only [lift, Task.run_ask]; exact run_lift e (k (e (liftQ q)))
+  | .ask q k => by simp only [lift, Query.Task.run_ask]; exact run_lift e (k (e (liftQ q)))
 
 theorem trace_lift {α : Type} (e : FU n × Spec.Q → Bool) :
-    ∀ t : Task (Spec.U n × Spec.Q) (fun _ => Bool) α, (lift t).trace e = (t.trace (e ∘ liftQ)).map liftQ
+    ∀ t : Query.Task (Spec.U n × Spec.Q) (fun _ => Bool) α, (lift t).trace e = (t.trace (e ∘ liftQ)).map liftQ
   | .pure _ => rfl
   | .ask q k => by
-    simp only [lift, Task.trace_ask, List.map_cons]
+    simp only [lift, Query.Task.trace_ask, List.map_cons]
     exact congrArg _ (trace_lift e (k (e (liftQ q))))
 
-def unit : FSrc n → Task (FU n × Spec.Q) (fun _ => Bool) Spec.Out
+def unit : FSrc n → Query.Task (FU n × Spec.Q) (fun _ => Bool) Spec.Out
   | .spec s => lift (Spec.unit n s)
   | .other => .pure ⟨false, none⟩
 
@@ -519,12 +521,12 @@ structure CSrc where
 abbrev Out := CSrc × List ℕ
 
 /-- Lowering a class reads its ancestors' declarations (its linearization), to depth `k`. -/
-def walk : ℕ → List Cls → Task (Cls × Unit) (fun _ => CSrc) (List ℕ)
+def walk : ℕ → List Cls → Query.Task (Cls × Unit) (fun _ => CSrc) (List ℕ)
   | 0, _ => .pure []
   | k + 1, ps => ps.foldr (fun p acc => .ask (p, ()) fun sp =>
       (walk k sp.parents).bind fun l₁ => acc.bind fun l₂ => .pure (sp.body :: l₁ ++ l₂)) (.pure [])
 
-def unit (s : CSrc) : Task (Cls × Unit) (fun _ => CSrc) Out :=
+def unit (s : CSrc) : Query.Task (Cls × Unit) (fun _ => CSrc) Out :=
   (walk 3 s.parents).bind fun l => .pure (s, l)
 
 def answer (I : Cls → CSrc) (q : Cls × Unit) : CSrc := I q.1
@@ -628,7 +630,7 @@ theorem walk_trace (I : Cls → CSrc) (k : ℕ) :
     | nil => intro q hq; simp [walk] at hq
     | cons p ps ihps =>
       intro q hq
-      rw [walk_cons, Task.trace_ask, Task.trace_bind, Task.trace_bind, Task.trace_pure,
+      rw [walk_cons, Query.Task.trace_ask, Query.Task.trace_bind, Query.Task.trace_bind, Query.Task.trace_pure,
         List.append_nil] at hq
       rcases List.mem_cons.1 hq with rfl | hq
       · exact ⟨p, List.mem_cons_self .., by simp [anc_succ]⟩
@@ -639,7 +641,7 @@ theorem walk_trace (I : Cls → CSrc) (k : ℕ) :
       · obtain ⟨p', hp', hq'⟩ := ihps q hq
         exact ⟨p', List.mem_cons_of_mem _ hp', hq'⟩
 
-theorem iface_run (s : CSrc) (e : Task.Env (Cls × Unit) (fun _ => CSrc)) :
+theorem iface_run (s : CSrc) (e : Query.Task.Env (Cls × Unit) (fun _ => CSrc)) :
     ((unit s).run e).1 = s := by
   simp [unit]
 
@@ -660,7 +662,7 @@ theorem coverage (I : Cls → CSrc) (d : Cls) (s : CSrc) :
         (compiler false).covers I q k := by
   intro q hq
   change q ∈ (unit s).trace (answer I) at hq
-  simp only [unit, Task.trace_bind, Task.trace_pure, List.append_nil] at hq
+  simp only [unit, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at hq
   obtain ⟨p, hp, hq⟩ := walk_trace I 3 s.parents q hq
   refine ⟨(p, ()), ?_, hq⟩
   change (p, ()) ∈ (((unit s).run (answer I)).1.parents.map fun p => (p, ())).toFinset

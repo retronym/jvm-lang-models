@@ -11,9 +11,11 @@ import Zinc.Bridges.Hier
   is that walk's verifying trace.
 -/
 
+open IncComp
+
 namespace Zinc.Hier
 
-open Zinc.Task
+open Query.Task
 
 /-! ## Traces of the walk -/
 
@@ -126,7 +128,7 @@ theorem mems_unitMat (s : Src) (e : Env) :
 theorem resolveFrom_congr (d : Decl) (n : Name) (e e' : Env)
     (h : ∀ q : Cls × Q, ((∃ n, q.2 = .decl n) ∨ q.2 = .parents) → e q = e' q) :
     (resolveFrom d n).run e = (resolveFrom d n).run e' :=
-  Task.run_congr _ e e' fun q hq => h q (trace_resolveFrom e d n q hq)
+  Query.Task.run_congr _ e e' fun q hq => h q (trace_resolveFrom e d n q hq)
 
 /-! ## `D`: decls + walk -/
 

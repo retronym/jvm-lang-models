@@ -51,6 +51,8 @@ check the PoC's literal `Δ` domain (`R ∪ inheritance.reverse*(R)`) and the he
 policy instead of keys, and show what breaks without it or with a non-transitive one.
 -/
 
+open Query IncComp
+
 namespace Zinc.Flat
 
 open Zinc.Hier (Cls Name Ty allCls)
@@ -223,13 +225,13 @@ def answer (I : Cls → Iface) : Cls × Q → AnsV
   | (c, .all) => .obs (I c).decl.kind (allFlat I c)
   | (c, .under _) => .ty (I c).decl.under
 
-abbrev T := Task (Cls × Q) (fun _ => AnsV)
+abbrev T := Query.Task (Cls × Q) (fun _ => AnsV)
 
-def askQ (c : Cls) (q : Q) : T AnsV := Task.ask (c, q) Task.pure
+def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
-@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).run e = e (c, q) := rfl
-@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).trace e = [(c, q)] := rfl
 
 /-! ## Linearization -/
@@ -590,7 +592,7 @@ def full : Kind → Bool := fun _ => true
 
 /-! ## Obligations -/
 
-theorem trace_parentLins (r : Cls → T Lin) (e : Task.Env (Cls × Q) (fun _ => AnsV))
+theorem trace_parentLins (r : Cls → T Lin) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV))
     (hr : ∀ p q, q ∈ (r p).trace e → q.2 = .parents) :
     ∀ ps q, q ∈ (parentLins r ps).trace e → q.2 = .parents := by
   intro ps
@@ -599,25 +601,25 @@ theorem trace_parentLins (r : Cls → T Lin) (e : Task.Env (Cls × Q) (fun _ => 
   | cons p rest ih =>
     intro q hq
     obtain ⟨c, a⟩ := p
-    simp only [parentLins, Task.bind_eq, Task.pure_eq, Task.trace_bind, Task.trace_pure,
+    simp only [parentLins, Query.Task.bind_eq, Query.Task.pure_eq, Query.Task.trace_bind, Query.Task.trace_pure,
       List.append_nil, List.mem_append] at hq
     rcases hq with hq | hq
     · exact hr c q hq
     · exact ih q hq
 
-theorem trace_ancestors (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+theorem trace_ancestors (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     ∀ fuel c q, q ∈ (ancestors fuel c).trace e → q.2 = .parents := by
   intro fuel
   induction fuel with
   | zero => intro c q hq; simp [ancestors] at hq
   | succ fuel ih =>
     intro c q hq
-    simp only [ancestors, Task.bind_eq, Task.trace_bind, trace_askQ, List.singleton_append,
+    simp only [ancestors, Query.Task.bind_eq, Query.Task.trace_bind, trace_askQ, List.singleton_append,
       List.mem_cons] at hq
     rcases hq with rfl | hq
     · rfl
     · split at hq
-      · simp only [Task.pure_eq, Task.trace_bind, Task.trace_pure,
+      · simp only [Query.Task.pure_eq, Query.Task.trace_bind, Query.Task.trace_pure,
           List.append_nil] at hq
         exact trace_parentLins _ e (fun p q hq => ih p q hq) _ q hq
       · simp at hq
@@ -627,7 +629,7 @@ theorem parentLins_congr (I I' : Cls → Iface) (h : ∀ c, (I c).decl.parents =
     (ps : List (Cls × Ty)) :
     (parentLins (ancestors depth) ps).run (answer I) =
       (parentLins (ancestors depth) ps).run (answer I') := by
-  apply Task.run_congr
+  apply Query.Task.run_congr
   intro q hq
   have := trace_parentLins _ _ (fun p q hq => trace_ancestors _ _ p q hq) ps q hq
   obtain ⟨c, q⟩ := q
@@ -635,7 +637,7 @@ theorem parentLins_congr (I I' : Cls → Iface) (h : ∀ c, (I c).decl.parents =
   subst this
   simp [answer, h c]
 
-theorem iface_unitF (s : Src) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+theorem iface_unitF (s : Src) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     ((unitF s).run e).iface = ⟨s.decl, merge ((parentLins (ancestors depth) s.decl.parents).run e)⟩ := by
   simp [unitF]
 

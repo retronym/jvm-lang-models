@@ -19,11 +19,13 @@ relates the trace to what the tree shows. T2 and T3a carry over with the same pr
 recording failed lookups, and anticipatory keys for the names a later phase will ask.
 -/
 
-namespace Zinc
+open Query
+
+namespace IncComp
 
 structure TCompiler (CUnit Src Out Iface K Hash Q : Type) (A : Q → Type) where
-  unit   : Src → Task (CUnit × Q) (fun p => A p.2) Out
-  group  : Finset CUnit → (CUnit → Src) → Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
+  unit   : Src → Query.Task (CUnit × Q) (fun p => A p.2) Out
+  group  : Finset CUnit → (CUnit → Src) → Query.Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
   iface  : Out → Iface
   answer : Iface → (q : Q) → A q
   π      : Iface → K → Hash
@@ -38,7 +40,7 @@ open Compiler (State Policy)
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : TCompiler CUnit Src Out Iface K Hash Q A)
 
-abbrev Env := Task.Env (CUnit × Q) (fun p => A p.2)
+abbrev Env := Query.Task.Env (CUnit × Q) (fun p => A p.2)
 
 def envOf (I : CUnit → Iface) : Env (CUnit := CUnit) (Q := Q) (A := A) :=
   fun p => C.answer (I p.1) p.2
@@ -160,4 +162,4 @@ theorem zinc_sound (ob : C.Obligations) (S : Finset CUnit) (src : CUnit → Src)
   exact C.toX.zinc_sound (C.toX_obligations ob) S src P hP fuel n R s D hD hInv s' h
 
 end TCompiler
-end Zinc
+end IncComp

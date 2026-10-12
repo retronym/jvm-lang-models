@@ -15,6 +15,8 @@ Interfaces are source-determined (explicit member types), so joint compilation i
 compositionality is a lemma.
 -/
 
+open Query IncComp
+
 namespace Zinc.Toy
 
 inductive Cls | A | B | C
@@ -118,9 +120,9 @@ def keysRepaired (tr : List (Cls × Q)) : Finset (Cls × K) :=
 
 /-! ## The per-unit task -/
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
 
-def askQ (c : Cls) (q : Q) : T (Ans q) := Task.ask (c, q) Task.pure
+def askQ (c : Cls) (q : Q) : T (Ans q) := Query.Task.ask (c, q) Query.Task.pure
 
 /-- Erasure: a value class erases to the erasure of its underlying type. The next query depends
 on the previous answer (a dynamic dependency); the depth is fuelled. -/
@@ -171,14 +173,14 @@ def compileUnit (s : Src) : T Out := do
   let (ds, is) ← compileBody s.body
   pure { iface := s.decl, descriptors := ds, implicits := is }
 
-theorem iface_run (s : Src) (e : Task.Env (Cls × Q) (fun p => Ans p.2)) :
+theorem iface_run (s : Src) (e : Query.Task.Env (Cls × Q) (fun p => Ans p.2)) :
     ((compileUnit s).run e).iface = s.decl := by
   simp [compileUnit]
 
 /-! ## The compiler, parameterised by the extractor -/
 
 /-- Joint compilation: every unit of the group sees its group-mates' source interfaces. -/
-def group (G : Finset Cls) (src : Cls → Src) (e : Task.Env (Cls × Q) (fun p => Ans p.2)) :
+def group (G : Finset Cls) (src : Cls → Src) (e : Query.Task.Env (Cls × Q) (fun p => Ans p.2)) :
     Cls → Out :=
   fun u => (compileUnit (src u)).run fun p => if p.1 ∈ G then answer (src p.1).decl p.2 else e p
 
@@ -193,7 +195,7 @@ def compiler (keys : List (Cls × Q) → Finset (Cls × K)) :
   covers := Covers
 
 /-- Compositionality holds for the toy compiler by construction. -/
-theorem comp (keys) : ∀ (G : Finset Cls) (src : Cls → Src) (e : Task.Env (Cls × Q) (fun p => Ans p.2)),
+theorem comp (keys) : ∀ (G : Finset Cls) (src : Cls → Src) (e : Query.Task.Env (Cls × Q) (fun p => Ans p.2)),
     ∀ d ∈ G, (compiler keys).group G src e d =
       ((compiler keys).unit (src d)).run ((compiler keys).override e G ((compiler keys).iface ∘ (compiler keys).group G src e)) := by
   intro G src e d _
@@ -232,7 +234,7 @@ theorem not_obligations_nameOnly : ¬ (compiler keysNameOnly).Obligations := by
   simp [compiler, keysNameOnly] at hk
 
 /-- Interfaces are source-determined, so T3b's explicit-interface hypothesis holds. -/
-theorem explicit (keys) : ∀ (sr : Src) (e : Task.Env (Cls × Q) (fun p => Ans p.2)),
+theorem explicit (keys) : ∀ (sr : Src) (e : Query.Task.Env (Cls × Q) (fun p => Ans p.2)),
     (compiler keys).iface (((compiler keys).unit sr).run e) = sr.decl :=
   fun sr e => iface_run sr e
 

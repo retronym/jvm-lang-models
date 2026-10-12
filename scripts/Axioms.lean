@@ -8,30 +8,30 @@ import Links.ZincBridgeLibs
 `native_decide`). -/
 
 -- T1
-#print axioms Zinc.Task.run_eq_of_trace
+#print axioms Query.Task.run_eq_of_trace
 -- T2, T3a, per framework variant
-#print axioms Zinc.Compiler.round_preserves
-#print axioms Zinc.Compiler.zinc_sound
-#print axioms Zinc.GCompiler.round_preserves
-#print axioms Zinc.TCompiler.round_preserves
-#print axioms Zinc.TCompiler.zinc_sound
-#print axioms Zinc.NCompiler.round_preserves
-#print axioms Zinc.NCompiler.zinc_sound
+#print axioms IncComp.Compiler.round_preserves
+#print axioms IncComp.Compiler.zinc_sound
+#print axioms IncComp.GCompiler.round_preserves
+#print axioms IncComp.TCompiler.round_preserves
+#print axioms IncComp.TCompiler.zinc_sound
+#print axioms IncComp.NCompiler.round_preserves
+#print axioms IncComp.NCompiler.zinc_sound
 -- T3b, T3
-#print axioms Zinc.Compiler.fixpoint_unique_of_wf
-#print axioms Zinc.Compiler.fixpoint_unique_of_explicit
-#print axioms Zinc.Compiler.zinc_eq_clean_of_wf
-#print axioms Zinc.Compiler.zinc_eq_clean_of_explicit
+#print axioms IncComp.Compiler.fixpoint_unique_of_wf
+#print axioms IncComp.Compiler.fixpoint_unique_of_explicit
+#print axioms IncComp.Compiler.zinc_eq_clean_of_wf
+#print axioms IncComp.Compiler.zinc_eq_clean_of_explicit
 -- T4
-#print axioms Zinc.Compiler.zinc_some_of_monotoneFrom
-#print axioms Zinc.Compiler.zinc_some_of_explicit
-#print axioms Zinc.Compiler.zinc_some_of_wf
+#print axioms IncComp.Compiler.zinc_some_of_monotoneFrom
+#print axioms IncComp.Compiler.zinc_some_of_explicit
+#print axioms IncComp.Compiler.zinc_some_of_wf
 -- T5
-#print axioms Zinc.NCompiler.downstream_sound
+#print axioms IncComp.NCompiler.downstream_sound
 -- proved counterexamples that used to lean on native_decide
 #print axioms Zinc.PingPong.zinc_diverges
-#print axioms Zinc.Stale.stale_unsound
-#print axioms Zinc.Stale.stale_affected
+#print axioms IncComp.Stale.stale_unsound
+#print axioms IncComp.Stale.stale_affected
 -- the instances' soundness theorems and witnesses
 #print axioms Zinc.JavaSpec.fix_sound
 #print axioms Zinc.JavaSealedSpec.fix_sound
@@ -58,36 +58,36 @@ import Links.ZincBridgeLibs
 #print axioms Zinc.Hier.W_obligations
 #print axioms Zinc.Hier.Mk_obligations
 -- the general form (General.lean), where T2, T3a, T4 (monotone) and T5 are proved once
-#print axioms Zinc.XCompiler.round_preserves
-#print axioms Zinc.XCompiler.zinc_sound
-#print axioms Zinc.XCompiler.zinc_some_of_monotoneFrom
-#print axioms Zinc.XCompiler.downstream_sound
+#print axioms IncComp.XCompiler.round_preserves
+#print axioms IncComp.XCompiler.zinc_sound
+#print axioms IncComp.XCompiler.zinc_some_of_monotoneFrom
+#print axioms IncComp.XCompiler.downstream_sound
 -- T3 for keys from the tree, through the forgetful map
-#print axioms Zinc.TCompiler.zinc_eq_clean_of_explicit
+#print axioms IncComp.TCompiler.zinc_eq_clean_of_explicit
 #print axioms Zinc.SplitProof.Spec.g_global_obligations
 #print axioms Zinc.SplitProof.Spec.g_narrowed_obligations
 #print axioms Zinc.SplitProof.Spec.g12_today
-#print axioms Zinc.TCompiler.downstream_sound
+#print axioms IncComp.TCompiler.downstream_sound
 -- the shared asSeenFrom (packages/scala-types/ScalaTypes/AsSeenFrom.lean) and T1 for lowering
 #print axioms AsSeenFrom.compose
 #print axioms AsSeenFrom.chain_is_single
 #print axioms Scala.lower_congr
 -- B4 (Track B4) and its extensions
-#print axioms Zinc.XCompiler.untouched_eq_clean
-#print axioms BinCompat.ZincBridge.gap_witness
-#print axioms BinCompat.ZincBridgeScala3.not_comp
-#print axioms BinCompat.ZincBridgeScala3.after_eq_fresh_fix
-#print axioms BinCompat.ZincBridgeKeys.coverage_fails
-#print axioms BinCompat.ZincBridgeKeys.loop_witness
-#print axioms BinCompat.ZincBridgeLibs.library_client
+#print axioms IncComp.XCompiler.untouched_eq_clean
+#print axioms Links.ZincBridge.gap_witness
+#print axioms Links.ZincBridgeScala3.not_comp
+#print axioms Links.ZincBridgeScala3.after_eq_fresh_fix
+#print axioms Links.ZincBridgeKeys.coverage_fails
+#print axioms Links.ZincBridgeKeys.loop_witness
+#print axioms Links.ZincBridgeLibs.library_client
 -- files as a layer
-#print axioms Zinc.XCompiler.round_preserves_charged
-#print axioms Zinc.XCompiler.zinc_sound_charged
+#print axioms IncComp.XCompiler.round_preserves_charged
+#print axioms IncComp.XCompiler.zinc_sound_charged
 #print axioms Zinc.FileSpec.today_not_charged
 #print axioms Zinc.FileSpec.every_obligations
 #print axioms Zinc.Fi.fi_not_covered
 #print axioms Zinc.Fi.fi_loop
-#print axioms Zinc.XCompiler.downstream_sound_charged
+#print axioms IncComp.XCompiler.downstream_sound_charged
 #print axioms Zinc.Fi.fi_loop_kept
 #print axioms Zinc.Fi.kept_obligations
 #print axioms Zinc.Fi.kept_sound

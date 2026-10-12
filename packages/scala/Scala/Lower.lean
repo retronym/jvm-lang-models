@@ -18,6 +18,8 @@ access, `ACC_BRIDGE`, and the invoke instructions of synthesized bodies (forward
 The rules are scalac 2.13's; where 2.12 or Scala 3 differs, the code branches on `Dialect` and says so.
 -/
 
+open Query
+
 namespace Scala
 
 /-! ## Erasure -/
@@ -425,7 +427,7 @@ def trace (dl : Dialect) (s : Src) (env : (q : Q) → Ans q) : List Q :=
 classfiles. -/
 theorem lower_congr (dl : Dialect) (s : Src) (e e' : (q : Q) → Ans q)
     (h : ∀ q ∈ trace dl s e, e q = e' q) : lower dl s e = lower dl s e' :=
-  (Zinc.Task.run_eq_of_trace _ e e' h).1
+  (Query.Task.run_eq_of_trace _ e e' h).1
 
 /-- What nesting adds to the classfiles of a program, which `lowerSrc` cannot see unit by unit:
 `InnerClasses` entries (a nested class's own, and its unit's nested members in the class or

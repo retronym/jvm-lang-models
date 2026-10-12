@@ -33,6 +33,8 @@ when it becomes absent (`deleted_today_clean`); Zinc also invalidates dependents
 classes directly.
 -/
 
+open Query IncComp
+
 namespace Zinc.Added
 
 open Compiler (State Policy)
@@ -71,8 +73,8 @@ structure Out where
 inductive K | name
   deriving DecidableEq, Repr
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
-abbrev Env := Task.Env (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (Cls × Q) (fun p => Ans p.2)
 
 def unit : Src → T Out
   | .absent => .pure ⟨none, [], none⟩
@@ -96,8 +98,8 @@ def group (G : Finset Cls) (src : Cls → Src) (e : Env) : Cls → Out :=
   fun u => (unit (src u)).run fun p => if p.1 ∈ G then ((unit (src p.1)).run fun _ => none).iface else e p
 
 theorem iface_client (e : Env) : ((unit .client).run e).iface = none := by
-  simp only [unit, Task.run_ask]
-  split <;> simp [Task.run_ask]
+  simp only [unit, Query.Task.run_ask]
+  split <;> simp [Query.Task.run_ask]
 
 /-- A class's interface does not depend on what it asks. -/
 theorem iface_run (s : Src) (e e' : Env) : ((unit s).run e).iface = ((unit s).run e').iface := by
@@ -135,17 +137,17 @@ theorem obligations_fixed : (compiler .fixed).Obligations where
     | absent => simp [unit] at hq
     | foo v => simp [unit] at hq
     | client =>
-      simp only [unit, Task.trace_ask, Task.run_ask] at hq ⊢
+      simp only [unit, Query.Task.trace_ask, Query.Task.run_ask] at hq ⊢
       revert hq
       split
       · intro hq
-        simp only [Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
-        simp only [Task.run_pure, exists_eq_left, refKeys, List.mem_map,
+        simp only [Query.Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
+        simp only [Query.Task.run_pure, exists_eq_left, refKeys, List.mem_map,
           List.mem_cons, List.not_mem_nil, or_false]
         simp_all
       · intro hq
-        simp only [Task.trace_ask, Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
-        simp only [Task.run_ask, Task.run_pure, exists_eq_left, refKeys,
+        simp only [Query.Task.trace_ask, Query.Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
+        simp only [Query.Task.run_ask, Query.Task.run_pure, exists_eq_left, refKeys,
           List.mem_map, List.mem_cons, List.not_mem_nil, or_false]
         rcases hq with h | h <;> simp_all
   abstraction := by

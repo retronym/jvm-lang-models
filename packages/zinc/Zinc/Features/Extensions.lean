@@ -33,6 +33,8 @@ Results:
   Phase 7's key (the ancestor companions, pinned).
 -/
 
+open IncComp
+
 namespace Zinc.SplitProof.Spec.Extensions
 
 open Zinc.SplitProof Zinc.SplitProof.Spec

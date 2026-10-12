@@ -59,6 +59,8 @@ on a deletion in a scope the lookup did not reach. `proposed_sound` says the add
 the deletions are `cross`'s over-invalidation.
 -/
 
+open Query IncComp
+
 namespace Zinc.SplitProof
 
 structure Scope where
@@ -332,7 +334,7 @@ structure Out where
   res : Option ℕ
   deriving DecidableEq
 
-abbrev T (n : ℕ) := Task (U n × Q) (fun _ => Bool) Out
+abbrev T (n : ℕ) := Query.Task (U n × Q) (fun _ => Bool) Out
 
 variable (n) in
 /-- The client's lookup from scope `k` on. -/
@@ -407,32 +409,32 @@ def compiler (d : Design) : NCompiler (U n) Src Out Bool K (List Bool) Q (fun _ 
 
 /-! ### The lookup's trace -/
 
-theorem iface_search (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem iface_search (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ k, ((search n k).run e).iface = false := by
   intro k
   induction k using search.induct n with
   | case1 k h ih =>
-    rw [search, dite_eq_left_of_eq_true (eq_true h), Task.run_ask]
+    rw [search, dite_eq_left_of_eq_true (eq_true h), Query.Task.run_ask]
     split
     · rfl
     · exact ih
   | case2 k h => rw [search, dite_eq_right_of_eq_false (eq_false h)]; rfl
 
-theorem iface_run (s : Src) (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem iface_run (s : Src) (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ((unit n s).run e).iface = ifaceSrc s := by
   cases s with
   | bind x => rfl
   | client => exact iface_search e 0
 
 /-- Every query asks a scope `i ≥ k`, after misses on the scopes between. -/
-theorem trace_search (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem trace_search (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ k, ∀ q ∈ (search n k).trace e, ∃ i, ∃ h : i < n, k ≤ i ∧ q = (some ⟨i, h⟩, .binds) ∧
       ∀ j, ∀ hj : j < n, k ≤ j → j < i → e (some ⟨j, hj⟩, .binds) = false := by
   intro k
   induction k using search.induct n with
   | case1 k h ih =>
     intro q hq
-    rw [search, dite_eq_left_of_eq_true (eq_true h), Task.trace_ask] at hq
+    rw [search, dite_eq_left_of_eq_true (eq_true h), Query.Task.trace_ask] at hq
     rcases List.mem_cons.1 hq with rfl | hq
     · exact ⟨k, h, le_refl k, rfl, fun j _ h1 h2 => absurd h2 (by omega)⟩
     · split at hq
@@ -446,13 +448,13 @@ theorem trace_search (e : Task.Env (U n × Q) (fun _ => Bool)) :
   | case2 k h => intro q hq; rw [search, dite_eq_right_of_eq_false (eq_false h)] at hq; simp at hq
 
 /-- A hit ends the lookup: it is the last query. -/
-theorem hit_last (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem hit_last (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ k, ∀ q ∈ (search n k).trace e, e q = true → ((search n k).trace e).getLast? = some q := by
   intro k
   induction k using search.induct n with
   | case1 k h ih =>
     intro q hq hhit
-    rw [search, dite_eq_left_of_eq_true (eq_true h), Task.trace_ask] at hq ⊢
+    rw [search, dite_eq_left_of_eq_true (eq_true h), Query.Task.trace_ask] at hq ⊢
     rcases List.mem_cons.1 hq with rfl | hq
     · simp [hhit]
     · split at hq
@@ -1036,7 +1038,7 @@ Both bridges record the selector's member, with its name, for the class charged 
 which takes the client's file with it: a check is a pinned scope. -/
 
 /-- Ask whether each check scope binds; `true` when all do. -/
-def askChecks : List (Fin n) → Task (U n × Q) (fun _ => Bool) Bool
+def askChecks : List (Fin n) → Query.Task (U n × Q) (fun _ => Bool) Bool
   | [] => .pure true
   | i :: is => .ask (some i, .binds) fun x => (askChecks is).bind fun y => .pure (x && y)
 
@@ -1059,36 +1061,36 @@ def selCompiler (d : Design) (chk : List (Fin n)) : NCompiler (U n) Src Out Bool
   keys := keys sc d
   covers := covers sc d
 
-theorem trace_askChecks (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem trace_askChecks (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ (chk : List (Fin n)), ∀ q ∈ (askChecks chk).trace e, ∃ i ∈ chk, q = (some i, Q.binds)
   | [], q, h => by simp [askChecks] at h
   | i :: is, q, h => by
-    simp only [askChecks, Task.trace_ask, Task.trace_bind, Task.trace_pure, List.append_nil,
+    simp only [askChecks, Query.Task.trace_ask, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil,
       List.mem_cons] at h
     rcases h with rfl | h
     · exact ⟨i, by simp, rfl⟩
     · obtain ⟨j, hj, rfl⟩ := trace_askChecks e is q h
       exact ⟨j, by simp [hj], rfl⟩
 
-theorem iface_selUnit (chk : List (Fin n)) (s : Src) (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem iface_selUnit (chk : List (Fin n)) (s : Src) (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ((selUnit n chk s).run e).iface = ifaceSrc s := by
   cases s with
   | bind x => rfl
   | client =>
-    simp only [selUnit, Task.run_bind]
+    simp only [selUnit, Query.Task.run_bind]
     split
     · exact iface_search e 0
     · rfl
 
 /-- A query of the client is a check or a query of the search. -/
-theorem trace_selUnit (chk : List (Fin n)) (s : Src) (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem trace_selUnit (chk : List (Fin n)) (s : Src) (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ q ∈ (selUnit n chk s).trace e,
       (∃ i ∈ chk, q = (some i, Q.binds)) ∨ q ∈ (search n 0).trace e := by
   intro q hq
   cases s with
   | bind x => simp [selUnit] at hq
   | client =>
-    simp only [selUnit, Task.trace_bind, List.mem_append] at hq
+    simp only [selUnit, Query.Task.trace_bind, List.mem_append] at hq
     rcases hq with h | h
     · exact .inl (trace_askChecks e chk q h)
     · revert h

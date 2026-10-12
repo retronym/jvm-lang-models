@@ -51,6 +51,8 @@ Results:
   covering, today's tree hash fails abstraction on I1.
 -/
 
+open Query IncComp
+
 namespace Zinc.InlineOpaqueSound
 
 abbrev Name := ℕ
@@ -147,7 +149,7 @@ def methsOf (a : Ans U) : List (TyRef U) :=
 
 /-! ## The per-unit task -/
 
-abbrev T (U : Type) := Task (U × Q) (fun _ => Ans U)
+abbrev T (U : Type) := Query.Task (U × Q) (fun _ => Ans U)
 
 def seqT : List (T U (List ℕ)) → T U (List ℕ)
   | [] => .pure []
@@ -191,7 +193,7 @@ def unit (depth : ℕ) (s : Src U) : T U (Out U) :=
     (ownDescs s.defs).bind fun o =>
       (fwds s.parents).bind fun w => .pure ⟨s.defs, c ++ o, w⟩
 
-theorem iface_run (depth : ℕ) (s : Src U) (e : Task.Env (U × Q) (fun _ => Ans U)) :
+theorem iface_run (depth : ℕ) (s : Src U) (e : Query.Task.Env (U × Q) (fun _ => Ans U)) :
     ((unit depth s).run e).iface = s.defs := by
   simp [unit]
 
@@ -379,7 +381,7 @@ theorem expansion_congr (depth : ℕ) (I I' : U → Iface U) (i : Iface U) (n : 
   | some p =>
     obtain ⟨tr, b⟩ := p
     simp only [expansion, hb] at h ⊢
-    apply Task.trace_congr
+    apply Query.Task.trace_congr
     intro q hq
     simp only [answer, h q hq]
 
@@ -423,18 +425,18 @@ theorem locality [DecidableEq U] (b : Bridge) (depth : ℕ) :
 
 /-! ## Coverage -/
 
-theorem trace_seqT (e : Task.Env (U × Q) (fun _ => Ans U)) (ts : List (T U (List ℕ))) :
+theorem trace_seqT (e : Query.Task.Env (U × Q) (fun _ => Ans U)) (ts : List (T U (List ℕ))) :
     (seqT ts).trace e = ts.flatMap fun t => t.trace e := by
   induction ts with
   | nil => rfl
-  | cons t ts ih => simp [seqT, Task.trace_bind, ih]
+  | cons t ts ih => simp [seqT, Query.Task.trace_bind, ih]
 
-theorem trace_erase (e : Task.Env (U × Q) (fun _ => Ans U)) (ctx : Ctx) (t : TyRef U) :
+theorem trace_erase (e : Query.Task.Env (U × Q) (fun _ => Ans U)) (ctx : Ctx) (t : TyRef U) :
     ∀ q ∈ (erase ctx t).trace e, q.2.ctx = ctx := by
   cases t <;> simp [erase]
 
 /-- Queries of an item compiled in context `ctx`, other than a nested expansion, carry `ctx`. -/
-theorem trace_item_code (e : Task.Env (U × Q) (fun _ => Ans U))
+theorem trace_item_code (e : Query.Task.Env (U × Q) (fun _ => Ans U))
     (rec : Ctx → List (Item U) → T U (List ℕ)) (it : Item U) :
     ∀ q ∈ (item rec .code it).trace e, q.2.ctx = .code ∨
       ∃ c n tr b, it = .inl c n ∧ bodyOf (e (c, ⟨.code, .body n⟩)) = some (tr, b) ∧
@@ -443,28 +445,28 @@ theorem trace_item_code (e : Task.Env (U × Q) (fun _ => Ans U))
   cases it with
   | lit v => simp [item] at hq
   | call c n =>
-    simp only [item, Task.trace_ask, List.mem_cons] at hq
+    simp only [item, Query.Task.trace_ask, List.mem_cons] at hq
     rcases hq with rfl | hq
     · exact Or.inl rfl
     · left
       split at hq
-      · simp only [Task.trace_bind, List.mem_append] at hq
+      · simp only [Query.Task.trace_bind, List.mem_append] at hq
         rcases hq with hq | hq
         · exact trace_erase e _ _ q hq
         · simp at hq
       · simp at hq
   | const c n p =>
-    simp only [item, Task.trace_ask, List.mem_cons] at hq
+    simp only [item, Query.Task.trace_ask, List.mem_cons] at hq
     rcases hq with rfl | hq
     · exact Or.inl rfl
     · simp at hq
   | sig t =>
-    simp only [item, Task.trace_bind, List.mem_append] at hq
+    simp only [item, Query.Task.trace_bind, List.mem_append] at hq
     rcases hq with hq | hq
     · exact Or.inl (trace_erase e _ _ q hq)
     · simp at hq
   | inl c n =>
-    simp only [item, Task.trace_ask, List.mem_cons] at hq
+    simp only [item, Query.Task.trace_ask, List.mem_cons] at hq
     rcases hq with rfl | hq
     · exact Or.inl rfl
     · right
@@ -483,7 +485,7 @@ theorem trace_code [DecidableEq U] (depth : ℕ) (I : U → Iface U) (s : Src U)
   have hsplit : (unit depth s).trace (answer I) =
       (expand (depth + 1) .code s.code).trace (answer I) ++
         ((ownDescs s.defs).trace (answer I) ++ (fwds s.parents).trace (answer I)) := by
-    simp [unit, Task.trace_bind]
+    simp [unit, Query.Task.trace_bind]
   rw [hsplit] at hq ⊢
   rcases List.mem_append.1 hq with hq | hq
   · simp only [expand, trace_seqT, List.mem_flatMap, List.mem_map] at hq
@@ -504,11 +506,11 @@ theorem trace_code [DecidableEq U] (depth : ℕ) (I : U → Iface U) (s : Src U)
       simp only [ownDescs, trace_seqT, List.mem_flatMap, List.mem_map] at hq
       obtain ⟨_, ⟨d, _, rfl⟩, hq⟩ := hq
       split at hq
-      · simp only [Task.trace_bind, List.mem_append] at hq
+      · simp only [Query.Task.trace_bind, List.mem_append] at hq
         rcases hq with hq | hq
         · exact trace_erase _ _ _ q hq
         · simp at hq
-      · simp only [Task.trace_bind, List.mem_append] at hq
+      · simp only [Query.Task.trace_bind, List.mem_append] at hq
         rcases hq with hq | hq
         · exact trace_erase _ _ _ q hq
         · simp at hq
@@ -516,13 +518,13 @@ theorem trace_code [DecidableEq U] (depth : ℕ) (I : U → Iface U) (s : Src U)
       · simp at hq
     · simp only [fwds, trace_seqT, List.mem_flatMap, List.mem_map] at hq
       obtain ⟨_, ⟨p, _, rfl⟩, hq⟩ := hq
-      simp only [Task.trace_ask, List.mem_cons] at hq
+      simp only [Query.Task.trace_ask, List.mem_cons] at hq
       rcases hq with rfl | hq
       · exact Or.inl rfl
       · right; left
         simp only [trace_seqT, List.mem_flatMap, List.mem_map] at hq
         obtain ⟨_, ⟨t, _, rfl⟩, hq⟩ := hq
-        simp only [Task.trace_bind, List.mem_append] at hq
+        simp only [Query.Task.trace_bind, List.mem_append] at hq
         rcases hq with hq | hq
         · exact trace_erase _ _ _ q hq
         · simp at hq

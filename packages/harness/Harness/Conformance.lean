@@ -41,6 +41,8 @@ as source files, Scala 2.
 `conformance [all]`: bases whose model build has no errors, resolves every selection and
 inherits one instance of each ancestor, or every base with `all`. -/
 
+open IncComp
+
 open Zinc.Flat
 open Zinc.Hier (Cls Name Ty)
 open Zinc.Hier.Cls Zinc.Hier.Name

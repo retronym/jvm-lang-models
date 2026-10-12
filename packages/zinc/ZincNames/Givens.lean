@@ -31,6 +31,7 @@ The specification is `SpecGivens.lean`; this file is the executable model, check
 bounded space.
 -/
 
+
 namespace Zinc.Givens
 
 open Zinc.Names (Ver Pkg Rules)

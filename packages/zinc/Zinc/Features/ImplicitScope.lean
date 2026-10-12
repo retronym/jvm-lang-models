@@ -73,6 +73,8 @@ keys count (`plain`).
    object's singleton type (counts at the end of the file).
 -/
 
+open IncComp
+
 namespace Zinc.ImplicitScope
 
 inductive Cls | A | B | C | D | L | O | X | W | Y | Z
@@ -182,13 +184,13 @@ def answer (I : Cls → Pub) : Cls × Q → AnsV
   | (c, .cscope _) => .imps (cscopeP I c)
   | (c, .api _) => .pub (I c)
 
-abbrev T := Task (Cls × Q) (fun _ => AnsV)
+abbrev T := Query.Task (Cls × Q) (fun _ => AnsV)
 
-def askQ (c : Cls) (q : Q) : T AnsV := Task.ask (c, q) Task.pure
+def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
-@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem run_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).run e = e (c, q) := rfl
-@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Task.Env (Cls × Q) (fun _ => AnsV)) :
+@[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Query.Task.Env (Cls × Q) (fun _ => AnsV)) :
     (askQ c q).trace e = [(c, q)] := rfl
 
 /-! ## The compiler -/
@@ -375,9 +377,9 @@ def Is (x : Ext) : NCompiler Cls Src Out Pub K H Q (fun _ => AnsV) where
 
 section obligations
 
-open Zinc.Task
+open Query.Task
 
-abbrev Env := Task.Env (Cls × Q) (fun _ => AnsV)
+abbrev Env := Query.Task.Env (Cls × Q) (fun _ => AnsV)
 
 theorem run_chainT (I : Cls → Pub) (t : Cls) :
     ∀ f c, (chainT t f c).run (answer I) = (chainP I f c).map fun e => (e, (I e).decl.obj) := by
@@ -386,7 +388,7 @@ theorem run_chainT (I : Cls → Pub) (t : Cls) :
   | zero => intro c; rfl
   | succ f ih =>
     intro c
-    simp only [chainT, chainP, bind_eq, Task.run_bind, run_askQ, answer]
+    simp only [chainT, chainP, bind_eq, Query.Task.run_bind, run_askQ, answer]
     cases (I c).decl.parent with
     | none => rfl
     | some p => simp [ih]
@@ -398,7 +400,7 @@ theorem trace_chainT (I : Cls → Pub) (t : Cls) :
   | zero => intro c; rfl
   | succ f ih =>
     intro c
-    simp only [chainT, chainP, bind_eq, Task.trace_bind, trace_askQ, run_askQ, answer]
+    simp only [chainT, chainP, bind_eq, Query.Task.trace_bind, trace_askQ, run_askQ, answer]
     cases (I c).decl.parent with
     | none => rfl
     | some p => simp [ih]
@@ -701,7 +703,7 @@ theorem consistent_of_upToDate (x : Ext) (hx : x.sto = true) (src : Cls → Src)
     rw [(h c).1]
     show ((unitF x (src c)).run (answer ((Is x).ifaces s))).pub = _
     rw [pub_unitF, hme c]
-    simp only [pubT, hx, ite_true, Task.bind_eq, Task.run_bind, Task.pure_eq, Task.run_pure,
+    simp only [pubT, hx, ite_true, Query.Task.bind_eq, Query.Task.run_bind, Query.Task.pure_eq, Query.Task.run_pure,
       run_askPub]
   intro c
   have hd : ((Is x).ifaces s c).decl = (src c).decl := by rw [hpub c]; rfl

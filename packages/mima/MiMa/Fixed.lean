@@ -20,7 +20,7 @@ reported. Checked by kernel `decide` (enumeration as testing, per `docs/specific
 all libraries).
 -/
 
-namespace BinCompat
+namespace MiMa
 
 open Jvm Jvm.Catalogue Jvm.Clients
 
@@ -161,4 +161,4 @@ def unreported (b : ℕ) (c : C) : List ℕ :=
     let n := variant b c i
     wf n && !same (baseOf b) n && !fixedReports (baseOf b) n
 
-end BinCompat
+end MiMa

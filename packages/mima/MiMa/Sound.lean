@@ -2,16 +2,16 @@ import MiMa.Fixed
 /-!
 # The corrected rules are sound on the space
 
-Every well-formed single edit of `base1` and `base2` (`BinCompat.Edits`) that the corrected rules
+Every well-formed single edit of `base1` and `base2` (`MiMa.Edits`) that the corrected rules
 do not report leaves every client of `spaceB` that linked still linking. Kernel `decide`: per base
 and class, the unreported variants are pinned and the rest shown sound without running a client;
 then each unreported edit is run against all of `spaceB` (about 15 s and 6 GB each). So this
-module is not imported by `BinCompat` and is built on demand: `lake build BinCompat.Sound` (about
+module is not imported by `BinCompat` and is built on demand: `lake build MiMa.Sound` (about
 half an hour). This is
 enumeration as testing (`docs/specification.md`), not a proof for all libraries.
 -/
 
-namespace BinCompat
+namespace MiMa
 
 open Jvm Jvm.Catalogue Jvm.Clients
 
@@ -252,4 +252,4 @@ example : sound 2 .J 62 = true := by decide +kernel
 set_option maxHeartbeats 0 in
 example : sound 2 .J 88 = true := by decide +kernel
 
-end BinCompat
+end MiMa

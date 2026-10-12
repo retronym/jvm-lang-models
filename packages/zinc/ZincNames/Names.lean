@@ -57,6 +57,7 @@ fixes as keys, with the obligations proved for every program. This file is the e
 checked against the compilers and Zinc on a bounded space; its results are `example`s.
 -/
 
+
 namespace Zinc.Names
 
 inductive Ver | s2 | s3

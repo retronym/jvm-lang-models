@@ -31,6 +31,8 @@ a new file); the G rule meets the obligations, global or narrowed given recorded
 fails abstraction on an inherited instance. T3a follows from `XCompiler.zinc_sound`.
 -/
 
+open Query IncComp
+
 namespace Zinc.SplitProof.Spec
 
 variable {n : ℕ}
@@ -49,7 +51,7 @@ structure GOut (n : ℕ) where
   hits : List (Fin n)
   deriving DecidableEq
 
-abbrev GT (n : ℕ) := Task (U n × Q) (fun _ => Bool) (GOut n)
+abbrev GT (n : ℕ) := Query.Task (U n × Q) (fun _ => Bool) (GOut n)
 
 variable (gx : Fin n → GScope)
 
@@ -69,37 +71,37 @@ def gunit : Src → GT n
 def ggroup (G : Finset (U n)) (src : U n → Src) (I : U n → Bool) : U n → GOut n :=
   fun u => (gunit gx (src u)).run (answer fun v => if v ∈ G then ifaceSrc (src v) else I v)
 
-theorem iface_gsearch (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem iface_gsearch (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ k hits, ((gsearch gx k hits).run e).iface = false := by
   intro k hits
   induction k, hits using gsearch.induct gx with
   | case1 k hits h hany => rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_true _ _ (eq_true hany)]; rfl
   | case2 k hits h hany ih =>
-    rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_false _ _ (eq_false hany), Task.run_ask]
+    rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_false _ _ (eq_false hany), Query.Task.run_ask]
     exact ih _
   | case3 k hits h => rw [gsearch, dite_cond_eq_false (eq_false h)]; rfl
 
-theorem iface_grun (s : Src) (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem iface_grun (s : Src) (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ((gunit gx s).run e).iface = ifaceSrc s := by
   cases s with
   | bind x => rfl
   | client => exact iface_gsearch gx e 0 []
 
 /-- Every query of the search asks a scope. -/
-theorem trace_gsearch (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem trace_gsearch (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ k hits, ∀ q ∈ (gsearch gx k hits).trace e, ∃ i : Fin n, q = (some i, Q.binds) := by
   intro k hits
   induction k, hits using gsearch.induct gx with
   | case1 k hits h hany => intro q hq; rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_true _ _ (eq_true hany)] at hq; simp at hq
   | case2 k hits h hany ih =>
     intro q hq
-    rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_false _ _ (eq_false hany), Task.trace_ask] at hq
+    rw [gsearch, dite_cond_eq_true (eq_true h), ite_cond_eq_false _ _ (eq_false hany), Query.Task.trace_ask] at hq
     rcases List.mem_cons.1 hq with rfl | hq
     · exact ⟨⟨k, h⟩, rfl⟩
     · exact ih _ q hq
   | case3 k hits h => intro q hq; rw [gsearch, dite_cond_eq_false (eq_false h)] at hq; simp at hq
 
-theorem trace_gunit (s : Src) (e : Task.Env (U n × Q) (fun _ => Bool)) :
+theorem trace_gunit (s : Src) (e : Query.Task.Env (U n × Q) (fun _ => Bool)) :
     ∀ q ∈ (gunit gx s).trace e, ∃ i : Fin n, q = (some i, Q.binds) := by
   cases s with
   | bind x => intro q hq; simp [gunit] at hq

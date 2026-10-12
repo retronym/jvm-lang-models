@@ -7,7 +7,7 @@ function of the answer. This is the free monad over the query interface (Build S
 asked along the way. Both are functions of the task and `e` only, which is the purity assumption.
 -/
 
-namespace Zinc
+namespace Query
 
 inductive Task (Q : Type) (A : Q → Type) (α : Type) : Type
   | pure (a : α)
@@ -83,4 +83,4 @@ theorem trace_congr (t : Task Q A α) (e e' : Env Q A) (h : ∀ q ∈ t.trace e,
     t.trace e = t.trace e' := (run_eq_of_trace t e e' h).2
 
 end Task
-end Zinc
+end Query

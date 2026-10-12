@@ -15,24 +15,24 @@
 
 ## Model
 
-A construction over any [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L24) ([`Tree.lean`](../../inc-comp/IncComp/Tree.lean)) with two spellings of its units into names: `read : CUnit → Name` (how the compiler reaches a unit's output: its product) and `rec : CUnit → Name` (how the bridge records a key on it). The named compiler's units are names; its task asks `(read u, q)` where the underlying one asks `(u, q)`, and its keys are `(rec u, k)` where the underlying ones are `(u, k)`. Coverage asks `q.1 = k.1`, i.e. `read u = rec u` for every unit a trace reaches.
+A construction over any [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L26) ([`Tree.lean`](../../inc-comp/IncComp/Tree.lean)) with two spellings of its units into names: `read : CUnit → Name` (how the compiler reaches a unit's output: its product) and `rec : CUnit → Name` (how the bridge records a key on it). The named compiler's units are names; its task asks `(read u, q)` where the underlying one asks `(u, q)`, and its keys are `(rec u, k)` where the underlying ones are `(u, k)`. Coverage asks `q.1 = k.1`, i.e. `read u = rec u` for every unit a trace reaches.
 
 ## Results ([`Naming.lean`](../Zinc/Bridges/Naming.lean))
 
 | Result | Status |
 |---|---|
-| [`run_rename`](../Zinc/Bridges/Naming.lean#L34), [`trace_rename`](../Zinc/Bridges/Naming.lean#L41): a renamed task runs as the original against the pulled-back oracle, and traces the renamed queries | proved, every task |
-| [`coverage_named`](../Zinc/Bridges/Naming.lean#L59): with one spelling (`read = rec`), the named compiler's coverage is the underlying one's | proved, every [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L24) |
-| [`not_coverage_named`](../Zinc/Bridges/Naming.lean#L72): a traced unit whose read spelling no covering key carries breaks coverage | proved, every [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L24) |
+| [`run_rename`](../Zinc/Bridges/Naming.lean#L36), [`trace_rename`](../Zinc/Bridges/Naming.lean#L43): a renamed task runs as the original against the pulled-back oracle, and traces the renamed queries | proved, every task |
+| [`coverage_named`](../Zinc/Bridges/Naming.lean#L61): with one spelling (`read = rec`), the named compiler's coverage is the underlying one's | proved, every [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L26) |
+| [`not_coverage_named`](../Zinc/Bridges/Naming.lean#L74): a traced unit whose read spelling no covering key carries breaks coverage | proved, every [`TCompiler`](../../inc-comp/IncComp/Tree.lean#L26) |
 | `collision`: two units read through one name cannot be served by any named oracle when their answers differ (#1553) | proved |
-| [`spelling_bugs`](../Zinc/Bridges/Naming.lean#L133): #1812, #127, #1351, #9694, #716/#1233, each as a pair of spellings on a minimal client | proved, kernel `decide` |
-| [`default_package_1812`](../Zinc/Bridges/Naming.lean#L181): on `JavaSpec`'s instance (fix keys, obligations proved), a default-package client resolving `A` asks for `A` and records `<empty>.A`; with one spelling its coverage carries over | proved, kernel `decide` |
+| [`spelling_bugs`](../Zinc/Bridges/Naming.lean#L135): #1812, #127, #1351, #9694, #716/#1233, each as a pair of spellings on a minimal client | proved, kernel `decide` |
+| [`default_package_1812`](../Zinc/Bridges/Naming.lean#L183): on `JavaSpec`'s instance (fix keys, obligations proved), a default-package client resolving `A` asks for `A` and records `<empty>.A`; with one spelling its coverage carries over | proved, kernel `decide` |
 
 The construction proves coverage only; comp and abstraction carry over when `read` is injective (a bijection between units and names), which `collision` shows is itself an obligation.
 
 ## The cluster's scripted tests
 
-All pass on develop, each the regression test of a spelling fixed by making the two sides agree: `java-inner` (#127), `malformed-class-name`, `malformed-class-name-with-dollar`, `java-name-with-dollars` (canonical names of Java and `$`-named classes), `compactify`, `compactify-nested`, `compactify-nested-class` (#716), `unexpanded-names`, `package-object-nested-class`, `recorded-products` (#1233). Each is an instance of [`coverage_named`](../Zinc/Bridges/Naming.lean#L59)'s hypothesis on one spelling pair. #1812 (Scala 3, Java class in the default package) and #1351 (Java nested classes under Scala 3 pipelining) have no test on develop; both are fixes on the dotty side ([scala/scala3#27134](https://github.com/scala/scala3/issues/27134) for #1812).
+All pass on develop, each the regression test of a spelling fixed by making the two sides agree: `java-inner` (#127), `malformed-class-name`, `malformed-class-name-with-dollar`, `java-name-with-dollars` (canonical names of Java and `$`-named classes), `compactify`, `compactify-nested`, `compactify-nested-class` (#716), `unexpanded-names`, `package-object-nested-class`, `recorded-products` (#1233). Each is an instance of [`coverage_named`](../Zinc/Bridges/Naming.lean#L61)'s hypothesis on one spelling pair. #1812 (Scala 3, Java class in the default package) and #1351 (Java nested classes under Scala 3 pipelining) have no test on develop; both are fixes on the dotty side ([scala/scala3#27134](https://github.com/scala/scala3/issues/27134) for #1812).
 
 ## Policy
 
@@ -40,6 +40,6 @@ The fix is one spelling, not more keys: a canonical name function shared by the 
 
 ## Steps
 
-- [x] P16.1 [`Naming.lean`](../Zinc/Bridges/Naming.lean): the construction, [`coverage_named`](../Zinc/Bridges/Naming.lean#L59), [`not_coverage_named`](../Zinc/Bridges/Naming.lean#L72), `collision`, witnesses.
+- [x] P16.1 [`Naming.lean`](../Zinc/Bridges/Naming.lean): the construction, [`coverage_named`](../Zinc/Bridges/Naming.lean#L61), [`not_coverage_named`](../Zinc/Bridges/Naming.lean#L74), `collision`, witnesses.
 - [x] P16.2 The cluster's scripted tests mapped (above).
 - [ ] Future: comp and abstraction for the named compiler under an injective `read`; pending tests for #1812 and #1351 once the Scala 3 version scripted uses has a bridge to test against.

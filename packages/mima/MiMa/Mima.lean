@@ -23,7 +23,7 @@ The class file parser drops private methods and fields, so no lookup sees them; 
 is never checked.
 -/
 
-namespace BinCompat
+namespace MiMa
 
 open Jvm Jvm.Catalogue
 
@@ -241,4 +241,4 @@ def check (o n : Lib) : Key → List Problem
 /-- MiMa's problems for a library edit `o` → `n`: every key's. -/
 def mima (o n : Lib) : List Problem := (keys o).flatMap (check o n)
 
-end BinCompat
+end MiMa

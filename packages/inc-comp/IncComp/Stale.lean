@@ -19,7 +19,9 @@ Stored at the owner's compile instead, it is a local hash, and freshness comes f
 recompiling when the value class changes.
 -/
 
-namespace Zinc.Stale
+open Query
+
+namespace IncComp.Stale
 
 inductive U | P | C
   deriving DecidableEq, Repr
@@ -40,9 +42,9 @@ abbrev Out := ℕ
 
 abbrev Env := GCompiler.Env (CUnit := U) (Q := Q) (A := Ans)
 
-def unit : Src → Task (U × Q) (fun p => Ans p.2) Out
-  | 0 => Task.ask (U.P, Q.value) fun (v : ℕ) => Task.pure v
-  | n + 1 => Task.pure (n + 1)
+def unit : Src → Query.Task (U × Q) (fun p => Ans p.2) Out
+  | 0 => Query.Task.ask (U.P, Q.value) fun (v : ℕ) => Query.Task.pure v
+  | n + 1 => Query.Task.pure (n + 1)
 
 /-- Joint compilation: group-mates answered from their source interfaces (the number itself). -/
 def group (G : Finset U) (src : U → Src) (e : Env) : U → Out :=
@@ -64,7 +66,7 @@ open GCompiler Compiler
 theorem group_P (G : Finset U) (src : U → Src) (e : Env) (hP : U.P ∈ G) :
     group G src e U.P = src U.P := by
   simp only [group, hP, ite_true]
-  cases h : src U.P <;> simp [unit, Task.run, hP, h]
+  cases h : src U.P <;> simp [unit, Query.Task.run, hP, h]
 
 theorem comp_lemma : ∀ (G : Finset U) (src : U → Src) (e : Env),
     ∀ d ∈ G, compiler.group G src e d =
@@ -72,14 +74,14 @@ theorem comp_lemma : ∀ (G : Finset U) (src : U → Src) (e : Env),
   intro G src e d hd
   show group G src e d = (unit (src d)).run (GCompiler.override compiler e G (id ∘ group G src e))
   simp only [group, hd, ite_true]
-  apply Task.run_congr
+  apply Query.Task.run_congr
   intro q hq
   simp only [GCompiler.override, compiler, Function.comp, id]
   by_cases hqG : q.1 ∈ G
   · simp only [hqG]
     -- the only query any task asks is `(P, value)`
     have hqP : q.1 = U.P := by
-      cases h : src d <;> simp [unit, Task.trace, h] at hq
+      cases h : src d <;> simp [unit, Query.Task.trace, h] at hq
       simp_all
     rw [hqP] at hqG ⊢
     exact (group_P G src e hqG).symm
@@ -138,4 +140,4 @@ theorem stale_affected : compiler.invalidated S (compiler.affected {U.P}) s₀ s
 /-- And after recompiling it, the build is right. -/
 theorem stale_repaired : (compiler.round src₁ {U.C} s₁).out U.C = 2 := by decide
 
-end Zinc.Stale
+end IncComp.Stale

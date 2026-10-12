@@ -42,6 +42,8 @@ import, static or single-type (#43).
 obligations (`obligations_fix`) and inherits T3a (`fix_sound`).
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.JavaSpec
@@ -108,8 +110,8 @@ structure Out (Pkg N : Type) where
   names : List N
   imports : List (CU Pkg N)
 
-abbrev T (Pkg N : Type) := Task (CU Pkg N × Q N) (fun p => Ans p.2)
-abbrev Env (Pkg N : Type) := Task.Env (CU Pkg N × Q N) (fun p => Ans p.2)
+abbrev T (Pkg N : Type) := Query.Task (CU Pkg N × Q N) (fun p => Ans p.2)
+abbrev Env (Pkg N : Type) := Query.Task.Env (CU Pkg N × Q N) (fun p => Ans p.2)
 
 def ask1 (p : Probe Pkg N) : T Pkg N Bool := .ask p.query .pure
 
@@ -164,8 +166,8 @@ theorem mem_trace_askAll (e : Env Pkg N) :
     ∀ (ps : List (Probe Pkg N)), ∀ q ∈ (askAll ps).trace e, ∃ p ∈ ps, q = p.query
   | [], q, h => by simp [askAll] at h
   | p :: ps, q, h => by
-    simp only [askAll, Task.trace_bind, trace_ask1, List.mem_append,
-      List.mem_cons, List.not_mem_nil, or_false, Task.trace_pure, List.append_nil] at h
+    simp only [askAll, Query.Task.trace_bind, trace_ask1, List.mem_append,
+      List.mem_cons, List.not_mem_nil, or_false, Query.Task.trace_pure, List.append_nil] at h
     rcases h with h | h
     · exact ⟨p, by simp, h⟩
     · obtain ⟨p', hp', hq⟩ := mem_trace_askAll e ps q h
@@ -175,7 +177,7 @@ theorem mem_trace_resolve (e : Env Pkg N) :
     ∀ (ls : List (List (Probe Pkg N))), ∀ q ∈ (resolve ls).trace e, ∃ l ∈ ls, ∃ p ∈ l, q = p.query
   | [], q, h => by simp [resolve] at h
   | l :: ls, q, h => by
-    simp only [resolve, Task.trace_bind, List.mem_append] at h
+    simp only [resolve, Query.Task.trace_bind, List.mem_append] at h
     rcases h with h | h
     · obtain ⟨p, hp, hq⟩ := mem_trace_askAll e l q h
       exact ⟨l, by simp, p, hp, hq⟩
@@ -192,14 +194,14 @@ theorem mem_trace_client (e : Env Pkg N) (c : Client Pkg N) :
     ∀ q ∈ (unit javaLang (.client c)).trace e,
       (∃ p ∈ importChecks c, q = p.query) ∨ ∃ l ∈ levels javaLang c, ∃ p ∈ l, q = p.query := by
   intro q h
-  simp only [unit, Task.trace_bind, List.mem_append] at h
+  simp only [unit, Query.Task.trace_bind, List.mem_append] at h
   rcases h with h | h
   · exact .inl (mem_trace_askAll e _ q h)
   · revert h
     split
     · simp
     · intro h
-      simp only [Task.trace_bind, List.mem_append, Task.trace_pure, List.not_mem_nil, or_false] at h
+      simp only [Query.Task.trace_bind, List.mem_append, Query.Task.trace_pure, List.not_mem_nil, or_false] at h
       exact .inr (mem_trace_resolve e _ q h)
 
 theorem iface_unit (e : Env Pkg N) (s : Src Pkg N) : ((unit javaLang s).run e).iface = ifaceOf s := by
@@ -207,18 +209,18 @@ theorem iface_unit (e : Env Pkg N) (s : Src Pkg N) : ((unit javaLang s).run e).i
   | absent => rfl
   | cls ms => rfl
   | client c =>
-    simp only [unit, Task.run_bind]
+    simp only [unit, Query.Task.run_bind]
     split
     · rfl
-    · simp only [Task.run_bind, Task.run_pure]; rfl
+    · simp only [Query.Task.run_bind, Query.Task.run_pure]; rfl
 
 /-- The output of a client compile: the client's facts and its resolution. -/
 theorem run_client (e : Env Pkg N) (c : Client Pkg N) :
     ∃ r, (unit javaLang (.client c)).run e = clientOut c r := by
-  simp only [unit, Task.run_bind]
+  simp only [unit, Query.Task.run_bind]
   split
   · exact ⟨_, rfl⟩
-  · simp only [Task.run_bind, Task.run_pure]; exact ⟨_, rfl⟩
+  · simp only [Query.Task.run_bind, Query.Task.run_pure]; exact ⟨_, rfl⟩
 
 /-! ## JLS 6.4.1: the first level with a hit decides -/
 
@@ -228,7 +230,7 @@ def hits (e : Env Pkg N) (l : List (Probe Pkg N)) : List (Probe Pkg N) := l.filt
 theorem run_askAll (e : Env Pkg N) : ∀ l : List (Probe Pkg N), (askAll l).run e = hits e l
   | [] => rfl
   | p :: ps => by
-    simp only [askAll, Task.run_bind, Task.run_pure, hits, List.filter_cons, run_askAll e ps]
+    simp only [askAll, Query.Task.run_bind, Query.Task.run_pure, hits, List.filter_cons, run_askAll e ps]
     rfl
 
 theorem resolve_cons (e : Env Pkg N) (l : List (Probe Pkg N)) (ls : List (List (Probe Pkg N))) :
@@ -237,7 +239,7 @@ theorem resolve_cons (e : Env Pkg N) (l : List (Probe Pkg N)) (ls : List (List (
       | [] => (resolve ls).run e
       | [h] => .ok h
       | _ :: _ :: _ => .ambiguous := by
-  simp only [resolve, Task.run_bind, run_askAll]
+  simp only [resolve, Query.Task.run_bind, run_askAll]
   split <;> rfl
 
 /-- A level with exactly one hit shadows every later level: an inherited member type over the

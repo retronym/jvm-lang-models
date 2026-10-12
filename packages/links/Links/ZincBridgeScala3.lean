@@ -30,7 +30,9 @@ a compiler with one named, reviewable change, and `f6_witness` shows that withou
 theorem is false. We take the fix.
 -/
 
-namespace BinCompat.ZincBridgeScala3
+open Query IncComp
+
+namespace Links.ZincBridgeScala3
 
 open Scala ZincBridge
 
@@ -66,19 +68,19 @@ theorem f6_witness : group3 {"T", "C"} src I "C" ≠ group3 {"C"} src I "C" := b
 
 /-- The interfaces a group's members expose do not depend on the group, here. -/
 theorem override_eq (G : Finset String) :
-    Zinc.XCompiler.override I G (Out.iface ∘ group3 G src I) = I := by
+    IncComp.XCompiler.override I G (Out.iface ∘ group3 G src I) = I := by
   funext v
-  simp only [Zinc.XCompiler.override, Function.comp, iface_group3]
+  simp only [IncComp.XCompiler.override, Function.comp, iface_group3]
   split <;> rfl
 
 /-- **`comp` fails for every per-unit task.** Whatever `unit` and `answer` an `XCompiler` with the
 faithful Scala 3 joint compilation chooses, the compositionality obligation is false: it would
 give `C` one output in both groups. -/
-theorem not_comp (unit' : Option Scala.Src → Zinc.Task FQ FAns Out)
+theorem not_comp (unit' : Option Scala.Src → Query.Task FQ FAns Out)
     (answer' : (String → Iface) → (q : FQ) → FAns q) :
     ¬ ∀ (G : Finset String) (src : String → Option Scala.Src) (I : String → Iface), ∀ d ∈ G,
       group3 G src I d =
-        (unit' (src d)).run (answer' (Zinc.XCompiler.override I G (Out.iface ∘ group3 G src I))) := by
+        (unit' (src d)).run (answer' (IncComp.XCompiler.override I G (Out.iface ∘ group3 G src I))) := by
   intro h
   have h₁ := h {"T", "C"} src I "C" (by decide)
   have h₂ := h {"C"} src I "C" (by decide)
@@ -106,10 +108,10 @@ theorem group3Fix_eq : group3Fix = group .s3 := by
 faithful one once the reader is fixed (`group3Fix_eq`). Hypotheses as for Track B4: a sound policy that
 stays inside `S`, the edit in the first round, the old build up to date except at the edit. -/
 theorem after_eq_fresh_fix (us : List String) (S : Finset String)
-    (src : String → Option Scala.Src) (P : Zinc.Compiler.Policy String Out Bool) (hP : P.Sound S)
-    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : Zinc.Compiler.State String Out Bool)
+    (src : String → Option Scala.Src) (P : IncComp.Compiler.Policy String Out Bool) (hP : P.Sound S)
+    (hPS : P.InS S) (fuel : ℕ) (R₀ D : Finset String) (s : IncComp.Compiler.State String Out Bool)
     (hD : D ⊆ R₀) (hR₀ : R₀ ⊆ S) (hInv : (compiler .s3).Inv S src s D)
-    (s' : Zinc.Compiler.State String Out Bool) (h : (compiler .s3).zinc S src P fuel 0 R₀ s = some s')
+    (s' : IncComp.Compiler.State String Out Bool) (h : (compiler .s3).zinc S src P fuel 0 R₀ s = some s')
     (c : String) (hc : c ∉ (compiler .s3).recompiled S src P fuel 0 R₀ s)
     (p : Jvm.Program String String String) :
     (compiler .s3).group = group3Fix ∧
@@ -117,4 +119,4 @@ theorem after_eq_fresh_fix (us : List String) (S : Finset String)
       Jvm.outcome (worldOf us ((compiler .s3).cleanFrom S src s)) p :=
   ⟨group3Fix_eq.symm, after_eq_fresh .s3 us S src P hP hPS fuel R₀ D s hD hR₀ hInv s' h c hc p⟩
 
-end BinCompat.ZincBridgeScala3
+end Links.ZincBridgeScala3

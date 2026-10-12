@@ -15,7 +15,7 @@ Both are proved once, for the general form `XCompiler` (`General.lean`), and hol
 lift `toX`, whose loop is this one round for round (`zinc_toX`).
 -/
 
-namespace Zinc.Compiler
+namespace IncComp.Compiler
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : Compiler CUnit Src Out Iface K Hash Q A)
@@ -105,9 +105,9 @@ theorem zinc_sound (ob : C.Obligations) (S : Finset CUnit) (src : CUnit → Src)
   rw [← zinc_toX] at h
   exact C.toX.zinc_sound (C.toX_obligations ob) S src P hP fuel n R s D hD hInv s' h
 
-end Zinc.Compiler
+end IncComp.Compiler
 
-namespace Zinc.Compiler
+namespace IncComp.Compiler
 
 variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : Compiler CUnit Src Out Iface K Hash Q A)
@@ -122,4 +122,4 @@ theorem inv_of_changed (S : Finset CUnit) (src₀ src : CUnit → Src) (s : Stat
   have h' := h u hu (Finset.notMem_empty u)
   simpa [UpToDate, this] using h'
 
-end Zinc.Compiler
+end IncComp.Compiler

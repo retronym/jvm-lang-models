@@ -33,6 +33,8 @@ records the walk of every alternative's parameter type; it meets the obligations
 (`obligations_fix`, `fix_sound`) and costs nothing elsewhere (`fix_eq_today`).
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.Sam
@@ -102,8 +104,8 @@ structure Out (N : Type) where
   java : Bool
   recs : List (Rec N)
 
-abbrev T (N : Type) := Task (N × Q N) (fun p => Ans p.2)
-abbrev Env (N : Type) := Task.Env (N × Q N) (fun p => Ans p.2)
+abbrev T (N : Type) := Query.Task (N × Q N) (fun p => Ans p.2)
+abbrev Env (N : Type) := Query.Task.Env (N × Q N) (fun p => Ans p.2)
 
 def answer (i : Iface N) : (q : Q N) → Ans q
   | .info => i
@@ -192,15 +194,15 @@ theorem trace_walk (e : Env N) : ∀ (k : ℕ) (xs : List N),
   | 0, _ => rfl
   | _ + 1, [] => rfl
   | k + 1, x :: xs => by
-    simp only [walk, Task.trace_ask, Task.run_ask, Task.trace_bind, Task.run_bind, Task.trace_pure,
-      Task.run_pure, List.append_nil, List.map_cons]
+    simp only [walk, Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure,
+      Query.Task.run_pure, List.append_nil, List.map_cons]
     rw [trace_walk e k]
 
 theorem mem_trace_walks (e : Env N) : ∀ (ts : List N), ∀ q ∈ (walks ts).trace e,
     ∃ p ∈ (walks ts).run e, q ∈ (names p.2).map (·, Q.info)
   | [], q, h => by simp [walks] at h
   | t :: ts, q, h => by
-    simp only [walks, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure,
+    simp only [walks, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure,
       List.append_nil, List.mem_append, List.mem_cons] at h ⊢
     rcases h with h | h
     · refine ⟨_, .inl rfl, ?_⟩
@@ -214,16 +216,16 @@ theorem mem_trace_useT (e : Env N) (java : Bool) (u : Use N) :
   intro q h
   cases u with
   | lam t ar =>
-    simp only [useT, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure, List.append_nil,
+    simp only [useT, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure, List.append_nil,
       trace_walk] at h ⊢
     simpa [Rec.qs, names, List.map_map] using h
   | anon t =>
-    simp only [useT, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure, List.append_nil,
+    simp only [useT, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure, List.append_nil,
       trace_walk] at h ⊢
     simpa [Rec.qs, names, List.map_map] using h
   | lamArg o m ar =>
-    simp only [useT, Task.trace_ask, Task.run_ask, Task.trace_bind, Task.run_bind, Task.trace_pure,
-      Task.run_pure, List.append_nil, List.mem_cons] at h ⊢
+    simp only [useT, Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure,
+      Query.Task.run_pure, List.append_nil, List.mem_cons] at h ⊢
     rcases h with rfl | h
     · simp [Rec.qs]
     · obtain ⟨p, hp, hq⟩ := mem_trace_walks e _ q h
@@ -235,7 +237,7 @@ theorem mem_trace_usesT (e : Env N) (java : Bool) : ∀ (us : List (Use N)), ∀
     ∃ r ∈ (usesT java us).run e, q ∈ r.qs
   | [], q, h => by simp [usesT] at h
   | u :: us, q, h => by
-    simp only [usesT, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure,
+    simp only [usesT, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure,
       List.append_nil, List.mem_append, List.mem_cons] at h ⊢
     rcases h with h | h
     · exact ⟨_, .inl rfl, mem_trace_useT e java u q h⟩
@@ -252,7 +254,7 @@ theorem trace_unit (e : Env N) (s : Src N) : ∀ q ∈ (unit s).trace e,
   intro q h
   cases s with
   | client java us =>
-    simp only [unit, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure,
+    simp only [unit, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure,
       List.append_nil] at h ⊢
     exact mem_trace_usesT e java us q h
   | _ => simp [unit] at h
@@ -433,7 +435,7 @@ theorem uses_usesT (e : Env N) (java : Bool) : ∀ us : List (Use N),
     ((usesT java us).run e).map (·.use) = us
   | [] => rfl
   | u :: us => by
-    simp only [usesT, Task.run_bind, Task.run_pure, List.map_cons, use_useT]
+    simp only [usesT, Query.Task.run_bind, Query.Task.run_pure, List.map_cons, use_useT]
     rw [uses_usesT e java us]
 
 theorem recKeys_today (java : Bool) (r : Rec N) (hr : r.use.isArg = false) :
@@ -457,7 +459,7 @@ theorem obligations_today_argFree : (compiler .today (ArgFree N) Subtype.val).Ob
     apply recKeys_today
     cases s with
     | client java us =>
-      simp only [unit, Task.run_bind, Task.run_pure] at hr
+      simp only [unit, Query.Task.run_bind, Query.Task.run_pure] at hr
       have : r.use ∈ us := by rw [← uses_usesT e java us]; exact List.mem_map_of_mem hr
       exact hs r.use this
     | _ => simp [unit] at hr

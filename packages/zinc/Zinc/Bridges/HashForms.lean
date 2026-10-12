@@ -23,6 +23,8 @@ compiler's interface is the pair `(f, i)`; its answers read `i`, its hashes `(f,
 fresh.
 -/
 
+open IncComp
+
 namespace Zinc.HashForms
 
 variable {F I V H Qy : Type} {A : Qy → Type}

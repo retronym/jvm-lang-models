@@ -22,7 +22,7 @@ below are confirmed on HotSpot 21, 25 and 27 by `packages/jvm/probes`, and MiMa 
 each (`packages/mima/probes`).
 -/
 
-namespace BinCompat
+namespace MiMa
 
 open Jvm Jvm.Catalogue Jvm.Clients
 
@@ -165,4 +165,4 @@ example : protectedRemoved.missed = true ∧ protectedRemoved.uncovered (.method
 example : (all ++ j3).all (fun k => k.mima == ((mima k.v0 k.v1).head?.map Problem.name)) = true := by
   decide +kernel
 
-end BinCompat
+end MiMa

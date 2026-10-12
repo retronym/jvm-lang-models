@@ -18,11 +18,13 @@ to date build whose stamps are the old library's interfaces, put the edited JAR 
 (`withUpstream`) and start Zinc's loop from the edited sources and the external invalidations
 (the clients holding a stamp that moved). If the loop stops and never recompiled a client `c`, then
 `c`'s old classfiles next to the new library link exactly as a fresh build of the project against
-the new library does. It is `Zinc.XCompiler.inv_external` (T5a) followed by
-`Zinc.XCompiler.untouched_eq_clean`.
+the new library does. It is `IncComp.XCompiler.inv_external` (T5a) followed by
+`IncComp.XCompiler.untouched_eq_clean`.
 -/
 
-namespace BinCompat.ZincBridgeLibs
+open IncComp
+
+namespace Links.ZincBridgeLibs
 
 open Scala ZincBridge
 
@@ -44,7 +46,7 @@ def covers (q : FQ) (k : String × LKey) : Prop :=
 
 /-- Lowering, with stamps for the library `Lib`. -/
 def compiler (dl : Dialect) (Lib : Finset String) :
-    Zinc.XCompiler String (Option Scala.Src) Out Iface LKey LHash Bool (fun _ => Option View) where
+    IncComp.XCompiler String (Option Scala.Src) Out Iface LKey LHash Bool (fun _ => Option View) where
   unit := unit dl
   group := group dl
   iface := Out.iface
@@ -86,13 +88,13 @@ theorem obligations (dl : Dialect) (Lib : Finset String) : (compiler dl Lib).Obl
     cases k <;> simp only [compiler, π, side, hc]
 
 /-- The stamps Zinc stored are the old library's interfaces: the snapshot is fresh. -/
-theorem fresh_of_stamps (dl : Dialect) (Lib S : Finset String) (s : Zinc.Compiler.State String Out LKey)
+theorem fresh_of_stamps (dl : Dialect) (Lib S : Finset String) (s : IncComp.Compiler.State String Out LKey)
     (snap : String → Iface) (hsnap : ∀ u ∈ Lib, snap u = (compiler dl Lib).ifaces s u) :
     (compiler dl Lib).Fresh Lib S s snap ∅ := by
   intro d _ _ k _
   have : (compiler dl Lib).snapView Lib s snap = (compiler dl Lib).ifaces s := by
     funext u
-    simp only [Zinc.XCompiler.snapView]
+    simp only [IncComp.XCompiler.snapView]
     split
     · exact hsnap u ‹_›
     · rfl
@@ -104,21 +106,21 @@ starts from `D` and the external invalidations and stays inside `S` under a soun
 project unit `c` the loop never recompiled links against the new JAR as in a fresh build. -/
 theorem library_client (dl : Dialect) (us : List String) (Lib S : Finset String)
     (hdisj : Disjoint Lib S) (src₀ src : String → Option Scala.Src)
-    (s : Zinc.Compiler.State String Out LKey) (snap : String → Iface) (o : String → Out)
+    (s : IncComp.Compiler.State String Out LKey) (snap : String → Iface) (o : String → Out)
     (hsnap : ∀ u ∈ Lib, snap u = (compiler dl Lib).ifaces s u)
     (D : Finset String) (hD : ∀ u, src₀ u ≠ src u → u ∈ D)
     (hInv : (compiler dl Lib).Inv S src₀ s ∅)
-    (P : Zinc.Compiler.Policy String Out LKey) (hP : P.Sound S) (hPS : P.InS S) (fuel : ℕ)
+    (P : IncComp.Compiler.Policy String Out LKey) (hP : P.Sound S) (hPS : P.InS S) (fuel : ℕ)
     (R₀ : Finset String)
     (hR₀ : D ∪ (compiler dl Lib).extInvalidated Lib S s snap
-      (Zinc.XCompiler.withUpstream Lib s o) ⊆ R₀)
+      (IncComp.XCompiler.withUpstream Lib s o) ⊆ R₀)
     (hR₀S : R₀ ⊆ S)
-    (s' : Zinc.Compiler.State String Out LKey)
-    (h : (compiler dl Lib).zinc S src P fuel 0 R₀ (Zinc.XCompiler.withUpstream Lib s o) = some s')
+    (s' : IncComp.Compiler.State String Out LKey)
+    (h : (compiler dl Lib).zinc S src P fuel 0 R₀ (IncComp.XCompiler.withUpstream Lib s o) = some s')
     (c : String) (hcLib : c ∉ Lib)
-    (hc : c ∉ (compiler dl Lib).recompiled S src P fuel 0 R₀ (Zinc.XCompiler.withUpstream Lib s o))
+    (hc : c ∉ (compiler dl Lib).recompiled S src P fuel 0 R₀ (IncComp.XCompiler.withUpstream Lib s o))
     (p : Jvm.Program String String String) :
-    let clean := (compiler dl Lib).cleanFrom S src (Zinc.XCompiler.withUpstream Lib s o)
+    let clean := (compiler dl Lib).cleanFrom S src (IncComp.XCompiler.withUpstream Lib s o)
     Jvm.outcome (afterWorld us clean c (s.out c)) p = Jvm.outcome (worldOf us clean) p := by
   intro clean
   have ob := obligations dl Lib
@@ -126,7 +128,7 @@ theorem library_client (dl : Dialect) (us : List String) (Lib S : Finset String)
     (fresh_of_stamps dl Lib S s snap hsnap)
   have := (compiler dl Lib).untouched_eq_clean ob ifaceSrc (fun sr I => iface_unit dl sr _) S src P
     hP hPS fuel R₀ _ _ hR₀ hR₀S hInv₁ s' h c hc
-  rw [Zinc.XCompiler.withUpstream_out_of_not_mem _ _ _ _ hcLib] at this
+  rw [IncComp.XCompiler.withUpstream_out_of_not_mem _ _ _ _ hcLib] at this
   unfold afterWorld
   congr 2
   funext u
@@ -134,4 +136,4 @@ theorem library_client (dl : Dialect) (us : List String) (Lib S : Finset String)
   · subst_vars; exact this
   · rfl
 
-end BinCompat.ZincBridgeLibs
+end Links.ZincBridgeLibs

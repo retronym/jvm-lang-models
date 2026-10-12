@@ -44,6 +44,8 @@ back to it, recompile the cycle jointly; it fires only on an edit that removes a
 cycle.
 -/
 
+open Query IncComp
+
 namespace Zinc.Cycles
 
 open Compiler (State Policy)
@@ -80,12 +82,12 @@ structure Out where
   ok : Bool
   deriving DecidableEq, Repr
 
-abbrev Env := Task.Env (U × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (U × Q) (fun p => Ans p.2)
 
 /-- `v` conforms to `t`: equal, or Scala's numeric widening `Int` to `Long`. -/
 def conforms (v : Option Ty) (t : Ty) : Bool := v == some t || (v == some .int && t == .long)
 
-def unit : Src → Task (U × Q) (fun p => Ans p.2) Out
+def unit : Src → Query.Task (U × Q) (fun p => Ans p.2) Out
   | .ann t r => .ask (r, .ty) fun v => .pure ⟨some t, conforms v t⟩
   | .inf r => .ask (r, .ty) fun v => .pure ⟨v, v.isSome⟩
 
@@ -125,7 +127,7 @@ theorem ty_group (G : Finset U) (src : U → Src) (e : Env) (v : U) :
   cases h : src v with
   | ann t r => simp [unit, jt, h]
   | inf r =>
-    simp only [unit, Task.run_ask, Task.run_pure, jt, h]
+    simp only [unit, Query.Task.run_ask, Query.Task.run_pure, jt, h]
     by_cases hr : r ∈ G
     · simp only [hr, ite_true]; exact (jt_stable G src _ r).symm
     · simp [hr]

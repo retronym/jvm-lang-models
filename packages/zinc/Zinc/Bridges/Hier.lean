@@ -28,6 +28,8 @@ every client of `B`, as `D`'s `(B, parents)` key does. `Erasure.lean` compares t
 and shows that only the declared one determines erasure.
 -/
 
+open Query IncComp
+
 namespace Zinc.Hier
 
 /-- `V` is used only by `Flat`, as a value class whose underlying type decides erasure. -/
@@ -94,12 +96,12 @@ def answer (i : Iface) : Q → AnsV
   | .members n => .ty (((i.mems.filter (·.1 = n)).head?).bind (·.2))
   | .select _ => .unit
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
-abbrev Env := Task.Env (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (Cls × Q) (fun p => Ans p.2)
 
 def envOfI (I : Cls → Iface) : Env := fun p => answer (I p.1) p.2
 
-def askQ (c : Cls) (q : Q) : T AnsV := Task.ask (c, q) Task.pure
+def askQ (c : Cls) (q : Q) : T AnsV := Query.Task.ask (c, q) Query.Task.pure
 
 @[simp] theorem run_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).run e = e (c, q) := rfl
 @[simp] theorem trace_askQ (c : Cls) (q : Q) (e : Env) : (askQ c q).trace e = [(c, q)] := rfl

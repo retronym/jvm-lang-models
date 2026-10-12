@@ -80,6 +80,7 @@ class's attribute differs from a joint build's. The module class is identical; 1
 differ only so.
 -/
 
+
 namespace Zinc.InlineOpaque
 
 /-! ## The loop -/

@@ -6,6 +6,8 @@ Each example runs Zinc's loop (`Policy.plain`, from `R₀ = {A}`) on a three-cla
 edit to `A`, and compares the result with a clean build of the new sources.
 -/
 
+open IncComp
+
 namespace Zinc.Toy
 
 open Cls Name

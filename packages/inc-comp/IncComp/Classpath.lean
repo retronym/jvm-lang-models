@@ -33,7 +33,7 @@ Results:
     counterexample (edit `A`, then revert it).
 -/
 
-namespace Zinc.NCompiler
+namespace IncComp.NCompiler
 
 /-! The definitions and theorems are `XCompiler`'s (`General.lean`), stated here for `NCompiler`
 through its lift. -/
@@ -141,4 +141,4 @@ theorem fresh_refreshRef_local (ob : C.Obligations) (hloc : ∀ I c, C.hashDeps 
     C.Fresh Up S s' (C.refreshRef Up Rc s' snap) ∅ :=
   C.toX.fresh_refreshRef_local (C.toX_obligations ob) hloc Up S s snap o s' Rc hUp hext hRc
 
-end Zinc.NCompiler
+end IncComp.NCompiler

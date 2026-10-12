@@ -28,6 +28,8 @@ Three extractors over the same typed tree:
   (scala/scala3#26262 records `_N+1` for this).
 -/
 
+open Query IncComp
+
 namespace Zinc.TreeToy
 
 open Compiler (State Policy)
@@ -101,11 +103,11 @@ inductive Covers : Q → K → Prop
 
 /-! ## The per-unit task: typer, then the pattern matcher -/
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
-abbrev Env := Task.Env (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (Cls × Q) (fun p => Ans p.2)
 
 def look {α : Type} (c : Cls) (n : Name) (k : Option Ty → T α) : T α :=
-  Task.ask (c, .lookup n) k
+  Query.Task.ask (c, .lookup n) k
 
 def typer : List Expr → T (List Node)
   | [] => .pure []
@@ -196,19 +198,19 @@ theorem trace_typer (e : Env) : ∀ (es : List Expr), ∀ q ∈ (typer es).trace
       let ⟨y, hy, hq'⟩ := ih q h; ⟨y, List.mem_cons_of_mem _ hy, hq'⟩
     cases x with
     | assignOp c =>
-      simp only [typer, look, Task.trace_ask] at hq
+      simp only [typer, look, Query.Task.trace_ask] at hq
       rcases List.mem_cons.1 hq with h | h
       · exact ⟨_, List.mem_cons_self .., by simp [exprQs, h]⟩
       · split at h
-        · simp only [Task.trace_bind, Task.trace_pure, List.append_nil] at h
+        · simp only [Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at h
           exact tail h
-        · simp only [Task.trace_ask, Task.trace_bind, Task.trace_pure, List.append_nil] at h
+        · simp only [Query.Task.trace_ask, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at h
           rcases List.mem_cons.1 h with h | h
           · exact ⟨_, List.mem_cons_self .., by simp [exprQs, h]⟩
           · exact tail h
     | pat c =>
-      simp only [typer, look, Task.trace_ask] at hq
-      simp only [Task.trace_bind, Task.trace_pure, List.append_nil] at hq
+      simp only [typer, look, Query.Task.trace_ask] at hq
+      simp only [Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at hq
       rcases List.mem_cons.1 hq with h | h
       · exact ⟨_, List.mem_cons_self .., by simp [exprQs, h]⟩
       · exact tail h
@@ -225,8 +227,8 @@ theorem trace_patmat (e : Env) : ∀ (es : List Expr), ∀ q ∈ (patmat es).tra
     cases x with
     | assignOp c => exact tail (by simpa [patmat] using hq)
     | pat c =>
-      simp only [patmat, look, Task.trace_ask] at hq
-      simp only [Task.trace_bind, Task.trace_pure, List.append_nil] at hq
+      simp only [patmat, look, Query.Task.trace_ask] at hq
+      simp only [Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at hq
       rcases List.mem_cons.1 hq with h | h
       · exact ⟨_, List.mem_cons_self .., by simp [exprQs, h]⟩
       rcases List.mem_cons.1 h with h | h
@@ -240,11 +242,11 @@ theorem typer_cons_mem (e : Env) (y : Expr) (es : List Expr) (node : Node)
     (hn : node ∈ (typer es).run e) : node ∈ (typer (y :: es)).run e := by
   cases y with
   | assignOp c =>
-    simp only [typer, look, Task.run_ask]
-    split <;> simp [Task.run_bind, Task.run_pure, hn]
+    simp only [typer, look, Query.Task.run_ask]
+    split <;> simp [Query.Task.run_bind, Query.Task.run_pure, hn]
   | pat c =>
-    simp only [typer, look, Task.run_ask]
-    simp [Task.run_bind, Task.run_pure, hn]
+    simp only [typer, look, Query.Task.run_ask]
+    simp [Query.Task.run_bind, Query.Task.run_pure, hn]
 
 /-- Every expression leaves a node in the tree whose fixed keys cover all its queries. -/
 theorem node_of_expr (e : Env) : ∀ (es : List Expr), ∀ x ∈ es, ∀ q ∈ exprQs x,
@@ -263,15 +265,15 @@ theorem node_of_expr (e : Env) : ∀ (es : List Expr), ∀ x ∈ es, ∀ q ∈ e
           rcases hq with rfl | rfl
           · exact ⟨(c, .name .plusEq), by simp [nodeKeys], rfl, .lookup _⟩
           · exact ⟨(c, .name .plus), by simp [nodeKeys], rfl, .lookup _⟩
-        simp only [typer, look, Task.run_ask]
+        simp only [typer, look, Query.Task.run_ask]
         split
-        · simp only [Task.run_bind, Task.run_pure]
+        · simp only [Query.Task.run_bind, Query.Task.run_pure]
           exact ⟨_, List.mem_cons_self .., key _⟩
-        · simp only [Task.run_ask, Task.run_bind, Task.run_pure]
+        · simp only [Query.Task.run_ask, Query.Task.run_bind, Query.Task.run_pure]
           exact ⟨_, List.mem_cons_self .., key _⟩
       | pat c =>
-        simp only [typer, look, Task.run_ask]
-        simp only [Task.run_bind, Task.run_pure]
+        simp only [typer, look, Query.Task.run_ask]
+        simp only [Query.Task.run_bind, Query.Task.run_pure]
         refine ⟨.pat c, List.mem_cons_self .., ?_⟩
         simp only [exprQs, List.mem_cons, List.not_mem_nil, or_false] at hq
         rcases hq with rfl | rfl | rfl | rfl
@@ -286,14 +288,14 @@ theorem coverage_fixed : ∀ (s : Src) (e : Env), ∀ q ∈ (compileUnit s).trac
     ∃ k ∈ keysOf .fixed ((compileUnit s).run e), q.1 = k.1 ∧ Covers q.2 k.2 := by
   intro s e q hq
   have hx : ∃ x ∈ s.body, q ∈ exprQs x := by
-    simp only [compileUnit, Task.trace_bind, Task.trace_pure, List.append_nil, List.mem_append] at hq
+    simp only [compileUnit, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil, List.mem_append] at hq
     rcases hq with h | h
     · exact trace_typer e _ q h
     · exact trace_patmat e _ q h
   obtain ⟨x, hx, hqx⟩ := hx
   obtain ⟨node, hn, k, hk, h1, h2⟩ := node_of_expr e s.body x hx q hqx
   refine ⟨k, ?_, h1, h2⟩
-  simp only [keysOf, compileUnit, Task.run_bind, Task.run_pure, List.mem_toFinset, List.mem_flatMap]
+  simp only [keysOf, compileUnit, Query.Task.run_bind, Query.Task.run_pure, List.mem_toFinset, List.mem_flatMap]
   exact ⟨node, hn, hk⟩
 
 theorem obligations_fixed : (compiler .fixed).Obligations where

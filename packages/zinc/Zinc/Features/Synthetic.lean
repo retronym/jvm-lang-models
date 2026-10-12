@@ -18,6 +18,7 @@ it needs to be when the signature it used changed.
 * `apply_572`: a synthetic companion left out of the API has no hash for `apply`.
 -/
 
+
 namespace Zinc.Synthetic
 
 /-- Members of a class and its companion. -/

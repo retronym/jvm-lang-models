@@ -31,6 +31,8 @@ determines nothing. The earlier spaces had no companion in an edited hierarchy, 
 this case.
 -/
 
+open IncComp
+
 namespace Zinc.Companions
 
 open Zinc.InlineOpaque (Key Cls Verdict verdict uniq ancestors)

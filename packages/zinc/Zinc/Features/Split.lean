@@ -29,6 +29,8 @@ the slot language and with no enumeration, are in `SplitProof.lean`; `check_abst
 this model is an instance of that language on the bases.
 -/
 
+open IncComp
+
 namespace Zinc.Split
 
 open Zinc.Names (Ver Slot Prog Res resolve changed invalidates addsClass besideResolution separateInit aliased)

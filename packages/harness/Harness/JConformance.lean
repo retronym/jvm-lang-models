@@ -14,6 +14,8 @@ under Zinc today, retronym/zinc#21 (`permits`), #21 with descendants (`desc`), o
 ancestors' users invalidated (`fix`). Scala clients
 compile with `-Werror`. -/
 
+open IncComp
+
 def jstr (s : String) : String := "\"" ++ s ++ "\""
 
 def jarr (l : List String) : String := "[" ++ ",".intercalate l ++ "]"

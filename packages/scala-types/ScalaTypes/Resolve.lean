@@ -11,6 +11,8 @@ signature groups, and the member a selection runs (`winner`). `Members` checks o
 these; `Scala.Lower` (in the `Scala` package) adds erasure and code generation.
 -/
 
+open Query
+
 namespace Scala
 
 inductive Q | decl (n : String) (isObj : Bool)
@@ -35,10 +37,10 @@ def Program.envIn (p : Program) (run : List String) : (q : Q) → Ans q
 /-- The environment of one run over the whole program. -/
 def Program.env (p : Program) : (q : Q) → Ans q := p.envIn (p.map (·.name))
 
-abbrev M := ExceptT String (Zinc.Task Q Ans)
+abbrev M := ExceptT String (Query.Task Q Ans)
 
 def askDecl (n : String) (o : Bool) : M (Option View) :=
-  ExceptT.lift (Zinc.Task.ask (Q.decl n o) Zinc.Task.pure : Zinc.Task Q Ans (Option View))
+  ExceptT.lift (Query.Task.ask (Q.decl n o) Query.Task.pure : Query.Task Q Ans (Option View))
 
 def needView (n : String) : M View := do
   match ← askDecl n false with

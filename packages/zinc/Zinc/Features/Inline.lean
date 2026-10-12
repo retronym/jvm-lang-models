@@ -25,6 +25,8 @@ The views disagree, so a pipelined build and a non-pipelined build of the same s
 Java constants, and holds for Scala 3 `inline`.
 -/
 
+open Query IncComp
+
 namespace Zinc.Inline
 
 open Compiler (State Policy)
@@ -106,12 +108,12 @@ def keys (tr : List (Cls × Q)) : Finset (Cls × K) :=
 
 /-! ## The per-unit task -/
 
-abbrev T := Task (Cls × Q) (fun p => Ans p.2)
-abbrev Env := Task.Env (Cls × Q) (fun p => Ans p.2)
+abbrev T := Query.Task (Cls × Q) (fun p => Ans p.2)
+abbrev Env := Query.Task.Env (Cls × Q) (fun p => Ans p.2)
 
 def compileCalls : List (Cls × Name) → T (List Emit)
   | [] => .pure []
-  | (c, n) :: cs => Task.ask (c, .member n) fun r =>
+  | (c, n) :: cs => Query.Task.ask (c, .member n) fun r =>
       (compileCalls cs).bind fun es => .pure ((match r with
         | some (_, some v) => Emit.inlined v
         | _ => Emit.call c n) :: es)

@@ -20,11 +20,13 @@ hash: the trap behind the bridge's own TODO about using parent hashes. Zinc's tr
 inheritance walk at invalidation time (`invalidateByInheritance`) is `affected` in disguise.
 -/
 
-namespace Zinc
+open Query
+
+namespace IncComp
 
 structure GCompiler (CUnit Src Out Iface K Hash Q : Type) (A : Q → Type) where
-  unit   : Src → Task (CUnit × Q) (fun p => A p.2) Out
-  group  : Finset CUnit → (CUnit → Src) → Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
+  unit   : Src → Query.Task (CUnit × Q) (fun p => A p.2) Out
+  group  : Finset CUnit → (CUnit → Src) → Query.Task.Env (CUnit × Q) (fun p => A p.2) → (CUnit → Out)
   iface  : Out → Iface
   answer : Iface → (q : Q) → A q
   /-- The hash of key `k` of unit `c`, computed from the interfaces of all units. -/
@@ -45,7 +47,7 @@ variable {CUnit Src Out Iface K Hash Q : Type} {A : Q → Type}
 variable (C : GCompiler CUnit Src Out Iface K Hash Q A)
 variable [DecidableEq CUnit]
 
-abbrev Env := Task.Env (CUnit × Q) (fun p => A p.2)
+abbrev Env := Query.Task.Env (CUnit × Q) (fun p => A p.2)
 
 def envOf (I : CUnit → Iface) : Env (CUnit := CUnit) (Q := Q) (A := A) :=
   fun p => C.answer (I p.1) p.2
@@ -170,4 +172,4 @@ theorem round_preserves (ob : C.Obligations) (S : Finset CUnit) (src : CUnit →
   exact ⟨C.invalidated_toX_subset ob S R s _ hmem.1, hmem.2⟩
 
 end GCompiler
-end Zinc
+end IncComp

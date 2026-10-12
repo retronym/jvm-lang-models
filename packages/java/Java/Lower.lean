@@ -17,6 +17,8 @@ methods, constructors, and user bodies, which return an expression over fields).
 `java/` classes are left out, as the probe leaves them out.
 -/
 
+open Query
+
 namespace Java
 
 inductive Q | decl (n : String)
@@ -28,10 +30,10 @@ def Ans : Q → Type
 def Program.env (p : Program) : (q : Q) → Ans q
   | .decl n => p.find n
 
-abbrev M := ExceptT String (Zinc.Task Q Ans)
+abbrev M := ExceptT String (Query.Task Q Ans)
 
 def askDecl (n : String) : M (Option Decl) :=
-  ExceptT.lift (Zinc.Task.ask (Q.decl n) Zinc.Task.pure : Zinc.Task Q Ans (Option Decl))
+  ExceptT.lift (Query.Task.ask (Q.decl n) Query.Task.pure : Query.Task Q Ans (Option Decl))
 
 def need (n : String) : M Decl := do
   match ← askDecl n with
@@ -350,7 +352,7 @@ def trace (u : CUnit) (env : (q : Q) → Ans q) : List Q :=
 classfiles. -/
 theorem lower_congr (u : CUnit) (e e' : (q : Q) → Ans q)
     (h : ∀ q ∈ trace u e, e q = e' q) : lower u e = lower u e' :=
-  (Zinc.Task.run_eq_of_trace _ e e' h).1
+  (Query.Task.run_eq_of_trace _ e e' h).1
 
 def lowerProgram (p : Program) : Except String (List ClassOut) := do
   let cs ← p.mapM fun u => lower u p.env

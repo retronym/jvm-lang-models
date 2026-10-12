@@ -25,6 +25,8 @@ The member a selection runs is the group's first concrete member along the linea
 scalac 2.12, 2.13 and dotc 3, including the programs they reject.
 -/
 
+open Query
+
 namespace Scala.Members
 
 inductive Kind

@@ -31,6 +31,8 @@ scala/scala3#27125), `fix`.
 (`obligations_fix`) and so T3a (`fix_sound`). Cost: `bytecode_coarse` and `private_coarse`.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.MacroDeps
@@ -118,8 +120,8 @@ def shape (a : Iface U) : List ℕ := a.pub.map (fun d => match d.2 with | .memb
 
 /-! ## The task -/
 
-abbrev T (U : Type) := Task (U × Q) (fun p => Ans (U := U) p.2)
-abbrev Env (U : Type) := Task.Env (U × Q) (fun p => Ans (U := U) p.2)
+abbrev T (U : Type) := Query.Task (U × Q) (fun p => Ans (U := U) p.2)
+abbrev Env (U : Type) := Query.Task.Env (U × Q) (fun p => Ans (U := U) p.2)
 
 def askR (c : Cat) (u : U) (q : Q) (k : Iface U → T U (List (Emit U))) : T U (List (Emit U)) :=
   .ask (u, q) fun a => (k a).bind fun es => .pure (.ref c u q :: es)
@@ -166,8 +168,8 @@ theorem faithful_askR (e : Env U) (c : Cat) (u : U) (q : Q)
     Faithful e (askR c u q k) := by
   intro u' q'
   have := hk (e (u, q)) u' q'
-  simp only [askR, Task.trace_ask, Task.trace_bind, Task.trace_pure, List.append_nil,
-    Task.run_ask, Task.run_bind, Task.run_pure, List.mem_cons, Prod.mk.injEq, Emit.ref.injEq]
+  simp only [askR, Query.Task.trace_ask, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil,
+    Query.Task.run_ask, Query.Task.run_bind, Query.Task.run_pure, List.mem_cons, Prod.mk.injEq, Emit.ref.injEq]
   constructor
   · rintro (⟨rfl, rfl⟩ | h)
     · exact ⟨_, Or.inl ⟨rfl, rfl, rfl⟩⟩
@@ -180,13 +182,13 @@ theorem run_seqT (e : Env U) (ts : List (T U (List (Emit U)))) :
     (seqT ts).run e = ts.flatMap fun t => t.run e := by
   induction ts with
   | nil => rfl
-  | cons t ts ih => simp [seqT, Task.run_bind, ih]
+  | cons t ts ih => simp [seqT, Query.Task.run_bind, ih]
 
 theorem trace_seqT (e : Env U) (ts : List (T U (List (Emit U)))) :
     (seqT ts).trace e = ts.flatMap fun t => t.trace e := by
   induction ts with
   | nil => rfl
-  | cons t ts ih => simp [seqT, Task.trace_bind, ih]
+  | cons t ts ih => simp [seqT, Query.Task.trace_bind, ih]
 
 theorem faithful_seqT (e : Env U) (ts : List (T U (List (Emit U)))) (h : ∀ t ∈ ts, Faithful e t) :
     Faithful e (seqT ts) := by
@@ -230,7 +232,7 @@ theorem faithful (e : Env U) (s : Src U) :
       obtain ⟨it, _, rfl⟩ := List.mem_map.1 ht
       exact faithful_item proj e it
   intro u q
-  simp only [unit, Task.trace_bind, Task.trace_pure, List.append_nil, Task.run_bind, Task.run_pure]
+  simp only [unit, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil, Query.Task.run_bind, Query.Task.run_pure]
   exact h u q
 
 /-! ## Keys -/

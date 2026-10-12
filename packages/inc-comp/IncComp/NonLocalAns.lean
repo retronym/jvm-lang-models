@@ -27,10 +27,12 @@ group-mate may read an outsider.
 read sets taken in the state before the round. **T3a″** (`zinc_sound`) follows for any sound policy.
 -/
 
-namespace Zinc
+open Query
+
+namespace IncComp
 
 structure NCompiler (CUnit Src Out Iface K Hash Q : Type) (A : Q → Type) where
-  unit   : Src → Task (CUnit × Q) (fun p => A p.2) Out
+  unit   : Src → Query.Task (CUnit × Q) (fun p => A p.2) Out
   /-- Joint compilation of a group against the interfaces of everything else. -/
   group  : Finset CUnit → (CUnit → Src) → (CUnit → Iface) → (CUnit → Out)
   iface  : Out → Iface
@@ -163,4 +165,4 @@ theorem zinc_sound (ob : C.Obligations) (S : Finset CUnit) (src : CUnit → Src)
   exact C.toX.zinc_sound (C.toX_obligations ob) S src P hP fuel n R s D hD hInv s' h
 
 end NCompiler
-end Zinc
+end IncComp

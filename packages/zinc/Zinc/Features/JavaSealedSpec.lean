@@ -29,6 +29,8 @@ parent with the nested class and the Scala bridge's hash lists descendants: per-
 express that, and it is why S2 needs `T` in a file of its own.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.JavaSealedSpec
@@ -58,8 +60,8 @@ structure Out (U : Type) where
   cases : List U
   visited : List U
 
-abbrev T (U : Type) := Task (U × Q) (fun p => Ans U p.2)
-abbrev Env (U : Type) := Task.Env (U × Q) (fun p => Ans U p.2)
+abbrev T (U : Type) := Query.Task (U × Q) (fun p => Ans U p.2)
+abbrev Env (U : Type) := Query.Task.Env (U × Q) (fun p => Ans U p.2)
 
 /-- The exhaustivity walk over a worklist: the uncovered leaves, and the classes asked. -/
 def walk (cs : List U) : ℕ → List U → T U (List U × List U)
@@ -86,7 +88,7 @@ theorem iface_unit (e : Env U) (s : Src U) : ((unit s).run e).iface = ifaceOf s 
   cases s with
   | absent => rfl
   | cls k => rfl
-  | client s cs n => simp only [unit, Task.run_bind, Task.run_pure]; rfl
+  | client s cs n => simp only [unit, Query.Task.run_bind, Query.Task.run_pure]; rfl
 
 /-- Every query the walk asks is for the children of a class it reports as visited. -/
 theorem trace_walk (cs : List U) (e : Env U) :
@@ -97,18 +99,18 @@ theorem trace_walk (cs : List U) (e : Env U) :
     by_cases hu : u ∈ cs
     · simp only [walk, hu, if_true] at h ⊢
       exact trace_walk cs e n ws q h
-    · simp only [walk, hu, if_false, Task.trace_ask, Task.run_ask, List.mem_cons] at h ⊢
+    · simp only [walk, hu, if_false, Query.Task.trace_ask, Query.Task.run_ask, List.mem_cons] at h ⊢
       rcases h with rfl | h
-      · split <;> simp [Task.run_bind]
+      · split <;> simp [Query.Task.run_bind]
       · revert h
         split
         · intro h
-          simp only [Task.trace_bind, Task.trace_pure, List.append_nil, Task.run_bind,
-            Task.run_pure] at h ⊢
+          simp only [Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil, Query.Task.run_bind,
+            Query.Task.run_pure] at h ⊢
           exact List.mem_cons_of_mem _ (trace_walk cs e n ws q h)
         · intro h
-          simp only [Task.trace_bind, Task.trace_pure, List.append_nil, Task.run_bind,
-            Task.run_pure] at h ⊢
+          simp only [Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil, Query.Task.run_bind,
+            Query.Task.run_pure] at h ⊢
           exact List.mem_cons_of_mem _ (trace_walk cs e n _ q h)
 
 inductive K | cls
@@ -145,7 +147,7 @@ theorem iface_group (G : Finset U) (src : U → Src U) (e : Env U) (u : U) :
 
 theorem run_client_visited (e : Env U) (s : U) (cs : List U) (n : ℕ) :
     ((unit (.client s cs n)).run e).visited = ((walk cs n [s]).run e).2 := by
-  simp only [unit, Task.run_bind, Task.run_pure]
+  simp only [unit, Query.Task.run_bind, Query.Task.run_pure]
 
 /-- **The fix meets the obligations**: hash the children (#21), and record a key on every sealed
 class the check descended through. -/
@@ -164,7 +166,7 @@ theorem obligations_fix : (compiler .children .visited (U := U)).Obligations whe
     | cls k => simp [compiler, unit] at hq
     | client sc cs n =>
       change q ∈ (unit (.client sc cs n)).trace e at hq
-      simp only [unit, Task.trace_bind, Task.trace_pure, List.append_nil] at hq
+      simp only [unit, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil] at hq
       have hv := trace_walk cs e n [sc] q hq
       change (q.1, K.cls) ∈ keysOf .visited ((unit (.client sc cs n)).run e)
       simp only [keysOf, List.mem_toFinset, List.mem_map, Prod.mk.injEq, and_true, exists_eq_right,

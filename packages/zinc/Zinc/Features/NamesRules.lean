@@ -10,6 +10,7 @@ They are `example`s, not theorems: the general results, for every program and ev
 compilers, and give the magnitudes (`conformance cost`).
 -/
 
+
 namespace Zinc.Names
 
 /-- `cheap_added_clean`: Under the cheap fix, every edit that adds a top-level class is clean, but for the divergences

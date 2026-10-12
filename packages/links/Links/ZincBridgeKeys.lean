@@ -37,7 +37,9 @@ hash a value class reference in an API by its underlying type, so `T`'s API chan
 inheritance invalidates `O`. This is a prediction of the model; a scripted test is the next step.
 -/
 
-namespace BinCompat.ZincBridgeKeys
+open IncComp
+
+namespace Links.ZincBridgeKeys
 
 open Scala ZincBridge
 
@@ -103,7 +105,7 @@ instance (I : String → Iface) (q : FQ) (k : String × ZKey) : Decidable (cover
   obtain ⟨u, k⟩ := k; cases k <;> (unfold covers; infer_instance)
 
 def compiler (dl : Dialect) :
-    Zinc.XCompiler String (Option Scala.Src) Out Iface ZKey (List Iface) Bool (fun _ => Option View) where
+    IncComp.XCompiler String (Option Scala.Src) Out Iface ZKey (List Iface) Bool (fun _ => Option View) where
   unit := unit dl
   group := group dl
   iface := Out.iface
@@ -131,13 +133,13 @@ def us : List String := ["V", "T", "O"]
 
 /-- The old build, with Zinc's keys recorded. -/
 def old : String → Out := group .s213 S src0 (fun _ => none)
-def s0 : Zinc.Compiler.State String Out ZKey := { out := old, U := fun d => zkeys d (old d) }
+def s0 : IncComp.Compiler.State String Out ZKey := { out := old, U := fun d => zkeys d (old d) }
 
 /-- The fresh build of the new sources. -/
 def fresh : String → Out := group .s213 S src1 (fun _ => none)
 
 /-- Zinc's policy: compile what was invalidated. -/
-def P : Zinc.Compiler.Policy String Out ZKey := fun _ _ _ _ I => I
+def P : IncComp.Compiler.Policy String Out ZKey := fun _ _ _ _ I => I
 
 /-- A caller compiled against the fresh build: `O.f(1)` from Java. -/
 def caller : Jvm.Program String String String := { sites := [.invokestatic "O" "f" "(I)I"] }
@@ -164,4 +166,4 @@ theorem loop_witness :
     Jvm.outcome (worldOf us fresh) caller = .ok ["O"] := by
   decide +kernel
 
-end BinCompat.ZincBridgeKeys
+end Links.ZincBridgeKeys

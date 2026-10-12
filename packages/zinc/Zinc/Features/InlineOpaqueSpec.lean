@@ -53,6 +53,8 @@ own name key (`refine`).
   its opaque types (`cls_coarse`: a client of `O.other` alone), which `refine` avoids.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.InlineOpaqueSpec
@@ -146,8 +148,8 @@ def methsOf (a : Iface U) : List (TyRef U) :=
 
 /-! ## The task -/
 
-abbrev T (U : Type) := Task (U × Q) (fun p => Ans (U := U) p.2)
-abbrev Env (U : Type) := Task.Env (U × Q) (fun p => Ans (U := U) p.2)
+abbrev T (U : Type) := Query.Task (U × Q) (fun p => Ans (U := U) p.2)
+abbrev Env (U : Type) := Query.Task.Env (U × Q) (fun p => Ans (U := U) p.2)
 
 /-- Where an expansion's code is: the unit's own, a plain expansion, a transparent one, a
 forwarder's erasure. -/
@@ -232,8 +234,8 @@ theorem faithful_askR (e : Env U) (ctx : Ctx) (f : Bool) (c : U) (q : Q)
     Faithful e (askR ctx f c q k) := by
   intro u q'
   have := hk (e (c, q)) u q'
-  simp only [askR, Task.trace_ask, Task.trace_bind, Task.trace_pure, List.append_nil,
-    Task.run_ask, Task.run_bind, Task.run_pure, List.mem_cons, Prod.mk.injEq, Emit.ref.injEq]
+  simp only [askR, Query.Task.trace_ask, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil,
+    Query.Task.run_ask, Query.Task.run_bind, Query.Task.run_pure, List.mem_cons, Prod.mk.injEq, Emit.ref.injEq]
   constructor
   · rintro (⟨rfl, rfl⟩ | h)
     · exact ⟨_, Or.inl ⟨rfl, rfl, rfl⟩⟩
@@ -246,13 +248,13 @@ theorem run_seqT (e : Env U) (ts : List (T U (List (Emit U)))) :
     (seqT ts).run e = ts.flatMap fun t => t.run e := by
   induction ts with
   | nil => rfl
-  | cons t ts ih => simp [seqT, Task.run_bind, ih]
+  | cons t ts ih => simp [seqT, Query.Task.run_bind, ih]
 
 theorem trace_seqT (e : Env U) (ts : List (T U (List (Emit U)))) :
     (seqT ts).trace e = ts.flatMap fun t => t.trace e := by
   induction ts with
   | nil => rfl
-  | cons t ts ih => simp [seqT, Task.trace_bind, ih]
+  | cons t ts ih => simp [seqT, Query.Task.trace_bind, ih]
 
 theorem faithful_seqT (e : Env U) (ts : List (T U (List (Emit U)))) (h : ∀ t ∈ ts, Faithful e t) :
     Faithful e (seqT ts) := by
@@ -322,7 +324,7 @@ theorem faithful (e : Env U) (s : Src U) :
         obtain ⟨ty, _, rfl⟩ := List.mem_map.1 ht
         exact faithful_erase e _ _
   intro u q
-  simp only [unit, Task.trace_bind, Task.trace_pure, List.append_nil, Task.run_bind, Task.run_pure]
+  simp only [unit, Query.Task.trace_bind, Query.Task.trace_pure, List.append_nil, Query.Task.run_bind, Query.Task.run_pure]
   exact h u q
 
 /-! ## Keys -/

@@ -27,6 +27,7 @@ The `example`s are checks by `native_decide` on this space, and the dump feeds t
 specification is `JavaSealedSpec.lean`.
 -/
 
+
 namespace Zinc.JavaSealed
 
 open Zinc.JavaNames (Lang)

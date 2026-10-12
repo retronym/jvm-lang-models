@@ -15,7 +15,9 @@ import Scala.Space
 * `verdicts`: per edit, the model's MiMa problems and whether some client of `spaceB` breaks or
   changes, as TSV. -/
 
-open BinCompat Jvm.Catalogue Jvm.Clients
+open IncComp
+
+open MiMa Links Jvm.Catalogue Jvm.Clients
 
 def jstr (s : String) : String := "\"" ++ s ++ "\""
 

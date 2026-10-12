@@ -21,8 +21,8 @@ Units: annotation classes (static or not, constructor arity, `transform` body), 
 |---|---|
 | `obligations_comp`: the two-stage joint compile (definitions against the round's classes, clients against the round's definitions) is a fixed point | proved, every program |
 | `obligations_fix`, `fix_sound`: #1842's keys (the annotation's class, a constant argument's holder) with a macro annotation's `transform` body in its hash meet the obligations, so T3a | proved, every program |
-| [`today_not_coverage`](../Zinc/Features/Annotations.lean#L269) (#1842): the definition's `ctor` query to its annotation's class has no key, whatever the hashing | proved, one witness |
-| [`noBody_not_abstraction`](../Zinc/Features/Annotations.lean#L277) ([scala/scala3#22999](https://github.com/scala/scala3/issues/22999)): two macro annotations differing in `transform` hash alike, whatever the keys | proved, one witness |
+| [`today_not_coverage`](../Zinc/Features/Annotations.lean#L271) (#1842): the definition's `ctor` query to its annotation's class has no key, whatever the hashing | proved, one witness |
+| [`noBody_not_abstraction`](../Zinc/Features/Annotations.lean#L279) ([scala/scala3#22999](https://github.com/scala/scala3/issues/22999)): two macro annotations differing in `transform` hash alike, whatever the keys | proved, one witness |
 | #237 | `HashForms.masking_237` (annotations read at a phase that drops them) |
 | [scala/scala3#23783](https://github.com/scala/scala3/issues/23783) (a macro reading a type argument's annotations) | the client's `annots` query on a unit reached through a type argument: covered when the client records a key on that unit, as `client d` does here; the bug is the missing key |
 
@@ -30,7 +30,7 @@ So #1842 as a key: a class key, from the annotated definition, on the annotation
 
 ## The cluster's scripted tests
 
-On develop: `annotations-in-java-sources-a`, `-a2`, `-b`, `annotations-in-java-params` and `specialized` pass (annotations in the API of Java sources and of specialised members). #1842 adds `annotation-ctor-change-class`, `annotation-ctor-change-param`, `annotation-class-signature-change`, `annotation-constant-arg`, `annotation-java-interface` (each an instance of [`today_not_coverage`](../Zinc/Features/Annotations.lean#L269), fixed by `obligations_fix`'s keys), with the Scala 3 and scala2-sbt-bridge variants pending (the same gap in those bridges).
+On develop: `annotations-in-java-sources-a`, `-a2`, `-b`, `annotations-in-java-params` and `specialized` pass (annotations in the API of Java sources and of specialised members). #1842 adds `annotation-ctor-change-class`, `annotation-ctor-change-param`, `annotation-class-signature-change`, `annotation-constant-arg`, `annotation-java-interface` (each an instance of [`today_not_coverage`](../Zinc/Features/Annotations.lean#L271), fixed by `obligations_fix`'s keys), with the Scala 3 and scala2-sbt-bridge variants pending (the same gap in those bridges).
 
 ## Steps
 

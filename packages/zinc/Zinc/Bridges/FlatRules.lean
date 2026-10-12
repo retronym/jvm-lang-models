@@ -9,6 +9,8 @@ Here that table is a `Policy`, the refchecks queries go unrecorded, and every ru
 program space is compared with the clean build.
 -/
 
+open IncComp
+
 namespace Zinc.Flat
 
 open Zinc.Hier (Cls Name Ty)

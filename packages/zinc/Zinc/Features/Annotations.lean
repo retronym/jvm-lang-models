@@ -26,6 +26,8 @@ annotation class without its `transform` body (a method body); `withBody` includ
   hash alike.
 -/
 
+open Query IncComp
+
 set_option linter.unusedSectionVars false
 
 namespace Zinc.Annotations
@@ -83,8 +85,8 @@ structure Out (U : Type) where
   /-- What a client records: the definition it reads. -/
   reads : List U
 
-abbrev T (U : Type) := Task (U × Q) (fun p => Ans U p.2)
-abbrev Env (U : Type) := Task.Env (U × Q) (fun p => Ans U p.2)
+abbrev T (U : Type) := Query.Task (U × Q) (fun p => Ans U p.2)
+abbrev Env (U : Type) := Query.Task.Env (U × Q) (fun p => Ans U p.2)
 
 def argVal : Arg U → T U ℕ
   | .lit n => .pure n
@@ -158,25 +160,25 @@ theorem answer_kind (s : Src U) (e : Env U) (q : Q) (hq : q ≠ .annots) :
   | annCls st ar tr => rfl
   | consts v => rfl
   | defn a arg =>
-    simp only [unit, Task.run_ask, Task.run_bind, Task.run_pure, kindIface]
+    simp only [unit, Query.Task.run_ask, Query.Task.run_bind, Query.Task.run_pure, kindIface]
     cases q <;> simp_all [answer]
   | client d =>
-    simp only [unit, Task.run_ask, Task.run_pure, kindIface]
+    simp only [unit, Query.Task.run_ask, Query.Task.run_pure, kindIface]
     cases q <;> simp_all [answer]
 
 /-- A definition asks no `annots`. -/
 theorem trace_defn (a : U) (arg : Arg U) (e : Env U) :
     ∀ q ∈ (unit (.defn a arg)).trace e, q.2 ≠ .annots := by
   intro q hq
-  simp only [unit, Task.trace_ask, Task.run_ask, List.mem_cons] at hq
+  simp only [unit, Query.Task.trace_ask, Query.Task.run_ask, List.mem_cons] at hq
   cases arg with
   | lit n =>
-    simp only [argVal, Task.trace_bind, Task.run_bind, Task.trace_pure, Task.run_pure,
-      Task.trace_ask, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [argVal, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_pure, Query.Task.run_pure,
+      Query.Task.trace_ask, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl | rfl <;> simp
   | ref c =>
-    simp only [argVal, Task.trace_bind, Task.run_bind, Task.trace_ask, Task.run_ask, Task.trace_pure,
-      Task.run_pure, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [argVal, Query.Task.trace_bind, Query.Task.run_bind, Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_pure,
+      Query.Task.run_pure, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl | rfl | rfl <;> simp
 
 /-- Two oracles that agree on every query but `annots` give a unit the same answer to `annots`. -/
@@ -188,7 +190,7 @@ theorem annots_stable (s : Src U) (e e' : Env U) (h : ∀ p : U × Q, p.2 ≠ .a
   | consts v => rfl
   | client d => simp [unit, answer]
   | defn a arg =>
-    rw [Task.run_congr (unit (.defn a arg)) e e' (fun q hq => h q (trace_defn a arg e q hq))]
+    rw [Query.Task.run_congr (unit (.defn a arg)) e e' (fun q hq => h q (trace_defn a arg e q hq))]
 
 theorem e₂_eq_e₁ (G : Finset U) (src : U → Src U) (e : Env U) (p : U × Q) (hp : p.2 ≠ .annots) :
     e₂ G src e p = e₁ G src e p := by
@@ -223,18 +225,18 @@ theorem trace_units (s : Src U) (e : Env U) :
   | annCls st ar tr => simp [unit] at hq
   | consts v => simp [unit] at hq
   | client d =>
-    simp only [unit, Task.trace_ask, Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [unit, Query.Task.trace_ask, Query.Task.trace_pure, List.mem_cons, List.not_mem_nil, or_false] at hq
     subst hq; simp [unit]
   | defn a arg =>
     cases arg with
     | lit n =>
-      simp only [unit, argVal, Task.trace_ask, Task.run_ask, Task.trace_bind, Task.run_bind,
-        Task.trace_pure, Task.run_pure, List.nil_append, List.mem_cons, List.not_mem_nil,
+      simp only [unit, argVal, Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_bind, Query.Task.run_bind,
+        Query.Task.trace_pure, Query.Task.run_pure, List.nil_append, List.mem_cons, List.not_mem_nil,
         or_false] at hq
       rcases hq with rfl | rfl | rfl <;> simp [unit, argVal, argDeps]
     | ref c =>
-      simp only [unit, argVal, Task.trace_ask, Task.run_ask, Task.trace_bind, Task.run_bind,
-        Task.trace_pure, Task.run_pure, List.cons_append, List.nil_append, List.mem_cons,
+      simp only [unit, argVal, Query.Task.trace_ask, Query.Task.run_ask, Query.Task.trace_bind, Query.Task.run_bind,
+        Query.Task.trace_pure, Query.Task.run_pure, List.cons_append, List.nil_append, List.mem_cons,
         List.not_mem_nil, or_false] at hq
       rcases hq with rfl | rfl | rfl | rfl <;> simp [unit, argVal, argDeps]
 

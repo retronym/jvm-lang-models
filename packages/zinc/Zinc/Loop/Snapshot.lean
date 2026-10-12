@@ -26,6 +26,8 @@ processed upstream change") refreshes every changed upstream class after a compi
 `refreshAll` on the classes that changed (an unchanged class's record is already current).
 -/
 
+open Query IncComp
+
 namespace Zinc.Snapshot
 
 open Compiler (State)
@@ -55,7 +57,7 @@ abbrev Out := ℕ × (ℕ × ℕ)
 def answer (I : U → Iface) : (q : U × Q) → Ans q.2
   | (u, .value) => (I U.A, I u)
 
-def unit : Src → Task (U × Q) (fun p => Ans p.2) Out
+def unit : Src → Query.Task (U × Q) (fun p => Ans p.2) Out
   | .lib n => .pure (n, (0, 0))
   | .client => .ask (U.C, Q.value) fun (v : ℕ × ℕ) => .pure (0, v)
 
@@ -85,7 +87,7 @@ theorem group_iface (G : Finset U) (src : U → Src) (I : U → Iface) (v : U) (
 
 theorem trace_C (s : Src) (e : (q : U × Q) → Ans q.2) : ∀ q ∈ (unit s).trace e, q = (U.C, Q.value) := by
   intro q hq
-  cases s <;> simp [unit, Task.trace] at hq
+  cases s <;> simp [unit, Query.Task.trace] at hq
   exact hq
 
 theorem obligations : compiler.Obligations where
