@@ -67,7 +67,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 
 **Why.** Findings help no one until filed.
 
-**Done looks like.** The five MiMa issues (drafts in [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md), "Issues to file") and the scalac 2 trait-setter `AbstractMethodError` ([`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md)) filed.
+**Done looks like.** Four MiMa issues are filed ([scala-garden/mima#993](https://github.com/scala-garden/mima/issues/993)–#996; MiMa-D1 is out of MiMa's scope, see [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md)). Still to file: the scalac 2 trait-setter `AbstractMethodError` ([`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md)) filed.
 
 ### Contributors
 

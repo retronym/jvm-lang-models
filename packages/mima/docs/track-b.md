@@ -81,15 +81,16 @@ The Scala catalogue cases of Tracks S1–S3, compiled by scalac 2.13.18 and run 
 
 Not done: a restricted Scala 3 theorem without the fix. [`XCompiler`](../../inc-comp/IncComp/General.lean#L22) subsumes the [`NCompiler`](../../inc-comp/IncComp/NonLocalAns.lean#L34) statement first planned (through [`NCompiler.toX`](../../inc-comp/IncComp/NonLocalAns.lean#L73)).
 
-## Issues to file
+## Issues filed
 
-Drafts against MiMa, one per gap, not yet filed. Each needs a reproducer from the edit space (`lake exe bincompat witness <edit>`) in MiMa's functional-test layout.
+Filed against scala-garden/mima on 12 October 2026, each with a reproducer in Java checked on HotSpot 21 and MiMa 1.2.1:
 
-1. **A field that becomes `final` is not reported** (MiMa-F1). `FieldChecker` compares access, type and `static`, not `final`. A client's `putfield`/`putstatic` fails with `IllegalAccessError`. Suggested: a `FinalFieldProblem` when the old field is not final and the new one is.
-2. **A member a subclass adds can hide an inherited one, and is not reported** (MiMa-M1). `B extends A`, `A.m()` public. If `B` adds a static, private, package-private or protected `m()`, or a field `m` with incompatible flags, a client's `invokevirtual B.m` or `getfield B.m` resolves to the new member and fails; a public final `m()` breaks a client's override at load. MiMa checks only the members `B` declared in the old version. Changing an override `B.m` from public to private is the same failure, also unreported, because the class file parser drops private methods and the lookup finds `A.m`. Suggested: for each class, check the resolution of every inherited public or protected member through that class, with private members in the new version's lookup.
-3. **An interface field that field resolution now reaches first is not reported** (MiMa-F2). Field resolution searches superinterfaces before the superclass (JVMS §5.4.3.2). If `I` gains a field `m`, a client `class X extends A implements I` that read `A.m` as `X.m` now gets `I.m`, which is static and final. `FieldChecker` looks only in the class and its superclasses.
-4. **A default method that conflicts with another interface's is not reported** (MiMa-D1). If `J` gains a default `m()` that an unrelated `I` has, a client implementing both gets `IncompatibleClassChangeError`. Clients can declare their own interfaces, so any new default can conflict, and MiMa treats new defaults as compatible by design; at least a conflict between two of the library's own interfaces can be reported.
-5. **Protected members are not checked** (MiMa-P1). `nonAccessible` is `!isBytecodePublic`, so a protected method a client's subclass calls can be removed without a report (`protectedRemoved`: `NoSuchMethodError` on HotSpot). Affects Java-defined libraries.
+1. MiMa-F1, a field that becomes `final`: [scala-garden/mima#993](https://github.com/scala-garden/mima/issues/993).
+2. MiMa-M1, a member a subclass adds breaks clients of an inherited one: [scala-garden/mima#994](https://github.com/scala-garden/mima/issues/994). Filed for the cases javac can produce: a new field that hides an inherited one (private or static), and a new `final` override. The method-hiding cases of the model (a static or private `m()` in the subclass) cannot come from javac when both classes compile together, so the issue only mentions them.
+3. MiMa-F2, a field added to an interface hides a superclass field: [scala-garden/mima#995](https://github.com/scala-garden/mima/issues/995). The reproducer needs no client class of its own: a library class extending `A` and implementing `I` is enough.
+4. MiMa-P1, protected members of Java classes are not checked: [scala-garden/mima#996](https://github.com/scala-garden/mima/issues/996).
+
+Not filed: MiMa-D1, a new default that conflicts with another interface's. It reproduces (`IncompatibleClassChangeError: Conflicting default methods`), but the conflict exists only in a client class that implements both interfaces. MiMa compares two versions of one library, class by class, and does not check interactions between unrelated classes; this gap belongs to a migration manager that also had data on how clients use the library.
 
 ## PRs
 
