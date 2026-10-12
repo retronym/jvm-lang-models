@@ -51,7 +51,7 @@ The same conflict can wait until selection. The client's class `X` implements `I
 ```lean
 open Jvm Jvm.Catalogue Jvm.Site
 
-def ifc (ms : List (N × D × MethodInfo)) :
+def ifc (ms : List (N × D × MethodInfo C N D)) :
     Classfile C N D :=
   { header := { isInterface := true }, methods := ms }
 

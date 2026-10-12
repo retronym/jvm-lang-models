@@ -87,3 +87,36 @@ The client's `getfield B.m` now resolves to a static field, and HotSpot raises
 MiMa 1.2.1 reports nothing for this edit: its field check looks in a class and its superclasses
 only. Reported as [scala-garden/mima#995](https://github.com/scala-garden/mima/issues/995), with a
 Java reproducer checked on HotSpot 21.
+
+# An access check after selection
+
+Resolution checks access to the method a reference names. `invokeinterface` checks access a second
+time, to the method selection picks on the receiver's class:
+
+> Otherwise, if the selected method is neither public nor private, invokeinterface throws an IllegalAccessError.
+
+  Otherwise, if the selected method is abstract, invokeinterface throws an AbstractMethodError.
+
+— [JVMS §6.5 invokeinterface](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-6.html#jvms-6.5.invokeinterface), run-time exceptions, Java SE 21.
+
+The model lacked this clause until the default-method calibration space (Track J7) ran on HotSpot.
+A package-private method in a class can override a public interface method (§5.4.5 asks only that
+the interface's method be public), so selection can pick it, and the model ran it where HotSpot
+throws. Now {name}`Jvm.select` checks it, before the check for an abstract method:
+
+{docstring Jvm.select}
+
+The javac-reachable form: a client's `X extends A implements I` inherits `I`'s default `m`; `A`,
+in another package and not implementing `I`, gains a package-private `m`. javac accepts the new `A`,
+and even a client recompiled against it, since `A.m` is not inherited outside its package; but
+`invokeinterface I.m` on an `X` now selects `A.m`:
+
+```lean
+open Jvm.Catalogue in
+example :
+    pkgMethodAboveDefault.before = .ok [.I] ∧
+    pkgMethodAboveDefault.after =
+      .error .illegalAccess := by decide
+```
+
+MiMa 1.2.1 reports nothing for this edit, and nor do the corrected rules of Track B.
