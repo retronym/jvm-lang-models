@@ -1,3 +1,5 @@
 .lake/
 /scratch
 .claude/
+.cache/
+literate/_out/

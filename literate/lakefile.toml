@@ -1,0 +1,22 @@
+name = "literate"
+version = "0.1.0"
+defaultTargets = ["literate"]
+
+# Literate pages, written with Verso: each section quotes the specification clause it models,
+# shows the model's definition, and checks examples by evaluation. A pilot: one chapter so far.
+#   lake exe literate --output _out   # then serve _out/html-multi
+[[require]]
+name = "verso"
+git = "https://github.com/leanprover/verso"
+rev = "v4.34.0"
+
+[[require]]
+name = "jvm"
+path = "../packages/jvm"
+
+[[lean_lib]]
+name = "Literate"
+
+[[lean_exe]]
+name = "literate"
+root = "LiterateMain"

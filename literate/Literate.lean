@@ -1,0 +1,16 @@
+import VersoManual
+import Literate.Linking
+
+open Verso.Genre Manual
+
+#doc (Manual) "JVM language models, literate" =>
+%%%
+authors := ["Jason Zaugg"]
+shortTitle := "Literate models"
+%%%
+
+These pages read the models in [retronym/jvm-lang-models](https://github.com/retronym/jvm-lang-models)
+next to the specifications they formalise. Each section quotes the clause it models, shows the
+model's definition, and checks an example by evaluation and by the kernel.
+
+{include 1 Literate.Linking}
