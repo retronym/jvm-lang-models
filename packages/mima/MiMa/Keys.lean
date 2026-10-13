@@ -160,6 +160,54 @@ def protectedRemoved : Witness where
 example : protectedRemoved.missed = true ∧ protectedRemoved.uncovered (.method .A .m .v) = true := by
   decide +kernel
 
+/-! ### MiMa-S1, a method added above a client subclass
+
+A public class gains a method that a client's own subclass meets first: resolution through the
+subclass finds it, selection on the subclass picks it, or the subclass's own method overrides it.
+MiMa keys members a library class declares or inherits, by references through library classes; none
+reads what a client subclass meets. The three witnesses add to `base3`, `base1` without `A.m()V`. -/
+
+/-- **MiMa-S1 (a), resolution.** `A` gains a private `m()V`. A client `X extends A implements I`
+resolved `invokevirtual X.m` to `I`'s default; resolution now searches `A` first (§5.4.3.3) and
+finds the private `A.m` (`IllegalAccessError`). javac-reachable: `A` compiles alone, and a
+recompiled `X` emits the same call (a private `A.m` is not inherited). -/
+def privateAboveDefault : Witness where
+  o := base3
+  n := replace base3 .A (setMethod ((get base3 .A).getD {}) .v (some { access := .priv }))
+  client := [(.X, { header := { super := some .A, ifaces := [.I] } })]
+  prog := { loads := [.X], sites := [.invokevirtual .X .m .v .X] }
+
+example : privateAboveDefault.missed = true ∧ privateAboveDefault.uncovered (.method .A .m .v) = true := by
+  decide +kernel
+
+/-- **MiMa-S1 (b), selection.** `A` gains a package-private `m()V`. A client
+`X extends A implements I` in another package inherited `I`'s default; `A.m` can override `I.m`
+(§5.4.5: `I.m` is public), so `invokeinterface I.m` on an `X` selects it and fails, as it is neither
+public nor private (`IllegalAccessError`, JVMS §6.5). javac-reachable: javac recompiles `X`
+unchanged (`A.m` is not inherited outside its package, JLS §8.4.8), and the new `X` fails the same
+way. -/
+def pkgAboveDefault : Witness where
+  o := base3
+  n := replace base3 .A (setMethod ((get base3 .A).getD {}) .v (some { access := .pkg }))
+  client := [(.X, { header := { super := some .A, ifaces := [.I] } })]
+  prog := { loads := [.X], sites := [.invokeinterface .I .m .v .X] }
+
+example : pkgAboveDefault.missed = true ∧ pkgAboveDefault.uncovered (.method .A .m .v) = true := by
+  decide +kernel
+
+/-- **MiMa-S1 (c), loading.** `A` gains a public final `m()V`; a client `X extends A` that declares
+`m()V` now overrides a final method and does not load (§5.3.5, `IncompatibleClassChangeError`).
+MiMa's final check compares only methods `A` had. The old `X` is javac-reachable; a recompile
+fails. -/
+def finalAboveOverride : Witness where
+  o := base3
+  n := replace base3 .A (setMethod ((get base3 .A).getD {}) .v (some { isFinal := true }))
+  client := [(.X, { header := { super := some .A }, methods := [(.m, .v, {})] })]
+  prog := { loads := [.X], sites := [.invokevirtual .X .m .v .X] }
+
+example : finalAboveOverride.missed = true ∧ finalAboveOverride.uncovered (.method .A .m .v) = true := by
+  decide +kernel
+
 /-- The `mima` field of each `Jvm` catalogue case is the first problem the model of MiMa reports
 (which MiMa itself reports too: `packages/mima/probes`). -/
 example : (all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject ++ j4).all

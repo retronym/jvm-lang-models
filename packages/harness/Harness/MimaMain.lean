@@ -51,7 +51,9 @@ def main (args : List String) : IO Unit := do
   if args.contains "gaps" then
     for (n, x) in [("finalField", finalField), ("shadowStatic", shadowStatic), ("shadowField", shadowField),
         ("overridePrivate", overridePrivate), ("ifaceField", ifaceField),
-        ("defaultConflict", defaultConflict), ("protectedRemoved", protectedRemoved)] do
+        ("defaultConflict", defaultConflict), ("protectedRemoved", protectedRemoved),
+        ("privateAboveDefault", privateAboveDefault), ("pkgAboveDefault", pkgAboveDefault),
+        ("finalAboveOverride", finalAboveOverride)] do
       IO.println (Jvm.Dump.caseJson { name := n, mima := none, v0 := x.o, v1 := x.n, client := x.client, prog := x.prog })
   else if args.contains "scala" then
     let out := args.getLast!
@@ -77,7 +79,7 @@ def main (args : List String) : IO Unit := do
     for e in edits do IO.println (problemsJson e.name (mima e.v0 e.v1))
     for k in all ++ j3 ++ j5 ++ j7 ++ j8 ++ jObject do IO.println (problemsJson k.name (mima k.v0 k.v1))
   else if args.contains "unreported" then
-    for b in [1, 2] do
+    for b in [1, 2, 3] do
       for c in [C.A, C.B, C.I, C.J] do
         IO.println s!"{b} {repr c} {nVariants b c} {unreported b c}"
   else if args.contains "witness" then

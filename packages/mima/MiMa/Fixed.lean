@@ -2,7 +2,7 @@ import MiMa.Keys
 /-!
 # A corrected rule set
 
-MiMa's keys plus four, one per gap in `packages/mima/MiMa/Keys.lean`:
+MiMa's keys plus five, one per gap in `packages/mima/MiMa/Keys.lean`:
 
 * `resolveMethod c n d`, `resolveField c n d`: for a public class `c` of the old library and every
   name and descriptor, the member a client's reference *through `c`* resolves to (JVMS §5.4.3.2–4,
@@ -14,6 +14,14 @@ MiMa's keys plus four, one per gap in `packages/mima/MiMa/Keys.lean`:
 * `defaults t n d`: an interface gaining a default method that another public interface, unrelated
   to it, also has (MiMa-D1). In general a client's own interface can have a default of any name, so any
   new default can conflict; in the model's client space, clients implement only library interfaces.
+* `subResolves`, `subSelects`, `subOverridesFinal` (MiMa-S1, a method added above a client
+  subclass): for a public, non-final class `c`, the declaration of `n d` that a client subclass
+  meets first on `c`'s superclass chain is new or changed, and (a) is private or static, so
+  resolution of the subclass's `n d` fails where it found an inherited default; (b) is
+  package-private or protected, so `invokeinterface` selects it and fails (JVMS §6.5); or (c) is
+  public or protected and final, so a subclass that declares `n d` no longer loads. (a) and (b) ask
+  that some public interface have a default `n d`: as for D1, the interface is the client's choice,
+  and the model's client space is the stand-in. (c) is unconditional.
 
 Soundness on the space: every edit in `BinCompat.edits` that breaks a client of `spaceB` is
 reported. Checked by kernel `decide` (enumeration as testing, per `docs/specification.md`; not a proof for
@@ -29,6 +37,9 @@ inductive Extra
   | resolvedFieldChanged
   | ifaceFieldShadows
   | defaultConflict
+  | subclassResolves
+  | subclassSelectsNonPublic
+  | subclassOverridesFinal
   deriving DecidableEq, Repr
 
 def Extra.name : Extra → String
@@ -36,6 +47,9 @@ def Extra.name : Extra → String
   | .resolvedFieldChanged => "ResolvedFieldChanged"
   | .ifaceFieldShadows => "InterfaceFieldShadows"
   | .defaultConflict => "DefaultConflict"
+  | .subclassResolves => "SubclassResolvesNonPublic"
+  | .subclassSelectsNonPublic => "SubclassSelectsNonPublic"
+  | .subclassOverridesFinal => "SubclassOverridesFinal"
 
 def rank : Access → ℕ | .pub => 3 | .prot => 2 | .pkg => 1 | .priv => 0
 
@@ -99,6 +113,64 @@ def defaultsCheck (o n : Lib) (t : C) (mn : N) (md : D) : Bool :=
       u != t && cf.header.isPublic && cf.header.isInterface && isDefault n u mn md &&
         !(allIfaces n fuel u).contains t && !(allIfaces n fuel t).contains u
 
+/-- A method's flags, without its body. -/
+def flags (i : MethodInfo C N D) : Access × Bool × Bool × Bool := (i.access, i.isStatic, i.isAbstract, i.isFinal)
+
+/-- The first declaration of `mn md` on `c`'s superclass chain, of any kind: what resolution
+(§5.4.3.3) through a subclass of `c` declaring no `mn md` finds before the superinterfaces. -/
+def firstDecl (l : Lib) (c : C) (mn : N) (md : D) : Option (MethodInfo C N D) :=
+  ((c :: supers l fuel c).filterMap fun x =>
+    ((((get l x).map (·.methods)).getD []).find? fun m => m.1 = mn ∧ m.2.1 = md).map (·.2.2)).head?
+
+/-- The first instance, non-private declaration of `mn md` on `c`'s superclass chain: what
+selection (§5.4.6) on a subclass of `c` declaring no `mn md` reaches before the superinterfaces,
+and what a subclass's own `mn md` overrides (`overrides` skips static and private methods). -/
+def selDecl (l : Lib) (c : C) (mn : N) (md : D) : Option (MethodInfo C N D) :=
+  ((c :: supers l fuel c).filterMap fun x =>
+    ((meths l x).find? fun m => m.1 = mn ∧ m.2.1 = md ∧ !m.2.2.isStatic).map (·.2.2)).head?
+
+def isPubIface (l : Lib) (u : C) : Bool :=
+  ((get l u).map fun cf => cf.header.isPublic && cf.header.isInterface).getD false
+
+/-- Some public interface has a default `mn md`, which a client subclass can inherit. -/
+def someDefault (l : Lib) (mn : N) (md : D) : Bool :=
+  l.any fun (u, _) => isPubIface l u && isDefault l u mn md
+
+def extendable (l : Lib) (c : C) : Bool :=
+  ((get l c).map fun cf => cf.header.isPublic && !cf.header.isInterface && !cf.header.isFinal).getD false
+
+/-- The declaration is new, or its flags changed. -/
+def changed (i0 : Option (MethodInfo C N D)) (i1 : MethodInfo C N D) : Bool :=
+  (i0.map flags) != some (flags i1)
+
+/-- MiMa-S1 (a), resolution: a subclass of `c` that inherits a default `mn md` resolves
+`invokevirtual X.mn` to a new private or static method on `c`'s chain, before the superinterfaces
+(`IllegalAccessError`, `IncompatibleClassChangeError`). -/
+def subResolvesCheck (o n : Lib) (c : C) (mn : N) (md : D) : Bool :=
+  extendable n c && someDefault n mn md &&
+    match firstDecl n c mn md with
+    | some i1 => (i1.access == .priv || i1.isStatic) && changed (firstDecl o c mn md) i1
+    | none => false
+
+/-- MiMa-S1 (b), selection: a subclass of `c` that inherits a default `mn md` selects a new
+package-private or protected method on `c`'s chain for `invokeinterface`, which fails
+(`IllegalAccessError`, JVMS §6.5). -/
+def subSelectsCheck (o n : Lib) (c : C) (mn : N) (md : D) : Bool :=
+  extendable n c && someDefault n mn md &&
+    match selDecl n c mn md with
+    | some i1 => (i1.access == .pkg || i1.access == .prot) && changed (selDecl o c mn md) i1
+    | none => false
+
+/-- MiMa-S1 (c), loading: `c`'s chain newly has a public or protected final `mn md`, which a client
+subclass declaring `mn md` now overrides (§5.3.5). Unconditional: any client subclass may declare it. -/
+def subOverridesFinalCheck (o n : Lib) (c : C) (mn : N) (md : D) : Bool :=
+  extendable n c &&
+    match selDecl n c mn md with
+    | some i1 =>
+      i1.isFinal && (i1.access == .pub || i1.access == .prot) &&
+        !((selDecl o c mn md).map (·.isFinal)).getD false
+    | none => false
+
 def allN : List N := [.m]
 def allMD : List D := [.v, .i]
 def allFD : List D := [.s]
@@ -115,15 +187,22 @@ def extra (o n : Lib) : List Extra :=
       (allN.flatMap fun fn => allFD.filterMap fun fd =>
         if ifaceFieldCheck o n c fn fd then some .ifaceFieldShadows else none) ++
       (allN.flatMap fun mn => allMD.filterMap fun md =>
-        if defaultsCheck o n c mn md then some .defaultConflict else none)
+        if defaultsCheck o n c mn md then some .defaultConflict else none) ++
+      (allN.flatMap fun mn => allMD.flatMap fun md =>
+        (if subResolvesCheck o n c mn md then [.subclassResolves] else []) ++
+        (if subSelectsCheck o n c mn md then [.subclassSelectsNonPublic] else []) ++
+        (if subOverridesFinalCheck o n c mn md then [.subclassOverridesFinal] else []))
 
 /-- The corrected rule set reports something. -/
 def fixedReports (o n : Lib) : Bool := mima o n != [] || extra o n != []
 
 /-- Each witness of a MiMa gap is reported by the corrected rules. -/
 example : [finalField, shadowStatic, shadowField, overridePrivate, ifaceField, defaultConflict,
-    protectedRemoved].all
+    protectedRemoved, privateAboveDefault, pkgAboveDefault, finalAboveOverride].all
     (fun x => fixedReports x.o x.n) = true := by decide +kernel
+
+/-- Track J7's `pkgMethodAboveDefault` (MiMa-S1), which MiMa misses. -/
+example : fixedReports pkgMethodAboveDefault.v0 pkgMethodAboveDefault.v1 = true := by decide +kernel
 
 /-! ## Package-private members: `methodBecomesFinalBehind`
 
@@ -160,7 +239,7 @@ def finalBehindMissed (k : Case) : Bool :=
 /-! ## The edit space, indexed for `packages/mima/MiMa/Sound.lean` -/
 
 
-def baseOf : ℕ → Lib | 1 => base1 | _ => base2
+def baseOf : ℕ → Lib | 1 => base1 | 3 => base3 | _ => base2
 
 /-- The `i`-th variant of class `c` in base `b`. -/
 def variant (b : ℕ) (c : C) (i : ℕ) : Lib :=

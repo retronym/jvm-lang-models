@@ -75,7 +75,7 @@ The Mathlib-free packages can be required on their own, for example [`packages/i
 
 **Maintain javac, scalac or dotc.** [`packages/java`](packages/java), [`packages/scala`](packages/scala) and [`packages/scala-types`](packages/scala-types) state what the compilers emit for a subset, calibrated by the probes beside them. [`packages/scala/Scala/Facts.lean`](packages/scala/Scala/Facts.lean) and the `comp` failures in the bug map are where joint and separate compilation differ.
 
-**Maintain MiMa.** [`packages/mima`](packages/mima): MiMa as a bridge design, its five gaps, corrected rules; [`packages/links`](packages/links) connects it to Zinc (B4).
+**Maintain MiMa.** [`packages/mima`](packages/mima): MiMa as a bridge design, its six gaps, corrected rules; [`packages/links`](packages/links) connects it to Zinc (B4).
 
 **Maintain the IntelliJ Scala plugin.** [`packages/intellij`](packages/intellij): the theorems behind the plugin's substitutor checks, on top of `ScalaTypes.AsSeenFrom`.
 

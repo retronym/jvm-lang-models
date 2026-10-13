@@ -37,6 +37,15 @@ def base2 : Lib :=
           fields := [(.m, .s, { isStatic := true, isFinal := true })] }),
    (.J, { header := { itf1 with ifaces := [.I] }, methods := [(.m, .v, {})] })]
 
+/-- `base1` without `A.m()V`, so that an edit can add a method to `A` below `I`'s default (Track J7's
+`pkgMethodAboveDefault`). Its edits are in `MiMa.Sound`'s check of the corrected rules, not in
+`edits`, the space compared with MiMa 1.2.1. -/
+def base3 : Lib :=
+  [(.A, { header := pub1, fields := [(.m, .s, {})] }),
+   (.B, { header := { pub1 with super := some .A } }),
+   (.I, { header := itf1, methods := [(.m, .v, {})] }),
+   (.J, { header := itf1 })]
+
 def bools : List Bool := [false, true]
 def accesses : List Access := [.pub, .prot, .pkg, .priv]
 
