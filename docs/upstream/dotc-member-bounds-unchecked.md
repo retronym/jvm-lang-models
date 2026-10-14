@@ -55,6 +55,19 @@ val p: { type L >: Int <: String } = null      // a refinement; then the same up
 
 This is a smaller form of [scala/bug#9633](https://github.com/scala/bug/issues/9633) than the bug's own: no intersection is needed, because one declaration carries the conflict. The design of checking bounds at realization rather than declaration ([Scaling DOT to Scala: soundness](https://www.scala-lang.org/blog/2016/02/17/scaling-dot-soundness.html)) is about bounds that conflict only in combination, which a local check cannot see. Bounds that conflict where they are written can be seen locally, and Scala 2 does see them.
 
-Suggested resolution: check a type member's, type parameter's and refinement member's declared bounds at the declaration (`lo <: hi`), as Scala 2 does and as [scala/scala3#15569](https://github.com/scala/scala3/issues/15569) first asked. This leaves the combined-bounds case to realizability, as today.
+## Cause
+
+`PostTyper` checks a type definition's bounds with `Checking.checkGoodBounds`, except where its owner is an abstract class or a trait:
+
+```scala
+if !sym.is(Param) && !sym.owner.isOneOf(AbstractOrTrait) then
+  Checking.checkGoodBounds(tree.symbol)
+```
+
+The exemption was added on purpose, in scala/scala3 commit `a24915c9f6` (4 July 2022, alongside [scala/scala3#15571](https://github.com/scala/scala3/pull/15571)): "Don't check bounds for type definitions in abstract classes, traits, or refinements. Bounds violations will be detected when values of these types are created." The rationale assumes a path of type `B` is reached only through a value built by `new`, where `checkRealizableBounds` runs. `null` is a value of type `B` that was never created, so the violation is never detected.
+
+## Suggested fix
+
+Check a type member's, type parameter's and refinement member's declared bounds at the declaration (`lo <: hi`) in abstract classes and traits too, that is, drop `!sym.owner.isOneOf(AbstractOrTrait)` from the guard, as Scala 2 does and as [scala/scala3#15569](https://github.com/scala/scala3/issues/15569) first asked. A declaration's own bounds are known where it is written; only bounds that conflict in combination need realizability, which stays as it is. The tests the commit moved (`tests/init/neg/i11572.scala`, `tests/init/neg/i5854.scala`, `tests/neg-strict/i1050.scala`) are where the change would show.
 
 Found by enumerating 2,430 small programs over type members, paths and views, compiling and running each on scalac 2.12.21, 2.13.18 and dotc 3.9.0, and calibrating a Lean model of the compilers' checks against them ([retronym/jvm-lang-models, Track T](https://github.com/retronym/jvm-lang-models/blob/main/packages/scala-types/docs/track-t.md)), with an LLM's help. dotc accepts 264 programs there that throw a cast-free `ClassCastException`. One family of them, which Scala 2 rejects at the declaration, has this shape.

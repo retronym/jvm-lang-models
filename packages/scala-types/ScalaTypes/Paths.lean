@@ -72,10 +72,12 @@ def _root_.Scala.Decl.tmem (d : Decl) (n : String) : Option TMem := d.tmems.find
 /-- Member `n` of the intersection of `ds`, in order.
 
 Spec: cites SLS §3.2.7
-Spec: unspecified SLS §3.2.7: the bounds of an abstract type member of a compound type `A with B`
-whose parents both declare it. scalac takes the last parent's; dotc, for `A & B`, the union of the
-lower bounds and the intersection of the upper ones (the Scala 3 reference on intersection types).
-Calibrated on 2,430 programs per setting (`PathsOracle.calibrated`). -/
+Spec: contradicts SLS §3.2.7 / scalac 2.12.21, 2.13.18: every parent's declaration of a type member of
+a compound type `A with B` is a member binding (SLS §3.2.7, §3.4), but scalac takes the last
+parent's alone, so a path seen through the compound type has only `B`'s bounds (scala/bug#12164,
+open). dotc, for `A & B`, takes the union of the lower bounds and the intersection of the upper ones
+(the Scala 3 reference on intersection types). Calibrated on 2,430 programs per setting
+(`PathsOracle.calibrated`). -/
 def interBounds (s : Setting) (ds : List Decl) (n : String) : Bounds :=
   let ms := ds.filterMap (·.tmem n)
   if s.scala2 then (ms.getLast?.map TMem.bounds).getD ⟨[.nothing], [.any]⟩
@@ -158,10 +160,15 @@ def overrideOk (high low : Bounds) : Bool :=
 /-- The compiler's check, as a task over the program's declarations.
 
 Spec: cites SLS §4.3, SLS §5.1.4
-Spec: contradicts SLS §4.3 / dotc 3.9.0: "It is a compile-time error if L does not conform to U",
-but dotc accepts `trait B { type L >: Int <: String }` and rejects it only where the type is
-realized; scalac rejects the declaration (`PathsOracle.calibrated`). With a `null` path such a
-program throws a cast-free `ClassCastException` (`PathsOracle.accepted_sound_except`). -/
+Spec: contradicts SLS §4.3 / dotc 3.9.0: "It is a compile-time error if L does not conform to U", but
+dotc accepts `trait B { type L >: Int <: String }` and rejects it only where the type is realized;
+scalac rejects the declaration (`PathsOracle.calibrated`). The cause: `PostTyper` runs
+`Checking.checkGoodBounds` only when the owner is not an abstract class or trait (guard
+`!sym.owner.isOneOf(AbstractOrTrait)`, scala/scala3 commit a24915c9f6, July 2022), on the reasoning
+that "bounds violations will be detected when values of these types are created"; a `null` path is
+never created, and such a program throws a cast-free `ClassCastException`
+(`PathsOracle.accepted_sound_except`;
+[dotc-member-bounds-unchecked.md](../../../docs/upstream/dotc-member-bounds-unchecked.md)). -/
 def check (s : Setting) (p : Prog) : M Verdict := do
   let a ← boundsOf s ["A"] "L"
   let b ← boundsOf s ["B"] "L"
