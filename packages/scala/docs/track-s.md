@@ -135,7 +135,7 @@ And from Track S6: `caseFieldAdded` (accessor links; constructor, `apply`, `copy
 
 ### Refchecks accepted, so no `AbstractMethodError` (Question 1)
 
-A static promise across three layers ([`packages/scala/Scala/Refchecks.lean`](../Scala/Refchecks.lean), `lake build Scala.Refchecks`, about 20 minutes). Over the 4,704 programs of [`Members.membersSpace`](../../scala-types/ScalaTypes/Members.lean#L497) and each of scalac 2.12.21, 2.13.18 and dotc 3.9.0, [`refchecks_sound`](../Scala/Refchecks.lean#L275) decides by the kernel, in chunks of 400 programs:
+A static promise across three layers ([`packages/scala/Scala/Refchecks.lean`](../Scala/Refchecks.lean), `lake build Scala.Refchecks`, about 20 minutes). Over the 4,704 programs of [`Members.membersSpace`](../../scala-types/ScalaTypes/Members.lean#L532) and each of scalac 2.12.21, 2.13.18 and dotc 3.9.0, [`refchecks_sound`](../Scala/Refchecks.lean#L275) decides by the kernel, in chunks of 400 programs:
 
 - `Members` (typer's inheritance checks and refchecks, `reported`) accepts exactly the programs the compiler accepts (772, 772 and 672);
 - for an accepted program and each concrete class `C` whose `m` `Members` says comes from owner `O`, HotSpot ran `O`'s `m` (the oracle is `members.py`'s run of `new C().m` on each accepted program, written by [`members_lean.py`](../probes/members_lean.py) into `RefchecksData`, as Track T's `PathsOracle` does);

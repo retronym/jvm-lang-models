@@ -161,7 +161,13 @@ def concreteS3 (n : String) : Nat → Decl → M Bool
       pure r
 
 /-- Does `d`, or a parent reached through abstract classes and traits only, declare `n`? The names
-dotc's `checkMemberTypesOK` checks in a concrete class (a concrete parent was checked itself). -/
+dotc's `checkMemberTypesOK` checks in a concrete class (a concrete parent was checked itself).
+
+Spec: unspecified SLS §5.1.4: which members of a concrete class are checked against what it
+inherits. dotc's `RefChecks.checkMemberTypesOK` checks the names declared in the class or in a
+parent reached through abstract classes and traits only (a concrete parent was checked itself);
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 on `Members.membersSpace` and `FlatRules`'
+192,000 configurations by `packages/scala/probes/members.py`. -/
 def declaredUpAbstract (n : String) : Nat → Decl → M Bool
   | 0, _ => pure false
   | k + 1, d => do
@@ -173,7 +179,12 @@ def declaredUpAbstract (n : String) : Nat → Decl → M Bool
 
 /-- `d` and its superclasses as far as they are abstract classes: where Scala 2 looks for deferred
 declarations a concrete class must implement (`RefChecks.checkNoAbstractDecls` follows
-`superClass` while it is `ABSTRACT`; a trait is never a superclass). -/
+`superClass` while it is `ABSTRACT`; a trait is never a superclass).
+
+Spec: unspecified SLS §5.2: where a compiler looks for the deferred declarations a concrete class
+must implement. scalac's `RefChecks.checkNoAbstractDecls` follows the superclass while it is
+abstract; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 on `Members.membersSpace` and
+`FlatRules`' 192,000 configurations by `packages/scala/probes/members.py`. -/
 def abstractChain : Nat → Decl → M (List Decl)
   | 0, d => pure [d]
   | k + 1, d => do
@@ -188,7 +199,9 @@ of `g` is concrete (`checkNoAbstractMembers`), or a deferred declaration of `d` 
 superclass in a row (`abstractChain`) re-abstracts the member that implements it: the first concrete
 member along the linearization comes from a base class of the declaring class
 (`checkNoAbstractDecls`). A concrete class's re-abstraction therefore does not reach its
-subclasses: `object X extends C`, with `C` re-abstracting a trait's concrete `m`, compiles. -/
+subclasses: `object X extends C`, with `C` re-abstracting a trait's concrete `m`, compiles.
+
+Spec: cites SLS §5.1.4, SLS §5.2 -/
 def missingS2 (d : Decl) (g : List Hit) : M Bool := do
   match g.find? fun h => !h.2.abs && !h.2.priv with
   | none => pure (g.any fun h => h.2.abs && !h.2.priv)
@@ -201,7 +214,9 @@ def missingS2 (d : Decl) (g : List Hit) : M Bool := do
 /-- `checkOverride`'s checks of one pair, `member` over `other`, in its order: access, `final`, a
 missing `override` (an inherited `override` that overrides nothing in its own class counts as
 missing), accidental override (no third member overridden by both), `def` over `val`, lazy against
-strict, result type. `None` when the pair is legal. -/
+strict, result type. `None` when the pair is legal.
+
+Spec: cites SLS §5.1.4, SLS §5.2 -/
 def checkPair (d : Decl) (l : List Anc) (g : List Hit) (mh oh : Hit) (allowPrivOvr : Bool) : M (Option Kind) := do
   let mo := mh.1.1
   let m := mh.2
@@ -254,7 +269,15 @@ not private, which is then seen. So a concrete member pairs with a deferred memb
 that re-abstracts it, the concrete one as the lower member. 2.12 skips a pair when a direct parent
 has both owners as base classes (`hasCommonParentAsSubclass`); 2.13 does not. Returns the errors at
 lower members `d` declares (the first per member: one message per position) and those of inherited
-pairs, in order (`mixinOverrideErrors`). -/
+pairs, in order (`mixinOverrideErrors`).
+
+Spec: cites SLS §5.1.4
+Spec: unspecified SLS §5.1.4: which overriding pairs are checked, and which error is reported when a
+member breaks several rules. scalac follows `OverridingPairs.Cursor`'s order and reports one error
+per position; 2.12 leaves a pair to a parent that has both owners; dotc adds `checkAll`'s check of
+each deferred declaration; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 on
+`Members.membersSpace` and `FlatRules`' 192,000 configurations by
+`packages/scala/probes/members.py`. -/
 def pairs2 (dl : Dialect) (d : Decl) (l : List Anc) (pls : List (List Anc)) (g : List Hit) :
     M (List Kind × List Kind) := do
   -- dotc leaves every private member out (`memberCanMatchInheritedSymbols`); a private member of
@@ -412,7 +435,14 @@ def baseConflictDeep : Nat → Decl → M Bool
 final class"; dotc: "cannot extend final class"). Different instances of a base class: scalac
 reports them where the parents meet ("inherits different type instances"); dotc where a class
 or object is instantiable ("cannot be instantiated since it has conflicting base types"), so also
-in an object extending such a class, but not in a class that already has a final parent. -/
+in an object extending such a class, but not in a class that already has a final parent.
+
+Spec: cites SLS §5.1, SLS §5.2
+Spec: unspecified SLS §5.1: where a class with two instances of one base class is reported. scalac
+reports it where the parents meet; dotc where a class or object is instantiable, so also in an
+object extending such a class; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 on
+`Members.membersSpace` and `FlatRules`' 192,000 configurations by
+`packages/scala/probes/members.py`. -/
 def typerDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   let mut ks : List Kind := []
   let mut finalParent := false
@@ -427,7 +457,12 @@ def typerDecl (dl : Dialect) (d : Decl) : M (List Err) := do
   pure (ks.map fun k => { cls := d.name, kind := k })
 
 /-- What the compiler reports for a program: typer's errors if there are any, else refchecks'
-(`errors`). -/
+(`errors`).
+
+Spec: unspecified SLS §5.1.4: that an error in an earlier phase (typer's inheritance checks) hides
+refchecks' errors; both compilers stop before refchecks; calibrated against scalac 2.12.21, 2.13.18
+and dotc 3.9.0 on `Members.membersSpace` and `FlatRules`' 192,000 configurations by
+`packages/scala/probes/members.py`. -/
 def reported (dl : Dialect) (p : Program) : Except String (List Err) := do
   let q := p.desugar dl
   let env := (prelude dl ++ q).env
@@ -641,7 +676,12 @@ example : errors .s3 recheck11136 = .ok [{ cls := "L", kind := .finalOverride }]
 /-- `abstract class B { final def m: String = "" }; abstract class C extends B { def m: String }`:
 scalac's cursor pairs them with the concrete `B.m` overriding `C`'s abstract `m`, as SLS §5.1.3 has
 it, and nothing fails; dotc's `checkAll` also checks `C.m` as an override of the final `B.m` and
-rejects `C`. -/
+rejects `C`.
+
+Spec: contradicts SLS §5.1.3 / dotc 3.9.0: `abstract class B { final def m: String = "" }; abstract
+class C extends B { def m: String }`. By §5.1.3 the concrete `B.m` is the member, and scalac accepts
+`C`; dotc's `checkAll` also checks `C.m` as an override of the final `B.m` and rejects `C`
+(scala/scala3 neg/i11130; [spec-reabstraction.md](../../../docs/upstream/spec-reabstraction.md)). -/
 def abstractOverFinal : Program :=
   [decl "B" .cls [] [{ mem .str false with final := true }] (abs := true),
    decl "C" .cls ["B"] [mem .str true] (abs := true)]
