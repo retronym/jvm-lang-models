@@ -519,14 +519,15 @@ def resolveField (cur : Cur C) (c : C) (n : N) (d : D) : M C N D (C × FieldInfo
     if !(← accessible cur a f.access) then throw .illegalAccess
     pure (a, f)
 
-/-- The verifier's assignability of class type `r` to `c` (JVMS §4.10.1.2, as HotSpot checks it):
+/-- The verifier's assignability of class type `r` to `c` (JVMS §4.10.1.2, `isWideningReference`):
 equal names pass without loading; otherwise `c` is loaded, an interface passes, and a class must be
 a superclass of `r`.
 
 Spec: cites JVMS §4.10.1.2
-Spec: unspecified JVMS §4.10.1.2: when the verifier loads the classes of an assignability check.
-HotSpot passes equal names without loading, loads the target, and passes an interface target;
-calibrated on `Clients.space3` (`Catalogue.classBecomesInterface`). -/
+Spec: cites JVMS §4.10.1.2: the order is the specification's, not only HotSpot's. "Subtyping is
+reflexive" (`isAssignable(X, X)`, no loading); `isWideningReference` loads the target and passes an
+interface, and otherwise loads both classes and looks for the target among the source's superclasses
+(`Catalogue.classBecomesInterface`). -/
 def assignable (r c : C) : M C N D Unit := do
   if r = c then return
   if (← cls c).isInterface then return
@@ -597,8 +598,11 @@ The verifier checks the receiver's upcast before the site runs; then the receive
 the member resolved and selected.
 
 Spec: cites JVMS §5.4, JVMS §6.5
-Spec: unspecified JVMS §5.4: when symbolic references are resolved. The model resolves lazily, at a
-site's first execution, as HotSpot does, and verifies each site just before it runs.
+Spec: unspecified JVMS §5.4: when symbolic references are resolved. The JVMS leaves it to the
+implementation, which "may choose a 'lazy' linkage strategy" or an "eager" one; the model resolves
+lazily, at a site's first execution, as HotSpot does. (It also verifies each site just before it runs,
+where the JVM verifies a whole class before initialising it, §5.4.1: an approximation, observable only
+through a site that never runs and fails verification, which the spaces do not have.)
 Spec: cites JVMS §6.5 invokespecial, linking exceptions (resolution, then "Otherwise" the
 constructor's declaring class) -/
 def runSiteWith (enter' : C → N → D → Option C → M C N D (List C)) (init' : C → M C N D Unit)
