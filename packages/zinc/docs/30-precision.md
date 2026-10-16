@@ -36,7 +36,7 @@ Sums over the runs. "Recompiled" is beyond the edited class; "necessary" is the 
 
 ### The whole space (216,000 bases, 5,832,000 edits; `lake exe exhaustive precision`, about 12 CPU-hours)
 
-Run before the model's `traitDirect` gained Zinc's class-or-object clause, so its `traitDirect` row is the conservative rendering; the sample's rates hold to the decimal. A full-space run of the aligned rule is recorded in the calibration notes when it finishes.
+With the model's `traitDirect` aligned to Zinc's. The sample's rates hold to the decimal.
 
 | preset | unclean | recompiled | necessary | over-invalidated | of recompiled | output unchanged |
 |---|---|---|---|---|---|---|
@@ -45,13 +45,13 @@ Run before the model's `traitDirect` gained Zinc's class-or-object clause, so it
 | default, trait | 0 | 21,055,936 | 13,002,688 | 8,106,720 | 38.5% | 12,555,776 |
 | default, traitDirect without the class-or-object clause (the model before phase 30) | 0 | 20,835,136 | 13,002,688 | 7,964,256 | 38.2% | 12,334,976 |
 | default, traitDirect narrowed to implemented members | 0 | 20,828,736 | 13,002,688 | 7,964,256 | 38.2% | 12,328,576 |
-| default, traitDirect, without header (extends clauses recorded) | 0 | 20,619,136 | 13,002,688 | 7,964,256 | 38.6% | 12,118,976 |
+| default, traitDirect (Zinc's: classes and objects that mix the trait in) | 0 | 20,707,136 | 13,002,688 | 7,881,056 | 38.0% | 12,206,976 |
+| default, traitDirect, without header (extends clauses recorded) | 0 | 20,491,136 | 13,002,688 | 7,881,056 | 38.4% | 11,990,976 |
 | none (unsound) | 3,800,688 | 10,178,400 | 13,002,688 | 6,938,912 | 68.1% | 7,254,272 |
-
 
 ## What the numbers say
 
-**The rules are worth about three percent on this space, and the floor is sixty.** Every sound preset recompiles about 3.6 classes per edit beyond the edited one, and about 60% of those have the same output after the edit as before. The spread from `all` to the best sound preset is 920,193 to 896,531, 2.6%. The reason is the space's shape: its clients `X`, `Y`, `Z` each select `m` on `B`, `C` or `A`, so almost every edit changes an answer they read and they are recompiled by their keys under every preset; the descendant rules decide only `B`, `C` and `X`-as-subclass, and those read their ancestors (the refchecks prelude, the forwarders) often enough that most of their recompiles are necessary by the trace. The PoC's wins come from fan-out that this space does not have: Spark's `TreeNode` has 261 descendants and a few clients per class. The *rates* per descendant transfer; the totals do not.
+**The rules are worth about three percent on this space, and the floor is sixty.** Every sound preset recompiles about 3.6 classes per edit beyond the edited one, and about 60% of those have the same output after the edit as before. The spread from `all` to the best sound preset is 21,162,880 to 20,491,136, 3.2%, and to Zinc's default 2.2%. The reason is the space's shape: its clients `X`, `Y`, `Z` each select `m` on `B`, `C` or `A`, so almost every edit changes an answer they read and they are recompiled by their keys under every preset; the descendant rules decide only `B`, `C` and `X`-as-subclass, and those read their ancestors (the refchecks prelude, the forwarders) often enough that most of their recompiles are necessary by the trace. The PoC's wins come from fan-out that this space does not have: Spark's `TreeNode` has 261 descendants and a few clients per class. The *rates* per descendant transfer; the totals do not.
 
 **Two floors.** The necessary set (an answer the class read changed) and the output-unchanged set (the edit did not change what the class compiles to) differ by a factor of about 1.5, and the sound presets sit between them: `traitDirect` recompiles 905,923, of which 559,579 are necessary by the trace, 5,754 fewer than the 565,333 necessary classes, and it is clean on every run. `lake exe exhaustive precision why` shows which answers those skipped classes read: `has m` and `dfr m`, asked of every ancestor by the conflict and abstract-member checks. The exact answer moves (`A` gains `m`, so "does `A` declare `m`" flips) while the refchecks outcome does not (`B` declares nothing, so no override, no conflict, nothing to implement). A design that recorded those queries as keys would recompile `B`; the rule table, computed on Zinc's side from stored stubs, asks the coarser question the decision needs. So the rules are more precise than the key-per-query bridge the obligations describe, and `necessary_invalidated`'s floor is a floor for key-based designs, not for policies. Against the coarse floor, `all` wastes 59.8% of its descendant recompiles and the best sound preset 58.8%.
 
