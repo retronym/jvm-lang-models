@@ -4,11 +4,17 @@ import Zinc.Features.ImplicitScope
 import Zinc.Loop.PingPong
 import Zinc.Bridges.HierShared
 import Zinc.Bridges.FlatShared
+import Lean.Data.Json
 /-! Runs the bounded exhaustive checks as native code.
 
 * `exhaustive [N]`: `packages/zinc/Zinc/Bridges/FlatRules.lean`, for every rule set the number of unclean (base, edit)
   pairs and the smallest one. `N` checks the first `N` bases only. Chunks of bases are checked in
   parallel.
+* `exhaustive precision [N] [every K]`: the same space (every `K`-th of the first `N` bases), for
+  each preset the classes recompiled beyond the edited one against the necessary classes
+  (`FlatRules.necessaryOf`): the over-invalidation table, cumulative after each tenth of the
+  bases, with two concrete (base, edit) samples per batch and every preset's outcome on them.
+  With `PRECISION_LOG=file`, one JSON line per batch for a replay.
 * `exhaustive v`: the value-class space of `packages/zinc/Zinc/Bridges/FlatRules.lean`.
 * `exhaustive flatshared`: `packages/zinc/Zinc/Bridges/FlatShared.lean`, where `Flat`'s linearization,
   selections and refchecks agree with the shared Scala semantics, over `FlatRules`' programs.
@@ -107,6 +113,193 @@ def mainRules (args : List String) : IO Unit := do
     | some (k, k', e) => IO.println s!"  base {repr k}\n  edit {repr e} → {repr k'}"
     | none => pure ()
     j := j + 1
+
+/-- Per preset, the precision counts over a chunk of bases. The necessary set is computed once per
+(base, edit) and shared by the presets. -/
+def precChunk (bases : List Cfg) : Array Prec := Id.run do
+  let mut acc : Array Prec := presets.toArray.map fun _ => {}
+  for k in bases do
+    let s₀ := init clientOnly k.src
+    for (k', e) in edits k do
+      let nec := necessaryOf k.src k'.src s₀ e
+      let mut j := 0
+      for (_, E, ab, rs) in presets do
+        acc := acc.modify j (·.add (precRun E ab rs (init E k.src) nec k'.src e))
+        j := j + 1
+  return acc
+
+/-- `precision why [N]`: for the `default, traitDirect` preset, the first few (base, edit, class)
+where a class is necessary by its trace and not recompiled, with the changed queries. -/
+def mainPrecisionWhy (args : List String) : IO Unit := do
+  let n := (args.head? >>= String.toNat?).getD 200
+  let (_, E, ab, rs) := presets[3]!
+  let mut shown := 0
+  let mut byKind : List (String × ℕ) := []
+  for k in cfgs.take n do
+    let s₀ := init E k.src
+    for (k', e) in edits k do
+      let nec := necessaryOf k.src k'.src s₀ e
+      match runF E .zinc k'.src (rulePolicy k'.src ab rs) 9 0 ∅ {e} s₀ with
+      | none => pure ()
+      | some r =>
+        for c in nec do
+          if c ∉ r.compiled then
+            let qs := changedQueries k.src k'.src s₀ c
+            for (p, q, _, _) in qs do
+              let key := s!"{repr q} on {repr p} from {repr c}"
+              byKind := match byKind.lookup key with
+                | some m => (key, m + 1) :: byKind.filter (·.1 != key)
+                | none => (key, 1) :: byKind
+            if shown < 6 then
+              shown := shown + 1
+              IO.println s!"base {repr k}\n  edit {repr e} → {repr k'}\n  {repr c} necessary, not recompiled; changed: {repr qs}"
+  IO.println "by query:"
+  for (key, m) in (byKind.toArray.qsort (fun a b => a.2 > b.2)).toList.take 20 do
+    IO.println s!"  {m}× {key}"
+
+/-- Every `k`-th element. `cfgs` enumerates its Boolean knobs innermost, in a cycle of 32, so `k`
+must be coprime with 32 (a prime such as 23) or the sample never varies some knob: a stride of 20
+never picks a base with `A` as a trait. -/
+def stride (k : ℕ) (l : List Cfg) : List Cfg :=
+  (l.zipIdx.filter fun (_, i) => i % k == 0).map (·.1)
+
+def pct (a b : ℕ) : String :=
+  if b == 0 then "-" else
+    let t := a * 1000 / b
+    s!"{t / 10}.{t % 10}%"
+
+def optTag : Opt → String
+  | .none => "-" | .int => "Int" | .str => "String" | .par => "T" | .dfr => "deferred Int"
+  | .val => "val Int" | .var => "var Int" | .lzy => "lazy val Int" | .pval => "private val Int"
+
+def hTy : Zinc.Hier.Ty → String
+  | .int => "Int" | .string => "String" | .param => "T" | .v => "V"
+
+/-- A configuration as one line of Scala-ish, for the samples. -/
+def cfgSrc (k : Cfg) : String :=
+  let mem (o : Opt) := if o == .none then "" else s!" m: {optTag o}"
+  let aKind := if k.aTrait then "trait" else "abstract class"
+  let aPar := (k.aPar.map fun t => s!" extends M[{hTy t}]").getD ""
+  let fin := if k.bFinal then "final " else ""
+  let uses := if k.bUses then " uses this.m" else ""
+  let xDef := if k.xObj then "extends C[Int]" else "{ B.m }"
+  let zDef := if k.zObs then "(macro observing C)" else "{ A.m }"
+  s!"{aKind} A[T]{aPar} \{{mem k.oA} }; trait M[T] \{{mem k.oM} }; " ++
+  s!"{fin}class B extends A[{hTy k.bArg}] \{{mem k.oB}{uses} }; class C extends B with M[Int] \{{mem k.oC} }; " ++
+  s!"object X {xDef}; object Y \{ C.m }; object Z {zDef}"
+
+def clsName : Zinc.Hier.Cls → String
+  | .A => "A" | .B => "B" | .M => "M" | .C => "C" | .X => "X" | .Y => "Y" | .Z => "Z" | .V => "V"
+
+/-- One preset's outcome on a pair. -/
+structure SampleRow where
+  preset : String
+  recompiled : List String
+  rounds : ℕ
+  clean : Bool
+
+/-- One (base, edit) pair in full: the programs, the necessary classes, and per preset what was
+recompiled and whether the result equals the clean build. Human eyes on the loop's work. -/
+structure Sample where
+  base : String
+  edited : String
+  edit : String
+  necessary : List String
+  unchanged : List String
+  rows : List SampleRow
+
+def samplePair (k k' : Cfg) (e : Zinc.Hier.Cls) : Sample := Id.run do
+  let s₀ := init withUses k.src
+  let nec := necessaryOf k.src k'.src s₀ e
+  let unch := all.filter fun c => c != e && clean k'.src c == s₀.out c
+  let mut rows : List SampleRow := []
+  for (name, E, ab, rs) in presets do
+    match runF E .zinc k'.src (rulePolicy k'.src ab rs) 9 0 ∅ {e} (init E k.src) with
+    | none => rows := rows ++ [⟨name, [], 0, false⟩]
+    | some r =>
+      let cl := memo { out := clean k'.src, U := fun _ => ∅ }
+      let ok := all.all fun c => r.state.out c == cl.out c
+      let rc := all.filter fun c => c ∈ r.compiled ∧ c ≠ e
+      rows := rows ++ [⟨name, rc.map clsName, r.rounds, ok⟩]
+  return ⟨cfgSrc k, cfgSrc k', clsName e, nec.map clsName, unch.map clsName, rows⟩
+
+def printSample (x : Sample) : IO Unit := do
+  IO.println s!"  base: {x.base}"
+  IO.println s!"  edit {x.edit}: {x.edited}"
+  IO.println s!"  necessary (an answer they read changed): {x.necessary}"
+  IO.println s!"  output unchanged by the edit: {x.unchanged}"
+  for r in x.rows do
+    IO.println s!"    {r.preset}: recompiled {r.recompiled} in {r.rounds} rounds, {if r.clean then "clean" else "UNCLEAN"}"
+
+def jstr (s : String) : String := Lean.Json.str s |>.compress
+
+def Sample.toJson (x : Sample) : Lean.Json :=
+  Lean.Json.mkObj [("base", x.base), ("edit", x.edit), ("edited", x.edited),
+    ("necessary", Lean.toJson x.necessary), ("unchanged", Lean.toJson x.unchanged),
+    ("presets", Lean.Json.arr (x.rows.toArray.map fun r => Lean.Json.mkObj
+      [("preset", r.preset), ("recompiled", Lean.toJson r.recompiled), ("rounds", r.rounds),
+       ("clean", r.clean)]))]
+
+/-- One event per batch, as a JSON line: the cumulative table and the batch's samples. A replay
+can scrub through the file. Written when `PRECISION_LOG` names a file. -/
+def logEvent (done total : ℕ) (acc : Array Prec) (samples : List Sample) : IO Unit := do
+  match ← IO.getEnv "PRECISION_LOG" with
+  | none => pure ()
+  | some path =>
+    let table := (presets.zip acc.toList).map fun ((name, _, _, _), t) => Lean.Json.mkObj
+      [("preset", name), ("unclean", t.unclean), ("recompiled", t.recompiled),
+       ("necessary", t.necessary), ("over", t.over), ("outUnchanged", t.outUnchanged)]
+    let ev := Lean.Json.mkObj [("done", done), ("total", total),
+      ("table", Lean.Json.arr table.toArray), ("samples", Lean.Json.arr (samples.toArray.map (·.toJson)))]
+    let h ← IO.FS.Handle.mk path .append
+    h.putStrLn ev.compress
+
+/-- Print the cumulative table. -/
+def printPrec (done total : ℕ) (acc : Array Prec) : IO Unit := do
+  IO.println s!"after {done} of {total} bases:"
+  IO.println "| preset | unclean | recompiled | necessary | over-invalidated | of recompiled | output unchanged |"
+  IO.println "|---|---|---|---|---|---|---|"
+  let mut j := 0
+  for (name, _, _, _) in presets do
+    let t := acc[j]!
+    IO.println s!"| {name} | {t.unclean} | {t.recompiled} | {t.necessary} | {t.over} | {pct t.over t.recompiled} | {t.outUnchanged} |"
+    j := j + 1
+  (← IO.getStdout).flush
+
+/-- `precision [N] [every K]`: the first `N` bases, every `K`-th of them. The bases go through in
+ten batches, each in parallel chunks of 50, and the cumulative table is printed after each batch,
+so a long run shows its progress and a partial run is still a sample. -/
+def mainPrecision (args : List String) : IO Unit := do
+  let n := (args.head? >>= String.toNat?).getD cfgs.length
+  let k := match args with
+    | _ :: "every" :: k :: _ => k.toNat?.getD 1
+    | "every" :: k :: _ => k.toNat?.getD 1
+    | _ => 1
+  let bases := stride k (cfgs.take n)
+  let total := bases.length
+  IO.println s!"{total} bases (every {k}th of the first {n}), {(bases.flatMap edits).length} edits"
+  (← IO.getStdout).flush
+  let batch := max 50 ((total + 9) / 10)
+  let mut acc : Array Prec := presets.toArray.map fun _ => {}
+  let mut done := 0
+  for b in chunks batch bases total do
+    let tasks := (chunks 50 b b.length).map fun ch => Task.spawn fun _ => precChunk ch
+    for r in tasks.map Task.get do
+      acc := (acc.zip r).map fun (a, x) => a.add x
+    done := done + b.length
+    printPrec done total acc
+    let samples : List Sample :=
+      match b.head?, (b.drop (b.length / 2)).head? with
+      | some k, some k₂ =>
+        match (edits k).head?, ((edits k₂).drop ((edits k₂).length / 2)).head? with
+        | some (k', e), some (k₂', e₂) =>
+          samplePair k k' e :: (if k₂ != k then [samplePair k₂ k₂' e₂] else [])
+        | _, _ => []
+      | _, _ => []
+    IO.println "sample from this batch:"
+    for x in samples do printSample x
+    logEvent done total acc samples
+    (← IO.getStdout).flush
 
 end rules
 
@@ -470,4 +663,6 @@ def main (args : List String) : IO Unit :=
   | "pingpong" :: _ => PP.mainPingPong
   | "flatshared" :: rest => mainFlatShared rest
   | "v" :: _ => mainV
+  | "precision" :: "why" :: rest => mainPrecisionWhy rest
+  | "precision" :: rest => mainPrecision rest
   | _ => mainRules args

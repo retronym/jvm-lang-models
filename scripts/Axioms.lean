@@ -74,6 +74,9 @@ import Links.ZincBridgeLibs
 #print axioms Scala.lower_congr
 -- B4 (Track B4) and its extensions
 #print axioms IncComp.XCompiler.untouched_eq_clean
+-- precision (phase 30)
+#print axioms IncComp.XCompiler.necessary_invalidated
+#print axioms IncComp.XCompiler.policyOver_mono
 #print axioms Links.ZincBridge.gap_witness
 #print axioms Links.ZincBridgeScala3.not_comp
 #print axioms Links.ZincBridgeScala3.after_eq_fresh_fix

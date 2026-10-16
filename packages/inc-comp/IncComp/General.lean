@@ -157,6 +157,78 @@ theorem round_preserves (ob : C.Obligations) (S : Finset CUnit) (src : CUnit →
       obtain ⟨k, hk, hcovers⟩ := hcov q hq
       exact ⟨k, hk, (ob.abstraction _ _ k (hhash k hk) q hcovers).2⟩
 
+/-! ## Precision
+
+After recompiling `R`, a unit outside `R` is **necessary** when an answer its last compilation
+read changed (T1's converse, as a definition), and **over-invalidated** when `inv(ΔAPI)` holds it
+and it is not necessary. Sound keys invalidate every necessary unit (`necessary_invalidated`),
+so the necessary set is the floor every bridge design shares and over-invalidation is the whole
+difference between designs. `SplitProof`'s per-instance statements are this one on a lift; the
+numbers per design are measured on `FlatRules`' space (`lake exe exhaustive precision`). -/
+
+section Precision
+
+omit [DecidableEq K] [DecidableEq Hash] in
+/-- A unit whose last compilation read an answer that recompiling `R` changed. -/
+def Necessary (src : CUnit → Src) (R : Finset CUnit) (s : State CUnit Out K) (u : CUnit) : Prop :=
+  ∃ q ∈ (C.unit (src u)).trace (C.answer (C.ifaces s)),
+    C.answer (C.ifaces s) q ≠ C.answer (C.ifaces (C.round src R s)) q
+
+omit [DecidableEq K] [DecidableEq Hash] in
+/-- A unit outside `R` keeps its interface through the round. -/
+theorem ifaces_round_of_not_mem (src : CUnit → Src) (R : Finset CUnit) (s : State CUnit Out K)
+    (d : CUnit) (hd : d ∉ R) : C.ifaces (C.round src R s) d = C.ifaces s d := by
+  rw [ifaces_round]; simp [override, hd]
+
+/-- **Sound keys invalidate every necessary unit.** An up-to-date unit outside `R` whose trace
+read an answer the round changed holds a key whose hash moved: by locality the hash of a key
+owned outside the affected units is unchanged, and by abstraction an unchanged hash means an
+unchanged answer. -/
+theorem necessary_invalidated (ob : C.Obligations) (S : Finset CUnit) (src : CUnit → Src)
+    (R : Finset CUnit) (s : State CUnit Out K) (u : CUnit) (huS : u ∈ S) (huR : u ∉ R)
+    (hup : C.UpToDate src s u) (hn : C.Necessary src R s u) :
+    u ∈ C.invalidated S R s (C.round src R s) := by
+  obtain ⟨q, hq, hne⟩ := hn
+  obtain ⟨k, hk, hcov⟩ := hup.2 q hq
+  simp only [invalidated, Finset.mem_filter]
+  refine ⟨huS, k, ?_, ?_⟩
+  · simp [round, huR, hk]
+  · by_contra hnc
+    have hπ : C.π (C.ifaces s) k.1 k.2 = C.π (C.ifaces (C.round src R s)) k.1 k.2 := by
+      by_cases haff : C.Affected R s k.1
+      · by_contra h
+        exact hnc ⟨haff, h⟩
+      · apply ob.locality
+        intro d hd
+        exact (C.ifaces_round_of_not_mem src R s d fun h => haff (Or.inr ⟨d, hd, h⟩)).symm
+    exact hne (ob.abstraction _ _ k hπ q hcov).1
+
+/-- The units a round invalidates without need. -/
+noncomputable def overInvalidated (S : Finset CUnit) (src : CUnit → Src) (R : Finset CUnit)
+    (s : State CUnit Out K) : Finset CUnit :=
+  @Finset.filter _ (fun u => ¬ C.Necessary src R s u) (Classical.decPred _)
+    (C.invalidated S R s (C.round src R s))
+
+/-- What a policy adds for the next round beyond the necessary units. -/
+noncomputable def policyOver (P : Policy CUnit Out K) (n : ℕ) (S : Finset CUnit)
+    (src : CUnit → Src) (R : Finset CUnit) (s : State CUnit Out K) : Finset CUnit :=
+  let s' := C.round src R s
+  @Finset.filter _ (fun u => ¬ C.Necessary src R s u) (Classical.decPred _)
+    (P n R s s' (C.invalidated S R s s'))
+
+/-- **Inclusion.** A policy that recompiles a subset of what another recompiles over-invalidates
+no more, round for round. (Across rounds the sets diverge with the states, so the loop's total
+is measured, not proved.) -/
+theorem policyOver_mono (P₁ P₂ : Policy CUnit Out K)
+    (h : ∀ n R s s' I, P₁ n R s s' I ⊆ P₂ n R s s' I) (n : ℕ) (S : Finset CUnit)
+    (src : CUnit → Src) (R : Finset CUnit) (s : State CUnit Out K) :
+    C.policyOver P₁ n S src R s ⊆ C.policyOver P₂ n S src R s := by
+  intro u hu
+  simp only [policyOver, Finset.mem_filter] at hu ⊢
+  exact ⟨h _ _ _ _ _ hu.1, hu.2⟩
+
+end Precision
+
 /-- Zinc's loop with `Δ` over the affected units. -/
 def zinc (S : Finset CUnit) (src : CUnit → Src) (P : Policy CUnit Out K) :
     ℕ → ℕ → Finset CUnit → State CUnit Out K → Option (State CUnit Out K)

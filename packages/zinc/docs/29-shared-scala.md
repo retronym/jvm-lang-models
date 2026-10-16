@@ -40,7 +40,7 @@ Rejected: keeping the coarse query and keying `D` on whole declarations (loses t
 | 4 | `Flat`, `FlatShared` | stored linearization over `header`; refchecks prelude against `Members` (its gaps: `var`, the 2.13 re-check, Scala 3's direct-parent rule are already characterised in `FlatShared`) | DONE: see below |
 | 5 | `Erasure` | `Lower.erase`; additions: `Long`, intersection types (`W with Z`, erasing by trait-or-class), so `header` must carry the kind | DONE: see below; its own two-parameter walk stays local |
 | 6 | `ImplicitScope` | base classes from the shared walk; implicit search over companions is not in the shared layer (decision below) | DONE: see below |
-| 7 | Track B4's explicit-interface T3 into [`General.lean`](../../inc-comp/IncComp/General.lean) (roadmap item) | — | DONE: `recompiled`, `Fixpoint`, `cleanFrom`, `fixpoint_unique_of_explicit`, [`inv_of_edit`](../../inc-comp/IncComp/General.lean#L492), [`untouched_eq_clean`](../../inc-comp/IncComp/General.lean#L506), [`must_recompile`](../../inc-comp/IncComp/General.lean#L523) moved unchanged from `Links.ZincBridge` |
+| 7 | Track B4's explicit-interface T3 into [`General.lean`](../../inc-comp/IncComp/General.lean) (roadmap item) | — | DONE: `recompiled`, `Fixpoint`, `cleanFrom`, `fixpoint_unique_of_explicit`, [`inv_of_edit`](../../inc-comp/IncComp/General.lean#L564), [`untouched_eq_clean`](../../inc-comp/IncComp/General.lean#L578), [`must_recompile`](../../inc-comp/IncComp/General.lean#L595) moved unchanged from `Links.ZincBridge` |
 
 Each step builds, keeps its theorems, and is one commit.
 

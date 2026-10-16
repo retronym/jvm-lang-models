@@ -20,6 +20,15 @@ inductive Rule
   | uses | overrides | conflicts | abstract | header | «trait» | traitDirect | mirror
   /-- `traitDirect`, but blind to private members: a trait's API without Zinc's `extraHash`. -/
   | traitPub
+  /-- `traitDirect`, narrowed to a change that adds, removes or re-abstracts a member the trait
+  implements (a mixin forwarder or a field): the PoC's future-work "`trait` only for concrete
+  members". -/
+  | traitConcrete
+  /-- `traitDirect` for classes and objects only: a trait that mixes a trait in gets no forwarders
+  and implements no fields, so its output cannot change. Found by reading the dashboard's samples. -/
+  | traitImpl
+  /-- Zinc today: every descendant of a class whose API changed (the `all` preset). -/
+  | all
   deriving DecidableEq, Repr
 
 def ifc (s : St) (c : Cls) : Iface := (s.out c).iface
@@ -32,6 +41,10 @@ def declares (s : St) (q : Cls) (n : Name) : Bool := (own (ifc s q) n).isSome
 
 def deferredIn (s : St) (q : Cls) (n : Name) : Bool :=
   (own (ifc s q) n).map (·.deferred) == some true
+
+/-- Does `q` implement `n`: declare it, private members included, and not deferred? -/
+def implementsIn (s : St) (q : Cls) (n : Name) : Bool :=
+  ((ifc s q).decl.decls.lookup n).map (!·.deferred) == some true
 
 /-- The classes of `d`'s parents' stored linearizations, each parent first. -/
 def sides (s : St) (d : Cls) : List (List Cls) :=
@@ -65,7 +78,12 @@ def fires (src : Cls → Src) (abstractAll : Bool) (s s' : St) (p d : Cls) : Rul
   | .trait => anyChanged s s' p && ((ifc s p).decl.kind == .trt || (ifc s' p).decl.kind == .trt)
   | .traitDirect => anyChanged s s' p && mixesDirectly s' p d
   | .traitPub => pubChanged s s' p && mixesDirectly s' p d
+  | .traitConcrete => mixesDirectly s' p d &&
+      names.any fun n => implementsIn s p n != implementsIn s' p n ||
+        (implementsIn s' p n && (changedNames s s' p).contains n)
+  | .traitImpl => anyChanged s s' p && (ifc s' d).decl.kind != .trt && mixesDirectly s' p d
   | .mirror => anyChanged s s' p && (ifc s' d).decl.kind == .obj
+  | .all => anyChanged s s' p
 
 /-- The rule set as a policy over `inheritance.reverse*` of each recompiled class. -/
 def rulePolicy (src : Cls → Src) (abstractAll : Bool) (rs : List Rule) : Compiler.Policy Cls Out K :=
@@ -77,6 +95,17 @@ every descendant of a changed class, the non-local cover of `Flat`'s `all` key).
 def clientOnly : Kind → Bool := fun k => k == .client || k == .macro
 
 def allRules : List Rule := [.uses, .overrides, .conflicts, .abstract, .header, .trait, .mirror]
+
+/-- A rule set that fires on a subset of another's edits adds a subset of the descendants, so by
+`XCompiler.policyOver_mono` it over-invalidates no more in any round. -/
+theorem rulePolicy_mono (src : Cls → Src) (abstractAll : Bool) (rs rs' : List Rule)
+    (h : rs ⊆ rs') (n : ℕ) (R : Finset Cls) (s s' : St) (I : Finset Cls) :
+    rulePolicy src abstractAll rs n R s s' I ⊆ rulePolicy src abstractAll rs' n R s s' I := by
+  intro d hd
+  simp only [rulePolicy, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and] at hd ⊢
+  rcases hd with hd | ⟨p, hp, hne, hdesc, r, hr, hf⟩
+  · exact Or.inl hd
+  · exact Or.inr ⟨p, hp, hne, hdesc, r, h hr, hf⟩
 
 /-! ## The program space
 
@@ -295,6 +324,78 @@ example : (reportR clientOnly true allRules { k₀ with aPar := some .int }.src
       { k₀ with aPar := some .int }.src { k₀ with aPar := some .int, oM := .int }.src {M}).map
       (·.recompiled) = some [A, X, Y, Z] := by
   native_decide
+
+/-! ## Precision: what each preset recompiles beyond the necessary
+
+`XCompiler.Necessary` on this space: a class outside the edited one whose last compilation read
+an answer that the edit changed, between the old interfaces and the clean build of the new
+sources. Sound presets recompile every necessary class (`XCompiler.necessary_invalidated`); what
+they recompile beyond it is their over-invalidation, counted per run by
+`lake exe exhaustive precision`, with the classes whose output the edit left unchanged as the
+coarser floor. -/
+
+/-- The classes, other than `e`, whose last compilation (against `s₀`'s interfaces) read an
+answer that differs in the clean build of `src₁`. -/
+def necessaryOf (src₀ src₁ : Cls → Src) (s₀ : St) (e : Cls) : List Cls :=
+  let I : Cls → Iface := fun c => (s₀.out c).iface
+  let I' : Cls → Iface := fun c => (clean src₁ c).iface
+  all.filter fun c => c != e &&
+    ((unitF (lowerAll src₀ c)).trace (answer I)).any fun q => answer I q != answer I' q
+
+/-- The queries of `c`'s last compilation whose answer the edit changed (`necessaryOf`'s reason). -/
+def changedQueries (src₀ src₁ : Cls → Src) (s₀ : St) (c : Cls) : List (Cls × Q × AnsV × AnsV) :=
+  let I : Cls → Iface := fun c => (s₀.out c).iface
+  let I' : Cls → Iface := fun c => (clean src₁ c).iface
+  ((unitF (lowerAll src₀ c)).trace (answer I)).filterMap fun q =>
+    if answer I q != answer I' q then some (q.1, q.2, answer I q, answer I' q) else none
+
+structure Prec where
+  runs : ℕ := 0
+  unclean : ℕ := 0
+  /-- Σ over runs of the classes recompiled beyond the edited one. -/
+  recompiled : ℕ := 0
+  /-- Σ of the necessary classes (the same for every preset). -/
+  necessary : ℕ := 0
+  /-- Σ of recompiled classes that were not necessary. -/
+  over : ℕ := 0
+  /-- Σ of recompiled classes whose output the edit left unchanged (the coarser floor). -/
+  outUnchanged : ℕ := 0
+  deriving Repr, Inhabited
+
+def Prec.add (a b : Prec) : Prec :=
+  { runs := a.runs + b.runs, unclean := a.unclean + b.unclean,
+    recompiled := a.recompiled + b.recompiled, necessary := a.necessary + b.necessary,
+    over := a.over + b.over, outUnchanged := a.outUnchanged + b.outUnchanged }
+
+/-- One run's counts under a preset; `nec` is `necessaryOf` for the pair. -/
+def precRun (E : Kind → Bool) (abstractAll : Bool) (rs : List Rule) (s₀ : St) (nec : List Cls)
+    (src₁ : Cls → Src) (e : Cls) : Prec :=
+  match runF E .zinc src₁ (rulePolicy src₁ abstractAll rs) 9 0 ∅ {e} s₀ with
+  | none => { runs := 1, unclean := 1, necessary := nec.length }
+  | some r =>
+    let cl := memo { out := clean src₁, U := fun _ => ∅ }
+    let isClean := all.all fun c => r.state.out c == cl.out c
+    let rc := all.filter fun c => c ∈ r.compiled ∧ c ≠ e
+    { runs := 1, unclean := if isClean then 0 else 1, recompiled := rc.length,
+      necessary := nec.length, over := (rc.filter (!nec.contains ·)).length,
+      outUnchanged := (rc.filter fun c => cl.out c == s₀.out c).length }
+
+/-- Zinc's keys with a class's selections of its own inherited members recorded as `memberRef`s
+on the owner, as the bridge does (the PoC's reason for dropping the `uses` rule). -/
+def withUses : Kind → Bool := fun k => clientOnly k || k == .uses
+
+/-- The presets Zinc ships or considers, by name: keys recorded, `abstractAll`, rules. -/
+def presets : List (String × (Kind → Bool) × Bool × List Rule) :=
+  let base : List Rule := [.overrides, .conflicts, .abstract, .header, .mirror]
+  [("all (every descendant of a changed API)", withUses, true, [.all]),
+   ("strict (default + uses)", withUses, true, .uses :: .trait :: base),
+   ("default, trait", withUses, true, .trait :: base),
+   ("default, traitDirect", withUses, true, .traitDirect :: base),
+   ("default, traitDirect narrowed to implemented members", withUses, true, .traitConcrete :: base),
+   ("default, traitDirect for classes and objects only", withUses, true, .traitImpl :: base),
+   ("default, traitDirect, without header (extends clauses recorded)",
+     (fun k => withUses k || k == .extends), true, .traitDirect :: base.filter (· != .header)),
+   ("none (unsound)", withUses, true, [])]
 
 /-! ## Value classes
 

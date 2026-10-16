@@ -31,6 +31,13 @@ compositionality, coverage, abstraction and locality. A policy's one obligation 
   the source alone;
 * `IncComp.Compiler.zinc_eq_clean_of_wf`, `IncComp.Compiler.zinc_eq_clean_of_explicit` (T3).
 
+**Precision.** `IncComp.XCompiler.Necessary`: a unit whose last compilation read an answer the
+round changed. `IncComp.XCompiler.necessary_invalidated`: sound keys invalidate every necessary
+unit, so the necessary set is the floor every bridge design shares and
+`IncComp.XCompiler.overInvalidated` is the difference between designs;
+`IncComp.XCompiler.policyOver_mono`: a policy that recompiles a subset over-invalidates no more,
+round for round.
+
 **What goes wrong without the right domain.** `IncComp.Stale.stale_unsound`: a non-local hash
 diffed over the recompiled units alone undercompiles; `IncComp.Stale.stale_affected`: over the
 affected units it does not.
@@ -43,6 +50,8 @@ def IncComp.spec : List Lean.Name :=
    ``IncComp.XCompiler.zinc_some_of_monotoneFrom,
    ``IncComp.XCompiler.downstream_sound,
    ``IncComp.XCompiler.inv_external,
+   ``IncComp.XCompiler.necessary_invalidated,
+   ``IncComp.XCompiler.policyOver_mono,
    ``IncComp.Compiler.fixpoint_unique_of_wf,
    ``IncComp.Compiler.fixpoint_unique_of_explicit,
    ``IncComp.Compiler.zinc_eq_clean_of_wf,
