@@ -28,6 +28,8 @@ Each row is a PoC decision, hole or assumption. "Model today" is what exists in 
 
 ### 2.2 Rule-table parity between Zinc and the model
 
+*Status (16 October, later):* one gap found and closed the other way round: the model's `traitDirect` lacked Zinc's class-or-object clause (retronym/zinc e1bf9d747), so it was the conservative rendering; aligned in phase 30, with a scripted test added on the Zinc side. `annotated`, `exports` and the downstream `traitDirect` composition are still not in `FlatRules`.
+
 The model's rule inductive is `uses`, `overrides`, `conflicts`, `abstract`, `header`, `trait`, `traitDirect`, `mirror` (and `traitPub` as an ablation). Zinc's `default` now also has `annotated` (test discovery reads inherited annotations) and `exports` (a wildcard `export` is recorded as inheritance), and `traitDirect`'s downstream fix composes a trait's API from its trait ancestors only, under names no client uses. None of the three is in `FlatRules`, so the exhaustive check no longer checks the preset Zinc ships.
 
 *To decide:* add the three rules to [`FlatRules`](../../../packages/zinc/Zinc/Bridges/FlatRules.lean), with the observables they need (an annotation flag on a member, an `export` clause as a parent kind, a trait ancestor's own-name contributions), and re-run the ablation. [`Annotations.lean`](../../../packages/zinc/Zinc/Features/Annotations.lean) and [`DerivedApi.lean`](../../../packages/zinc/Zinc/Features/DerivedApi.lean) already have the queries. One to two sessions. *Zinc action:* any new minimal counterexample is a scripted test; the ablation list in the PoC plan is regenerated from the model rather than maintained by hand.

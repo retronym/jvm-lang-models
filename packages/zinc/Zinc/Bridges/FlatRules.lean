@@ -17,16 +17,22 @@ open Zinc.Hier (Cls Name Ty)
 open Zinc.Hier.Cls Zinc.Hier.Name
 
 inductive Rule
-  | uses | overrides | conflicts | abstract | header | «trait» | traitDirect | mirror
+  | uses | overrides | conflicts | abstract | header | «trait»
+  /-- Zinc's `traitDirect` (rz#30, `HierarchyView.mixesIn`): the descendant is a class or object
+  that mixes the changed trait in directly, so it holds the trait's forwarders and fields. A trait
+  descendant gets neither, so its output cannot change; Zinc has excluded it since retronym/zinc
+  e1bf9d747. Until phase 30 the model's rendering lacked that clause (`traitDirectAny`). -/
+  | traitDirect
+  | mirror
+  /-- `traitDirect` without the class-or-object clause: the model's rendering before phase 30,
+  kept as the conservative comparison. -/
+  | traitDirectAny
   /-- `traitDirect`, but blind to private members: a trait's API without Zinc's `extraHash`. -/
   | traitPub
   /-- `traitDirect`, narrowed to a change that adds, removes or re-abstracts a member the trait
   implements (a mixin forwarder or a field): the PoC's future-work "`trait` only for concrete
   members". -/
   | traitConcrete
-  /-- `traitDirect` for classes and objects only: a trait that mixes a trait in gets no forwarders
-  and implements no fields, so its output cannot change. Found by reading the dashboard's samples. -/
-  | traitImpl
   /-- Zinc today: every descendant of a class whose API changed (the `all` preset). -/
   | all
   deriving DecidableEq, Repr
@@ -76,12 +82,12 @@ def fires (src : Cls → Src) (abstractAll : Bool) (s s' : St) (p d : Cls) : Rul
         (abstractAll && (ifc s' d).lin.any fun e => deferredIn s' e.1 n)
   | .header => headerChanged s s' p
   | .trait => anyChanged s s' p && ((ifc s p).decl.kind == .trt || (ifc s' p).decl.kind == .trt)
-  | .traitDirect => anyChanged s s' p && mixesDirectly s' p d
+  | .traitDirect => anyChanged s s' p && (ifc s' d).decl.kind != .trt && mixesDirectly s' p d
+  | .traitDirectAny => anyChanged s s' p && mixesDirectly s' p d
   | .traitPub => pubChanged s s' p && mixesDirectly s' p d
   | .traitConcrete => mixesDirectly s' p d &&
       names.any fun n => implementsIn s p n != implementsIn s' p n ||
         (implementsIn s' p n && (changedNames s s' p).contains n)
-  | .traitImpl => anyChanged s s' p && (ifc s' d).decl.kind != .trt && mixesDirectly s' p d
   | .mirror => anyChanged s s' p && (ifc s' d).decl.kind == .obj
   | .all => anyChanged s s' p
 
@@ -390,9 +396,9 @@ def presets : List (String × (Kind → Bool) × Bool × List Rule) :=
   [("all (every descendant of a changed API)", withUses, true, [.all]),
    ("strict (default + uses)", withUses, true, .uses :: .trait :: base),
    ("default, trait", withUses, true, .trait :: base),
-   ("default, traitDirect", withUses, true, .traitDirect :: base),
+   ("default, traitDirect without the class-or-object clause (the model before phase 30)", withUses, true, .traitDirectAny :: base),
    ("default, traitDirect narrowed to implemented members", withUses, true, .traitConcrete :: base),
-   ("default, traitDirect for classes and objects only", withUses, true, .traitImpl :: base),
+   ("default, traitDirect (Zinc's: classes and objects that mix the trait in)", withUses, true, .traitDirect :: base),
    ("default, traitDirect, without header (extends clauses recorded)",
      (fun k => withUses k || k == .extends), true, .traitDirect :: base.filter (· != .header)),
    ("none (unsound)", withUses, true, [])]
