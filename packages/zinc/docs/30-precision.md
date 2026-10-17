@@ -2,6 +2,22 @@
 
 16 October 2026. Item 2.1 of [the Merkle slice](../../../docs/history/reviews/2026-10-16-merkle-slice.md).
 
+## Summary for a busy reader
+
+The Merkle PoC changes which classes Zinc recompiles after an edit to an ancestor: instead of every descendant, only the descendants that a short table of rules says must be recompiled. The question this phase answers is how much that table actually saves, and whether any of its rules can be dropped or tightened without undercompiling.
+
+The method: take every eight-class program in a fixed shape (abstract class `A`, trait `M`, class `B extends A`, class `C extends B with M`, three small clients), apply every single-class edit, and for each rule preset run Zinc's loop as the model has it. For each run, count the classes recompiled beyond the edited one, check that the result equals a clean build, and count two kinds of waste: classes recompiled although nothing they had read changed (the floor for any design that works from recorded dependencies), and classes recompiled although their output did not change (the floor a perfect oracle would reach). 216,000 programs, 5.8 million edits, eight presets, about twelve CPU-hours.
+
+What it says:
+
+- **Every sound preset is sound here**: no undercompile on any of the 5.8 million edits. The deliberately rule-less preset undercompiles 65% of them, so the check is not vacuous.
+- **The rules are worth about 2% on this space** (Zinc's default recompiles 2.2% fewer classes than "every descendant"), **and about 60% of what every preset recompiles has unchanged output.** That is the shape of the space talking: each program has two descendants and three clients, and the clients select the edited member, so they must recompile under any design. The PoC's real wins come from hierarchies with hundreds of descendants and few clients per class (Spark's `TreeNode`), which this space does not have. The per-descendant rates transfer; the totals do not.
+- **The rule table beats the dependency floor.** The rules skip some classes that did read something the edit changed (they asked "does ancestor `A` declare `m`" and the answer flipped) and stay correct, because what they read did not change the decision. So "recompile whatever read a changed fact" is not the lower bound for a policy that reasons on Zinc's side; "output unchanged" is.
+- **Which rules matter.** Narrowing `trait` to classes that mix the trait in directly is the one step that matters (1%); further narrowing to "only when an implemented member changed" buys 0.03% and is not worth having. Dropping `header` would buy another 1% but rests on an invariant not yet checked (every descendant is a `memberRef` client of its parent).
+- **One parity fix, found by looking at the samples.** The run prints two concrete programs per batch with every preset's decision. One showed a trait that mixes a trait in being recompiled with unchanged output. Porting the fix to Zinc found Zinc already had it; the model's rendering of the rule was the conservative one, and is now aligned.
+
+What this gives the PoC: a definition of precision in the framework (`Necessary`, `necessary_invalidated`, [`policyOver_mono`](../../inc-comp/IncComp/General.lean#L222)), a number per preset to cite, and a reusable dashboard (`lake exe exhaustive precision 100`, ten seconds) that shows the loop's work as it runs.
+
 ## Question
 
 The Merkle PoC's claim is precision: with the inheritance edge filtered by `DescendantRule`s, an ancestor edit recompiles clients and the descendants that read the change, not the hierarchy. The rule table went from eight rules to six by ablation on scripted tests, `traitDirect` was narrowed after the Spark cross-module run, and two narrowings sit in future work. Each of those is a question of the form "which preset recompiles what, and how much of it was needed", and the framework had no definition of "needed". [`FlatRules.lean`](../Zinc/Bridges/FlatRules.lean) decided soundness per preset over its 216,000 configurations; this phase adds the precision count beside it.
