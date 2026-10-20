@@ -29,6 +29,12 @@ Track L, true and spurious cycles (`ScalaTypes.Laziness`):
   succeeds. A spurious cycle.
 * `ScalaTypes.Laziness.slsI_ranked`, `ScalaTypes.Laziness.implI_unranked`: an overriding method's
   inferred type is well-founded under the SLS's rule and cyclic under the compilers'.
+* `ScalaTypes.Laziness.implicitSkip_O_first`, `ScalaTypes.Laziness.implicitSkip_U_first`,
+  `ScalaTypes.Laziness.implicitSkip_separate`: an implicit search that skips a candidate being
+  completed gives one program three outcomes by order (scalac 2.12 and 2.13): it compiles, a
+  cyclic reference, or, recompiled separately, an ambiguity.
+* `ScalaTypes.Laziness.exportOrder_reads_differ`: a wildcard export reading a member set that
+  another object's exports are still growing (dotc 3.9).
 -/
 
 /-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
@@ -44,4 +50,8 @@ def ScalaTypes.spec : List Lean.Name :=
    ``ScalaTypes.Laziness.scalac5_unranked,
    ``ScalaTypes.Laziness.dotc5_ok,
    ``ScalaTypes.Laziness.slsI_ranked,
-   ``ScalaTypes.Laziness.implI_unranked]
+   ``ScalaTypes.Laziness.implI_unranked,
+   ``ScalaTypes.Laziness.implicitSkip_O_first,
+   ``ScalaTypes.Laziness.implicitSkip_U_first,
+   ``ScalaTypes.Laziness.implicitSkip_separate,
+   ``ScalaTypes.Laziness.exportOrder_reads_differ]

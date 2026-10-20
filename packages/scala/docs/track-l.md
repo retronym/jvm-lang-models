@@ -14,6 +14,8 @@ The model ([`Query.Lazy`](../../query/Query/Lazy.lean), [`Query.Freeze`](../../q
 4. **Some facts are pushed, not pulled.** A sealed class's children grow as subclasses are entered; a read sees whatever has arrived. Guarded by a freeze (a read forbids later pushes), the answer is either the whole fact or a hard error, whatever the order ([`guarded_quasi_det`](../../query/Query/Freeze.lean#L67)); unguarded, it is silently order-dependent ([`unguarded_diverges`](../../query/Query/Freeze.lean#L105)).
 5. **Facts are indexed by phase.** A symbol's info at typer differs from its info at erasure; its name before LambdaLift differs from after. Phase-indexed laziness is sound when no fact reads a later phase ([`phase_ranked`](../../query/Query/Lazy.lean#L199)). dotc keeps every version of every fact; scalac versions the info and masks the flags but overwrites the name and owner, so a typer-phase question asked late gets a late answer. Measured: three typer-phase answers change after a run in scalac 2.12.21 and 2.13.18, none in dotc 3.9.0.
 
+And, measured: the converse fails in practice. A program whose implicit search skips a candidate being completed compiles in one file order and not the other in scalac 2.12 and 2.13, and an incremental build rejects what the clean build accepted; mutual wildcard exports compile in one file order and not the other in dotc 3.9 (§6).
+
 The rest of this note explains each idea, maps it onto both compilers' code, and gives the evidence and the probes that produced it.
 
 ## 1. A compiler is a lazy evaluator
@@ -42,9 +44,9 @@ A compiler does not force a program's semantic facts one by one. It forces its o
 
 [`ScalaTypes.Laziness`](../../scala-types/ScalaTypes/Laziness.lean) gives each shape three times — the semantic rules (ranked), scalac's bundling, dotc's:
 
-* **A parent that reads the class's own member** (`class C extends B[C#T] { type T = C }`): the semantic rules are ranked ([`fine5_ranked`](../../scala-types/ScalaTypes/Laziness.lean#L61)). scalac completes parents and members as one `ClassInfoType`, typing the parents first, so looking up `C#T` needs the info being computed: no ranking at all ([`scalac5_unranked`](../../scala-types/ScalaTypes/Laziness.lean#L165)). dotc's class completer first installs a `TempClassInfo` with the indexed members, then types the parents, and succeeds ([`dotc5_ok`](../../scala-types/ScalaTypes/Laziness.lean#L89)). Real compilers: scalac 2.12.21 and 2.13.18 report the cycle, dotc 3.9.0 compiles it.
-* **A consumer of every member's signature**: `n`'s completer asking `m`'s signature is fine; asking every member's (`members.map(_.info)`, the shape of overloading resolution and implicit search over a scope) includes `n` itself ([`allSigsM_cycles`](../../scala-types/ScalaTypes/Laziness.lean#L121)). Both compilers, measured below.
-* **The specification decides** (`trait T { def m = new C().m }; class C extends T { override def m = 1 }`). By the SLS an inferred result type is the type of the right-hand side, so `C.m : Int` asks nothing and the program is well-founded ([`slsI_ranked`](../../scala-types/ScalaTypes/Laziness.lean#L149)). scalac types an overriding method's right-hand side against the overridden method's result type, and dotc (with scalac under `-Xsource:3 infer-override`) takes the type from it outright; under their rules `C.m` asks `T.m` and the cycle is true ([`implI_unranked`](../../scala-types/ScalaTypes/Laziness.lean#L157)). All three compilers reject it.
+* **A parent that reads the class's own member** (`class C extends B[C#T] { type T = C }`): the semantic rules are ranked ([`fine5_ranked`](../../scala-types/ScalaTypes/Laziness.lean#L62)). scalac completes parents and members as one `ClassInfoType`, typing the parents first, so looking up `C#T` needs the info being computed: no ranking at all ([`scalac5_unranked`](../../scala-types/ScalaTypes/Laziness.lean#L166)). dotc's class completer first installs a `TempClassInfo` with the indexed members, then types the parents, and succeeds ([`dotc5_ok`](../../scala-types/ScalaTypes/Laziness.lean#L90)). Real compilers: scalac 2.12.21 and 2.13.18 report the cycle, dotc 3.9.0 compiles it.
+* **A consumer of every member's signature**: `n`'s completer asking `m`'s signature is fine; asking every member's (`members.map(_.info)`, the shape of overloading resolution and implicit search over a scope) includes `n` itself ([`allSigsM_cycles`](../../scala-types/ScalaTypes/Laziness.lean#L122)). Both compilers, measured below.
+* **The specification decides** (`trait T { def m = new C().m }; class C extends T { override def m = 1 }`). By the SLS an inferred result type is the type of the right-hand side, so `C.m : Int` asks nothing and the program is well-founded ([`slsI_ranked`](../../scala-types/ScalaTypes/Laziness.lean#L150)). scalac types an overriding method's right-hand side against the overridden method's result type, and dotc (with scalac under `-Xsource:3 infer-override`) takes the type from it outright; under their rules `C.m` asks `T.m` and the cycle is true ([`implI_unranked`](../../scala-types/ScalaTypes/Laziness.lean#L158)). All three compilers reject it.
 
 **The signature of a spurious cycle is order sensitivity.** A true cycle fails under every demand order. A spurious one can come and go with an irrelevant edit, a change of file order, joint versus separate compilation, or an incremental build versus a clean one. Where a compiler *avoids* a cyclic reference by skipping the fact (scalac's implicit search leaves out a candidate whose symbol is being completed: `ImplicitInfo.isCyclicOrErroneous` reads its `LOCKED` flag), the cycle becomes an absence and the *answer* depends on the order — no longer an error you would rather not see, but a loss of determinism. [Phase 15](../../zinc/docs/15-cycles.md) ([`two_fixpoints`](../../zinc/Zinc/Loop/Cycles.lean#L196)) is that loss reaching Zinc.
 
@@ -87,7 +89,7 @@ Every fact is asked *at a phase*: `enteringPhase`/`exitingPhase` in scalac, `atP
 | owner at a phase | `rawowner`, **overwritten** by LambdaLift (`owner_=`, the old one kept in `originalOwnerMap`); after flatten, reinterpreted | part of each version |
 | a flag set by an info transformer | UnCurry's info transformer adds `METHOD` to a nested module **in the raw flags** ([scala/bug#8907](https://github.com/scala/bug/issues/8907)) | in the new version only |
 
-[`phase_ranked`](../../query/Query/Lazy.lean#L199): if no fact reads a later phase, and the reads within a phase are ranked, the whole system is ranked (phase first, lexicographically), so phase-indexed laziness is sound and order-independent. The overwritten facts break the premise in a different way: the store is not indexed by phase, so a typer-phase question's answer depends on whether a later phase has run ([`localName_versioned`](../../scala-types/ScalaTypes/Laziness.lean#L199), [`localName_overwritten`](../../scala-types/ScalaTypes/Laziness.lean#L203)). Measured on the program below with `Phases2`/`Phases3`:
+[`phase_ranked`](../../query/Query/Lazy.lean#L199): if no fact reads a later phase, and the reads within a phase are ranked, the whole system is ranked (phase first, lexicographically), so phase-indexed laziness is sound and order-independent. The overwritten facts break the premise in a different way: the store is not indexed by phase, so a typer-phase question's answer depends on whether a later phase has run ([`localName_versioned`](../../scala-types/ScalaTypes/Laziness.lean#L200), [`localName_overwritten`](../../scala-types/ScalaTypes/Laziness.lean#L204)). Measured on the program below with `Phases2`/`Phases3`:
 
 ```scala
 class A {
@@ -108,6 +110,24 @@ class A {
 
 This is also where Track N meets Track L: a binary name ([track-s.md](track-s.md), "Binary names of classes and objects") is the name fact at the last phase, and the lambda-lifted `L$1` that scalac writes into `InnerClasses` is the overwritten name, which dotc keeps as `L`.
 
+## 6. Order sensitivity, measured
+
+A well-founded program compiles the same in every order ([`forceAll_ok`](../../query/Query/Lazy.lean#L160)). [`probes/forcing/order.py`](../probes/forcing/order.py) tests the converse on real compilers: each multi-file program is compiled jointly in its file order, jointly reversed, and, after the first, each file alone against the classfiles, as an incremental build does after an edit to it. Of eighteen programs (implicit candidates, conversions, overloading, case-class defaults, parents, inherited types, Scala 3 exports and transparent inline), three compile or not by order:
+
+* **An implicit candidate skipped while it is completed** (scalac 2.12.21 and 2.13.18):
+
+  ```scala
+  // O.scala
+  object O { implicit val x: Int = 1; implicit def y = U.z + 1 }
+  // U.scala
+  object U { import O._; def z = implicitly[Int] }
+  ```
+
+  With `O.scala` first, completing `y` types `U.z`, whose implicit search skips `y` (`LOCKED`) and resolves to `x`: it compiles, and `U.z` is `1`. With `U.scala` first: "recursive method z needs result type". Recompiling `U.scala` alone, with `y`'s type from the classfile: "ambiguous implicit values". So **a clean build accepts what an incremental build rejects**: retronym/zinc `claude/order-sensitive-implicit` has it as a pending scripted test, failing on Zinc `develop` after a comment-only edit to `U.scala`. In the model, a consumer that *peeks* ([`Query.Lazy.forcePeek`](../../query/Query/Lazy.lean#L249)) instead of forcing, and the three outcomes by `decide` ([`implicitSkip_O_first`](../../scala-types/ScalaTypes/Laziness.lean#L242), [`implicitSkip_U_first`](../../scala-types/ScalaTypes/Laziness.lean#L247), [`implicitSkip_separate`](../../scala-types/ScalaTypes/Laziness.lean#L252)). The same shape through an implicit conversion behaves the same. Scala 2.13 warns that an implicit definition should have an explicit type; Scala 3 requires one, which removes the shape. Within one file both orders compile: the order that matters here is the order of compilation units.
+* **Mutual wildcard exports** (dotc 3.9.0): `object A { export B.*; def a = 1 }` with `object B { export A.a; def b = 2 }` fails with "Conflicting definitions" typing `A.scala` first and compiles typing `B.scala` first. `A`'s wildcard export reads `B`'s member set while `B`'s own export forwarders are still being added to it: a growing fact read without a freeze, the shape of §4 ([`exportOrder_reads_differ`](../../scala-types/ScalaTypes/Laziness.lean#L275)). Draft report: [`dotc-export-order.md`](../../../docs/upstream/dotc-export-order.md).
+
+The rest either compile in every mode, are rejected in every mode (some with a diagnostic that depends on the order: overloading across files is "overloaded method f needs result type" one way and "recursive method g needs result type" the other), or are Scala 3 programs skipped for Scala 2.
+
 ## Recipes
 
 For someone changing either compiler, the model reduces to a few rules:
@@ -122,12 +142,14 @@ For someone changing either compiler, the model reduces to a few rules:
 
 * **Forcing footprints** ([`probes/forcing/Footprint2.scala`](../probes/forcing/Footprint2.scala), [`Footprint3.scala`](../probes/forcing/Footprint3.scala); outputs `footprint-<version>.txt`): symbols whose infos are spy completers, and which of them each operation forces, cold, from inside a member's completer and from inside the class's. scalac 2.12.21 and 2.13.18 give identical tables. The differences from dotc 3.9.0 are the rows of the levels table above, plus: `erasure(A.typeRef)` completes `A` in scalac and nothing in dotc.
 * **Phase-indexed facts** ([`probes/forcing/Phases2.scala`](../probes/forcing/Phases2.scala), [`Phases3.scala`](../probes/forcing/Phases3.scala); outputs `phases-<version>.txt`): the table in §5.
+* **Order sensitivity** ([`probes/forcing/order.py`](../probes/forcing/order.py), [`order/`](../probes/forcing/order)): §6.
 * **The cycle battery** ([`probes/forcing/battery.py`](../probes/forcing/battery.py), [`battery/`](../probes/forcing/battery)): twenty-four programs — case class and companion, inherited result types, F-bounds, annotations, partial information about parents — each with its expected verdict per compiler and its kind. Thirteen are fine everywhere, seven are true cycles everywhere, four are spurious in Scala 2 only (one, a parent's type argument aliased in the companion, already fixed in 2.13), and none is a cycle in dotc that scalac accepts. One spurious program (`class C extends D[C { def x: Int }]`) crashes scalac 2.13.18 with an uncaught `TypeError`.
 
 ## Future work
 
-- [ ] The order-sensitivity test as a harness: every battery program, and two-file versions of them, under both file orders and joint versus separate compilation.
+- [x] The order-sensitivity harness (§6): eighteen two-file programs under both file orders and each file recompiled alone; three compile or not by order.
 - [ ] Namer's eager forcings as their own families: case-class synthetics, Scala 3 `export` forwarders, implicit eligibility without a result type, Scala 2 macro annotations.
-- [ ] A cycle *caught* and turned into an absence (scalac's cyclic implicit candidates) as a theorem: such an evaluator is not order-independent, with a witness.
+- [x] A cycle avoided by skipping the fact (scalac's implicit candidates): `forcePeek`, and one program with three outcomes (§6).
 - [ ] Zinc: a spurious cycle across files makes an incremental build's verdict depend on which files it recompiles; [phase 15](../../zinc/docs/15-cycles.md) restated over `Query.Lazy`.
-- [ ] Report the scalac crash on `class C extends D[C { def x: Int }]` upstream.
+- [ ] File the drafts: [`scalac-refinement-parent-crash.md`](../../../docs/upstream/scalac-refinement-parent-crash.md) (the crash, 2.12 and 2.13) and [`dotc-export-order.md`](../../../docs/upstream/dotc-export-order.md).
+- [ ] Scala 3 givens and extension search across files, and Scala 2 macro annotations, in the order harness.

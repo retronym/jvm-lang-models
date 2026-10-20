@@ -211,4 +211,60 @@ theorem phase_ranked {X : Type} [DecidableEq X] (R : Rules (X × Nat) V) (ρ : X
     subst heq
     omega
 
+/-! ## Skipping a fact in progress instead of failing
+
+Some consumers do not fail on a fact that is being computed: they skip it. scalac's implicit
+search leaves out a candidate whose symbol is being completed (`ImplicitInfo.isCyclicOrErroneous`
+reads its `LOCKED` flag). That turns a cycle into an absence, and the answer then depends on what
+was in progress when the question was asked: the demand order, and whether the fact came from a
+classfile (separate compilation) instead of from source. `ScalaTypes.Laziness.implicitSkip_*` shows
+one program with three outcomes. -/
+
+/-- A rule's question: force a fact, or peek at it, which answers `absent` if the fact is in
+progress instead of black-holing. -/
+inductive Probe (Q : Type)
+  | force (q : Q)
+  | peek (q : Q)
+  deriving DecidableEq, Repr
+
+/-- Rules that may peek. -/
+abbrev PRules (Q V : Type) := Q → Task (Probe Q) (fun _ => V) V
+
+/-- Run a peeking task, forcing with `f` and answering a peek at a fact in progress with
+`absent`. -/
+def runPeek (stk : List Q) (absent : V) (f : Store Q V → Q → Out Q V × Store Q V) :
+    Task (Probe Q) (fun _ => V) V → Store Q V → Out Q V × Store Q V
+  | .pure v, s => (.ok v, s)
+  | .ask (.peek q) k, s =>
+    if q ∈ stk then runPeek stk absent f (k absent) s
+    else match f s q with
+      | (.ok v, s') => runPeek stk absent f (k v) s'
+      | (e, s') => (e, s')
+  | .ask (.force q) k, s =>
+    match f s q with
+    | (.ok v, s') => runPeek stk absent f (k v) s'
+    | (e, s') => (e, s')
+
+/-- `force`, for rules that may peek. -/
+def forcePeek (R : PRules Q V) (absent : V) : Nat → List Q → Store Q V → Q → Out Q V × Store Q V
+  | 0, _, s, _ => (.fuel, s)
+  | n + 1, stk, s, q =>
+    match s q with
+    | some v => (.ok v, s)
+    | none =>
+      if q ∈ stk then (.cyc q, s)
+      else
+        match runPeek (q :: stk) absent (fun s' q' => forcePeek R absent n (q :: stk) s' q') (R q) s with
+        | (.ok v, s') => (.ok v, upd s' q v)
+        | (e, s') => (e, s')
+
+/-- Force a list of facts in order with peeking rules, from a given store (an empty one for a
+clean build; one holding facts read from classfiles for a separate compilation). -/
+def forcePeekAll (R : PRules Q V) (absent : V) (n : Nat) : List Q → Store Q V → List (Out Q V) × Store Q V
+  | [], s => ([], s)
+  | q :: qs, s =>
+    let (o, s₁) := forcePeek R absent n [] s q
+    let (os, s₂) := forcePeekAll R absent n qs s₁
+    (o :: os, s₂)
+
 end Query.Lazy

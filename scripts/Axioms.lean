@@ -124,3 +124,5 @@ import ScalaTypes.Laziness
 #print axioms Query.Freeze.guarded_quasi_det
 #print axioms ScalaTypes.Laziness.scalac5_unranked
 #print axioms ScalaTypes.Laziness.implI_unranked
+#print axioms ScalaTypes.Laziness.implicitSkip_separate
+#print axioms ScalaTypes.Laziness.exportOrder_reads_differ

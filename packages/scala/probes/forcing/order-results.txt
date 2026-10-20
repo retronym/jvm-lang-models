@@ -1,0 +1,112 @@
+== companion-cross-file
+  2.12.21  in order: ok, reversed: ok, C.scala alone: ok, D.scala alone: ok
+  2.13.18  in order: ok, reversed: ok, C.scala alone: ok, D.scala alone: ok
+  3.9.0    in order: cycle, reversed: cycle
+           in order: Overloaded or recursive method $lessinit$greater$default$1 needs return type
+           reversed: Overloaded or recursive method d needs return type
+== export-class-member
+  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
+           in order: value x is not a member of o1.C
+           reversed: Overloaded or recursive method y needs return type
+== export-inferred-back
+  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+== export-inferred-cross
+  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+== export-inferred-from-forwarder
+  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+== export-mutual-named
+  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+== export-mutual-wildcard
+  3.9.0    in order: error, reversed: ok   <-- compiles or not by order
+           in order: Conflicting definitions:
+== export-wildcard-both
+  3.9.0    in order: error, reversed: error
+           in order: Conflicting definitions:
+           reversed: Conflicting definitions:
+== implicit-explicit-type
+  2.12.21  in order: error, reversed: error
+           in order: ambiguous implicit values:
+           reversed: ambiguous implicit values:
+  2.13.18  in order: error, reversed: error
+           in order: ambiguous implicit values:
+           reversed: ambiguous implicit values:
+  3.9.0    in order: error, reversed: error
+           in order: Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of 
+           reversed: Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of 
+== implicit-skip
+  2.12.21  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
+           reversed: recursive method z needs result type
+           U.scala alone: ambiguous implicit values:
+  2.13.18  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
+           reversed: recursive method z needs result type
+           U.scala alone: ambiguous implicit values:
+  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
+           in order: result type of implicit definition needs to be given explicitly
+           reversed: result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur
+== implicit-skip-conversion
+  2.12.21  in order: error, reversed: error
+           in order: type mismatch;
+           reversed: type mismatch;
+  2.13.18  in order: error, reversed: error
+           in order: type mismatch;
+           reversed: type mismatch;
+  3.9.0    in order: error, reversed: error
+           in order: result type of implicit definition needs to be given explicitly
+           reversed: result type of implicit definition needs to be given explicitly | Found:    ("abc" : String)
+== implicit-skip-conversion-inferred
+  2.12.21  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
+           reversed: recursive method n needs result type
+           U.scala alone: type mismatch;
+  2.13.18  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
+           reversed: recursive method n needs result type
+           U.scala alone: type mismatch;
+  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
+           in order: result type of implicit definition needs to be given explicitly
+           reversed: result type of implicit definition needs to be given explicitly | Overloaded or recursive method n needs retur
+== implicit-skip-same-file
+  2.12.21  in order: ok
+  2.13.18  in order: ok
+  3.9.0    in order: error
+           in order: result type of implicit definition needs to be given explicitly
+== implicit-skip-same-file-reversed
+  2.12.21  in order: ok
+  2.13.18  in order: ok
+  3.9.0    in order: cycle
+           in order: result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur
+== inherited-cross-file
+  2.12.21  in order: cycle, reversed: cycle
+           in order: recursive method m needs result type
+           reversed: recursive method m needs result type
+  2.13.18  in order: cycle, reversed: cycle
+           in order: recursive method m needs result type
+           reversed: recursive method m needs result type
+  3.9.0    in order: cycle, reversed: cycle
+           in order: Overloaded or recursive method m needs return type
+           reversed: Overloaded or recursive method m needs return type
+== overload-cross-file
+  2.12.21  in order: error, reversed: cycle   (diagnostic differs)
+           in order: overloaded method f needs result type
+           reversed: recursive method g needs result type
+  2.13.18  in order: error, reversed: cycle   (diagnostic differs)
+           in order: overloaded method f needs result type
+           reversed: recursive method g needs result type
+  3.9.0    in order: cycle, reversed: cycle
+           in order: Overloaded or recursive method f needs return type
+           reversed: Overloaded or recursive method g needs return type
+== parent-member-cross-file
+  2.12.21  in order: cycle, reversed: cycle
+           in order: illegal cyclic reference involving class C
+           reversed: illegal cyclic reference involving class C
+  2.13.18  in order: cycle, reversed: cycle
+           in order: illegal cyclic reference involving class C
+           reversed: illegal cyclic reference involving class C
+  3.9.0    in order: ok, reversed: ok, B.scala alone: ok, C.scala alone: ok
+== transparent-inline
+  2.12.21  in order: error, reversed: error
+           in order: ';' expected but 'def' found.
+           reversed: ';' expected but 'def' found.
+  2.13.18  in order: error, reversed: error
+           in order: ';' expected but 'def' found.
+           reversed: ';' expected but 'def' found.
+  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+18 programs, 3 compilers: 5 (program, compiler) pairs that compile or not by order

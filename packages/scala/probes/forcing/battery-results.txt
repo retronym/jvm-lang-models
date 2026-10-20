@@ -1,0 +1,26 @@
+program                          kind      2.12   2.13   3     
+an-in-type                       true      cycle  cycle  cycle 
+an-on-class-from-companion       ok        ok     ok     ok    
+an-on-def-self                   ok        ok     ok     ok    
+cc-companion-uses-apply          ok        ok     ok     ok    
+cc-copy-chain                    true      cycle  cycle  cycle 
+cc-default-from-companion        ok        ok     ok     ok    
+cc-param-from-companion          ok        ok     ok     ok    
+cc-param-singleton               true      cycle  cycle  cycle 
+cc-user-apply                    ok        ok     ok     ok    
+fb-abstract-guarded              ok        ok     ok     ok    
+fb-alias-unguarded               true      cycle  cycle  cycle 
+fb-ordering                      ok        ok     ok     ok    
+fb-ordering-reversed             ok        ok     ok     ok    
+fb-parent-reads-own-member       spurious  cycle  cycle  ok    
+fb-parent-refines-self           spurious  cycle  cycle  ok    
+fb-self-bound                    true      cycle  cycle  cycle 
+ir-expected-from-parent          true      cycle  cycle  cycle 
+ir-sibling-recursion             ok        ok     ok     ok    
+ir-through-object                ok        ok     ok     ok    
+pi-bound-through-subtrait        spurious  cycle  cycle  ok    
+pi-parent-arg-companion-alias    spurious  cycle  ok     ok    
+pi-parent-cycle                  true      cycle  cycle  cycle 
+pi-parent-from-companion         ok        ok     ok     ok    
+pi-self-type                     ok        ok     ok     ok    
+24 programs, 3 compilers (2.12.21, 2.13.18, 3.9.0): all verdicts as expected

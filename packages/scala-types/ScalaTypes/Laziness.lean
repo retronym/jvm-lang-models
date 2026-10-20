@@ -1,4 +1,5 @@
 import Query.Lazy
+import Query.Freeze
 /-!
 # True and spurious cycles, in the shapes scalac and dotc have
 
@@ -201,5 +202,83 @@ theorem localName_versioned :
   decide
 
 theorem localName_overwritten : readOverwritten "L" typer ≠ readOverwritten "L$1" typer := by decide
+
+/-! ## An implicit candidate skipped while it is completed
+
+```scala
+// O.scala
+object O {
+  implicit val x: Int = 1
+  implicit def y = U.z + 1
+}
+// U.scala
+object U { import O._; def z = implicitly[Int] }
+```
+
+`y`'s type needs `U.z`'s, whose implicit search considers `x` and `y`. scalac skips a candidate
+whose symbol is being completed, so the outcome depends on what is in progress:
+
+* typing `O.scala` first: completing `y` types `U.z`, which skips `y` and resolves to `x`; the
+  program compiles, and `U.z` is `1`;
+* typing `U.scala` first: `U.z`'s search forces `y`, which needs `U.z`: "recursive method z needs
+  result type";
+* recompiling `U.scala` alone against the classfiles (what Zinc does after an edit to it): `y`'s
+  type is read from the classfile, both candidates are eligible: "ambiguous implicit values".
+
+So a clean build accepts what an incremental build rejects. Measured with scalac 2.12.21 and
+2.13.18 (2.13 warns that an implicit definition should have an explicit type); dotc 3.9.0 rejects
+both orders, since Scala 3 requires that type. The facts: `y`'s type and `U.z`'s resolution. -/
+
+inductive Fz | y | z
+  deriving DecidableEq, Repr
+
+/-- `y` forces `z`; `z` peeks at `y` (implicit search skips a candidate in progress). -/
+def implicitRules : PRules Fz String
+  | .y => .ask (.force .z) fun _ => .pure "Int"
+  | .z => .ask (.peek .y) fun ty =>
+      .pure (if ty == "Int" then "ambiguous: x, y" else "x")
+
+/-- Typing `O.scala` first: `z` resolves to `x`. -/
+theorem implicitSkip_O_first :
+    (forcePeekAll implicitRules "absent" 10 [.y, .z] (fun _ => none)).1 = [.ok "Int", .ok "x"] := by
+  decide
+
+/-- Typing `U.scala` first: a cyclic reference. -/
+theorem implicitSkip_U_first :
+    (forcePeekAll implicitRules "absent" 10 [.z, .y] (fun _ => none)).1.head? = some (.cyc .z) := by
+  decide
+
+/-- Recompiling `U.scala` alone, with `y`'s type from the classfile: ambiguous. -/
+theorem implicitSkip_separate :
+    (forcePeekAll implicitRules "absent" 10 [.z] (fun q => if q = .y then some "Int" else none)).1 =
+      [.ok "ambiguous: x, y"] := by
+  decide
+
+/-! ## A wildcard export reads a member set that is still growing (dotc)
+
+```scala
+// A.scala
+object A { export B.*; def a = 1 }
+// B.scala
+object B { export A.a; def b = 2 }
+```
+
+`A`'s wildcard export reads `B`'s members (`membersBasedOnFlags`). `B`'s own export forwarders are
+added to its declarations while `B` completes, so `B`'s member set is a fact that grows, read
+without a freeze. dotc 3.9.0, typing `A.scala` first: `B` completes, gets its forwarder `a`, and
+`A` exports it too, clashing with `A`'s `def a` ("Conflicting definitions"). Typing `B.scala`
+first: `B` is mid-completion when `A` reads its members, sees only `b`, and the program compiles.
+Recompiling `A.scala` alone against the classfiles fails again. The pushes are `B`'s members, `b`
+when it is indexed and `a` when its export is processed; the read is `A`'s wildcard. -/
+
+/-- `A` read `B`'s members after `B`'s export (A first) or before it (B first). -/
+theorem exportOrder_reads_differ :
+    Query.Freeze.unguarded [.push "b", .push "a", .read] [] ≠
+      Query.Freeze.unguarded [.push "b", .read, .push "a"] [] := by
+  decide
+
+/-- A freeze would make the second order fail instead of compiling. -/
+theorem exportOrder_guarded :
+    Query.Freeze.guarded [.push "b", .read, .push "a"] [] false = none := by decide
 
 end ScalaTypes.Laziness
