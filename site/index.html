@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JVM Language Models</title>
+<meta name="description" content="Lean 4 models of the JVM, javac, scalac, dotc, incremental compilation, Zinc, MiMa and the IntelliJ Scala plugin, calibrated against the real tools.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a layered import graph on the left (the model), "I am a…" lenses on the right that light up layers and answer questions with evidence. */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #17202c;
+  --muted: #5b6676;
+  --rule: #d8dee7;
+  --accent: #2f4fd8;       /* proof: kernel-checked theorems */
+  --accent-soft: #e3e8fd;
+  --calib: #b5650a;        /* calibration against a real tool */
+  --calib-soft: #fbecd9;
+  --gap: #a8344a;
+  --gap-soft: #f8e1e5;
+  --node: #ffffff;
+  --node-dim: #eef1f5;
+  --edge: #b9c2cf;
+  --f-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --panel: #161d27; --ink: #e6ebf2; --muted: #95a1b2; --rule: #2a3442;
+    --accent: #8aa2ff; --accent-soft: #1f2a52; --calib: #f0a64c; --calib-soft: #3a2a14;
+    --gap: #f08396; --gap-soft: #3d1d25; --node: #1b2430; --node-dim: #131a23; --edge: #3a4657;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --panel: #161d27; --ink: #e6ebf2; --muted: #95a1b2; --rule: #2a3442;
+  --accent: #8aa2ff; --accent-soft: #1f2a52; --calib: #f0a64c; --calib-soft: #3a2a14;
+  --gap: #f08396; --gap-soft: #3d1d25; --node: #1b2430; --node-dim: #131a23; --edge: #3a4657;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.82em; }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+nav.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; font: 600 14px var(--f-display); border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+nav.top .home { font-family: var(--f-mono); font-weight: 400; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: auto; }
+nav.top a { text-decoration: none; }
+nav.top a:hover { text-decoration: underline; }
+header { display: flex; flex-direction: column; gap: 10px; max-width: 820px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 4.4vw, 48px); line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+.lede { font-size: 18px; color: var(--muted); margin: 0; max-width: 68ch; }
+.lede b { color: var(--ink); font-weight: 600; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 8px 28px; font-variant-numeric: tabular-nums; border-block: 1px solid var(--rule); padding-block: 12px; }
+.stat { display: flex; align-items: baseline; gap: 8px; }
+.stat b { font-family: var(--f-display); font-size: 22px; font-weight: 700; }
+.stat span { font-size: 13px; color: var(--muted); font-family: var(--f-mono); }
+.stat.p b { color: var(--accent); } .stat.c b { color: var(--calib); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 920px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+h2 { font-family: var(--f-display); font-weight: 700; font-size: 20px; margin: 0; }
+.sub { font-size: 14px; color: var(--muted); margin: 2px 0 0; }
+
+/* Diagram */
+.diagram { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.svgbox { overflow-x: auto; }
+svg.g { display: block; width: 100%; min-width: 560px; height: auto; font-family: var(--f-display); }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.4; transition: stroke 0.2s, opacity 0.2s; }
+.edge.hot { stroke: var(--accent); stroke-width: 2; }
+.node { cursor: pointer; }
+.node rect.box { fill: var(--node); stroke: var(--rule); stroke-width: 1.2; transition: fill 0.2s, stroke 0.2s, opacity 0.2s; }
+.node text { fill: var(--ink); pointer-events: none; transition: opacity 0.2s; }
+.node .nm { font-size: 15px; font-weight: 700; }
+.node .q { font-size: 10.5px; fill: var(--muted); font-family: var(--f-body); }
+.node .bar-p { fill: var(--accent); } .node .bar-c { fill: var(--calib); }
+.node.lit rect.box { fill: var(--accent-soft); stroke: var(--accent); }
+.node.sel rect.box { stroke: var(--ink); stroke-width: 2.2; }
+.node.dim rect.box, .node.dim text, .node.dim .bars { opacity: 0.38; }
+.node:hover rect.box { stroke: var(--accent); }
+.tool { font-family: var(--f-mono); font-size: 10px; fill: var(--calib); }
+.toolline { stroke: var(--calib); stroke-dasharray: 2 3; stroke-width: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 6px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+.detail { border-top: 1px solid var(--rule); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.detail h3 { font-family: var(--f-display); margin: 0; font-size: 22px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.detail h3 small { font-family: var(--f-body); font-weight: 400; font-size: 15px; color: var(--muted); }
+.rows { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px 14px; font-size: 15px; }
+.rows dt { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 3px; }
+.rows dd { margin: 0; min-width: 0; }
+dt.p { color: var(--accent); } dt.c { color: var(--calib); } dt.g { color: var(--gap); } dt.s { color: var(--muted); }
+
+/* Lenses */
+.lenses { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 600 14px var(--f-display); border: 1px solid var(--rule); background: var(--panel); color: var(--ink); padding: 7px 12px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 12px; }
+.card .n { grid-row: span 3; font: 700 15px var(--f-display); width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--panel); display: grid; place-items: center; margin-top: 2px; }
+.card h4 { margin: 0; font: 700 17px/1.25 var(--f-display); text-wrap: balance; }
+.card p { margin: 0; font-size: 15px; }
+.ev { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tag { font: 12px var(--f-mono); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.tag.p { background: var(--accent-soft); color: var(--accent); }
+.tag.c { background: var(--calib-soft); color: var(--calib); }
+.tag.g { background: var(--gap-soft); color: var(--gap); }
+a.tag { text-decoration: none; } a.tag:hover { text-decoration: underline; }
+.tag.l { background: transparent; border: 1px solid var(--rule); color: var(--muted); cursor: pointer; }
+.tag.l:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Limits */
+.limits { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.limits ul { margin: 0; padding-left: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 32px; font-size: 15px; }
+.limits li::marker { color: var(--gap); }
+footer { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="top" aria-label="Site">
+    <span class="home">Lean 4 · jvm-lang-models</span>
+    <a href="literate/">Literate pages</a>
+    <a href="api/">API documentation</a>
+    <a href="https://github.com/retronym/jvm-lang-models">GitHub</a>
+  </nav>
+  <header>
+    <h1>What can this model do for me?</h1>
+    <p class="lede">Lean models of the tools that build JVM languages: the JVM linker, javac, scalac and dotc, incremental compilation, Zinc, MiMa and the IntelliJ Scala plugin. Each layer answers one question, is <b>calibrated against the real tool</b>, and only then has <b>theorems</b> built on it. Pick who you are on the right; click a layer to see what it holds. The <a href="literate/">literate pages</a> read the models next to the JVMS, JLS and SLS clauses they formalise; the <a href="api/">API documentation</a> lists every definition and theorem.</p>
+  </header>
+
+  <div class="stats" aria-label="Model size">
+    <div class="stat p"><b data-stat="theorems">877</b><span>theorems</span></div>
+    <div class="stat"><b data-stat="examples">661</b><span>checked examples</span></div>
+    <div class="stat c"><b data-stat="probed">196,972</b><span>programs run on HotSpot</span></div>
+    <div class="stat"><b>145</b><span>Zinc &amp; compiler bugs mapped</span></div>
+    <div class="stat"><b data-stat="lines">34,529</b><span>lines of Lean</span></div>
+    <div class="stat p"><b>0</b><span>sorry / axiom</span></div>
+  </div>
+
+  <div class="grid">
+    <section class="diagram" aria-labelledby="dh">
+      <div>
+        <h2 id="dh">The layers</h2>
+        <p class="sub">Arrows point to what a package imports. Core layers never import a consumer.</p>
+      </div>
+      <div class="svgbox"><svg class="g" id="svg" viewBox="0 0 760 470" role="img" aria-label="Package import graph"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>theorems (log scale)</span>
+        <span><i style="background:var(--calib)"></i>checked examples (log scale)</span>
+        <span style="color:var(--calib);font-family:var(--f-mono);font-size:12px">┄ real tool it is calibrated against</span>
+      </div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </section>
+
+    <section class="lenses" aria-labelledby="lh">
+      <div>
+        <h2 id="lh">I am…</h2>
+        <p class="sub">Each answer names the layers it uses and the evidence behind it.</p>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Choose a role"></div>
+      <div class="cards" id="cards"></div>
+    </section>
+  </div>
+
+  <section class="limits">
+    <h2>What it will not do for you</h2>
+    <ul>
+      <li><b>It does not verify scalac or Zinc.</b> The models are calibrated against them; the theorems are about the models, and the Zinc model's hypotheses are the specification a bridge must meet.</li>
+      <li><b>Hashing is assumed perfect.</b> Collisions of Zinc's 32-bit name hashes are excluded by the abstraction obligation.</li>
+      <li><b>Incremental = clean (T3) needs acyclic dependencies or annotated interfaces.</b> A mix of annotated and inferred members in a cycle is unproved.</li>
+      <li><b>Precision is per instance.</b> The framework proves a floor (<code>necessary_invalidated</code>); "invalidates no more than needed" is not a framework theorem.</li>
+      <li><b>The set of units is fixed.</b> Added and deleted sources are modelled as absent sources.</li>
+      <li><b>Checks are bounded.</b> <code>native_decide</code> results are <code>example</code>s over a space, never theorems. MiMa's corrected rules are sound on the edit space, not yet for every library.</li>
+    </ul>
+  </section>
+
+  <footer>Model sizes from <a href="https://github.com/retronym/jvm-lang-models/blob/main/docs/stats.md"><code>docs/stats.md</code></a>, filled in when the site is built; calibration and bug counts from <a href="https://github.com/retronym/jvm-lang-models/blob/main/docs/status.md"><code>docs/status.md</code></a> and <a href="https://github.com/retronym/jvm-lang-models/blob/main/docs/evidence/bug-map.md"><code>docs/evidence/bug-map.md</code></a>. Source of this page: <a href="https://github.com/retronym/jvm-lang-models/blob/main/site/index.html"><code>site/index.html</code></a>.</footer>
+</div>
+
+<script type="application/json" id="stats">
+{
+ "packages": {
+  "harness": {
+   "examples": 0,
+   "files": 9,
+   "lines": 1592,
+   "theorems": 0
+  },
+  "inc-comp": {
+   "examples": 0,
+   "files": 12,
+   "lines": 2195,
+   "theorems": 91
+  },
+  "intellij": {
+   "examples": 21,
+   "files": 9,
+   "lines": 1594,
+   "theorems": 63
+  },
+  "java": {
+   "examples": 20,
+   "files": 7,
+   "lines": 1213,
+   "theorems": 2
+  },
+  "jvm": {
+   "examples": 96,
+   "files": 6,
+   "lines": 2224,
+   "theorems": 3
+  },
+  "links": {
+   "examples": 0,
+   "files": 6,
+   "lines": 687,
+   "theorems": 23
+  },
+  "mima": {
+   "examples": 189,
+   "files": 8,
+   "lines": 1335,
+   "theorems": 2
+  },
+  "query": {
+   "examples": 0,
+   "files": 5,
+   "lines": 215,
+   "theorems": 18
+  },
+  "scala": {
+   "examples": 25,
+   "files": 10,
+   "lines": 2177,
+   "theorems": 44
+  },
+  "scala-types": {
+   "examples": 28,
+   "files": 11,
+   "lines": 2514,
+   "theorems": 57
+  },
+  "zinc": {
+   "examples": 282,
+   "files": 46,
+   "lines": 18783,
+   "theorems": 574
+  }
+ },
+ "total": {
+  "examples": 661,
+  "files": 129,
+  "lines": 34529,
+  "probed": 196972,
+  "theorems": 877
+ }
+}
+</script>
+<script>
+const STATS = JSON.parse(document.getElementById("stats").textContent);
+const REPO = "https://github.com/retronym/jvm-lang-models/blob/main/";
+const L = {
+  query:   { x:380, y:420, q:"questions + trace",
+    full:"Query", ask:"A compilation is a task that queries an oracle and leaves a trace. Why is the trace enough?",
+    proved:"T1 <code>Task.run_eq_of_trace</code>: oracles that agree on a run's trace give the same output and trace.",
+    calib:"Nothing to calibrate: the foundation every other layer instantiates.",
+    gaps:"None.", start:"packages/query/Query/Task.lean" },
+  jvm:     { x:150, y:320, q:"linkage, resolution", tools:["HotSpot 21 · 25 · 27"],
+    full:"JVM linkage", ask:"When does a classfile link against a library, and to which method?",
+    proved:"<code>link_congr</code>: a library edit that agrees on a client's linkage footprint links it the same way (T1 for linkage).",
+    calib:"60 catalogue cases, 196,972 client programs rendered with the Classfile API and run on HotSpot 21, 25 and 27. All agree, except two known JDK 21 bugs.",
+    gaps:"Method bodies are their linkage behaviour only; class initialisation.", lit:["Linking", "Overriding", "Access-control", "Default-methods", "Binary-compatibility", "Constructors", "Sealed-classes"], start:"packages/jvm/Jvm/Link.lean" },
+  "scala-types": { x:400, y:320, q:"asSeenFrom, members", tools:["scalac 2.12 · 2.13", "dotc 3.9"],
+    full:"Scala types", ask:"How do scalac and dotc compute a member's type, resolution and overriding?",
+    proved:"<code>AsSeenFrom.compose</code>, <code>chain_is_single</code>: asSeenFrom once, for any type language.",
+    calib:"Membership and overriding on 4,704 hierarchies, rejected programs included: 4,700 agree on scalac 2.12/2.13 (the 4 are a scalac bug), 4,704 on dotc 3.9.0.",
+    gaps:"Type members, <code>var</code>, qualified access, <code>abstract override</code>.", lit:["Linearization", "Overriding-in-Scala"], start:"packages/scala-types/README.md" },
+  "inc-comp": { x:650, y:320, q:"incremental = clean?",
+    full:"Incremental compilation", ask:"When does an incremental build equal a clean one, for any compiler and invalidation policy?",
+    proved:"Under the obligations (comp, coverage, abstraction, locality): T2 one round preserves the invariant, <code>XCompiler.round_preserves</code>; T3a the loop is sound, <code>XCompiler.zinc_sound</code>; T3 incremental = clean, <code>Compiler.zinc_eq_clean_of_wf</code>; T4 it terminates, <code>XCompiler.zinc_some_of_monotoneFrom</code>; T5 downstream subprojects, <code>XCompiler.downstream_sound</code>. The precision floor, <code>XCompiler.necessary_invalidated</code>.",
+    calib:"Through the Zinc instances.",
+    gaps:"T3 needs acyclic dependencies or source-determined interfaces; precision has no framework definition.", start:"packages/inc-comp/IncComp/General.lean" },
+  java:    { x:80, y:210, q:"javac, JLS 13", tools:["javac 17 · 21 · 25"],
+    full:"Java", ask:"What does javac emit, and what do JLS chapter 13's binary-compatibility rules mean in linkage terms?",
+    proved:"<code>Java.lower_congr</code>.",
+    calib:"javac 17, 21 and 25 on 99 programs; JLS 13's rules against the jvm linkage model.",
+    gaps:"A subset of Java.", lit:["Binary-compatibility", "Constructors", "Sealed-classes"], start:"packages/java/README.md" },
+  mima:    { x:215, y:210, q:"reports vs misses", tools:["MiMa 1.2.1"],
+    full:"MiMa", ask:"Which library edits does MiMa report, which does it miss, and what would correct rules look like?",
+    proved:"Corrected rules (one key per gap) sound on the 5,300-edit space, by kernel <code>decide</code> (<code>MiMa.Sound</code>).",
+    calib:"MiMa's verdicts against the model: six gaps, 40 false negatives, every one breaking on HotSpot. Filed as scala-garden/mima#993–996.",
+    gaps:"No proof for every library; 17 reverse-missing-method reports need method bodies.", start:"packages/mima/MiMa/Keys.lean" },
+  scala:   { x:350, y:210, q:"scalac, dotc output", tools:["scalac 2.12 · 2.13", "dotc 3.9"],
+    full:"Scala lowering", ask:"What classfiles do scalac and dotc emit, including forwarders and binary names?",
+    proved:"<code>Scala.lower_congr</code>; F6 as a compositionality failure (<code>Scala.Facts</code>).",
+    calib:"Classfiles: 1,353 of 1,353 programs on scalac 2.12.21/2.13.18, 1,368 of 1,368 on dotc 3.9.0. Binary names: 314 of 314 and 332 of 332. Found scala/scala3#27351.",
+    gaps:"Local/anonymous class names, type-parametric case classes, overloading, and more (roadmap).", start:"packages/scala/Scala/Lower.lean" },
+  intellij:{ x:485, y:210, q:"substitutor chains", tools:["IntelliJ Scala TCK"],
+    full:"IntelliJ Scala plugin", ask:"When do the plugin's substitutor chains agree with scalac's asSeenFrom?",
+    proved:"<code>Chain.compose</code>, <code>chain_is_intended</code>, <code>once_is_scalac</code>, <code>selfRooted_twice_diverges</code>, <code>IntelliJ.agrees</code>.",
+    calib:"Three scala/scala cases decided by computation; the TCK corpus against scalac. The theorems become runtime checks in the plugin.",
+    gaps:"Only the substitutor; not the plugin's resolver.", start:"packages/intellij/IntelliJ/Chain.lean" },
+  zinc:    { x:650, y:210, q:"loop, bridges", tools:["Zinc develop"],
+    full:"Zinc", ask:"Zinc's loop, its bridges and each language feature, as instances of the incremental framework.",
+    proved:"About 20 features each with today's bridge as a failed obligation plus witness, and the fix with its obligations and soundness. <code>PingPong.zinc_diverges</code>, <code>Cycles.zinc_ne_clean</code>, the Merkle PoC's <code>flat_sound</code>.",
+    calib:"Conformance harness: model and Zinc agree on every verdict and recompiled set (2,331 + 2,372 cases); 20 predicted failures all failed on Zinc develop.",
+    gaps:"50 of 145 catalogued bugs are gaps, mostly compiler comp or snapshot bookkeeping.", start:"packages/zinc/Zinc/Features/Sam.lean" },
+  links:   { x:560, y:115, q:"Zinc-clean ⇒ links",
+    full:"Links", ask:"Theorems that connect layers: does a Zinc-clean build link like a fresh one?",
+    proved:"B4 <code>XCompiler.untouched_eq_clean</code>: a unit Zinc never recompiles equals the clean build's, so it links as a fresh build does. Scala 3 <code>ZincBridgeScala3.not_comp</code> under F6, and the fix.",
+    calib:"Through scala and jvm, which are calibrated.",
+    gaps:"None in how B4 is stated.", start:"packages/links/Links/ZincBridge.lean" },
+  harness: { x:300, y:30, q:"calibration drivers",
+    full:"Harness", ask:"Executables and scripts that write the dumps the real tools are run against.",
+    proved:"—", calib:"<code>lake exe conformance</code>, <code>jconformance</code>, <code>jvmcases</code>, <code>exhaustive</code>.",
+    gaps:"—", start:"packages/harness/README.md" },
+};
+const API_ROOT = "api/";
+const API = {
+  "Task.run_eq_of_trace": "Query/Task.html#Query.Task.run_eq_of_trace",
+  "link_congr": "Jvm/Link.html#Jvm.link_congr",
+  "Java.lower_congr": "Java/Lower.html#Java.lower_congr",
+  "Scala.lower_congr": "Scala/Lower.html#Scala.lower_congr",
+  "Scala.Facts": "Scala/Facts.html",
+  "AsSeenFrom.compose": "ScalaTypes/AsSeenFrom.html#AsSeenFrom.compose",
+  "chain_is_single": "ScalaTypes/AsSeenFrom.html#AsSeenFrom.chain_is_single",
+  "XCompiler.round_preserves": "IncComp/General.html#IncComp.XCompiler.round_preserves",
+  "XCompiler.zinc_sound": "IncComp/General.html#IncComp.XCompiler.zinc_sound",
+  "Compiler.zinc_eq_clean_of_wf": "IncComp/Uniqueness.html#IncComp.Compiler.zinc_eq_clean_of_wf",
+  "XCompiler.zinc_some_of_monotoneFrom": "IncComp/General.html#IncComp.XCompiler.zinc_some_of_monotoneFrom",
+  "XCompiler.downstream_sound": "IncComp/General.html#IncComp.XCompiler.downstream_sound",
+  "XCompiler.necessary_invalidated": "IncComp/General.html#IncComp.XCompiler.necessary_invalidated",
+  "XCompiler.untouched_eq_clean": "IncComp/General.html#IncComp.XCompiler.untouched_eq_clean",
+  "PingPong.zinc_diverges": "Zinc/Loop/PingPong.html#Zinc.PingPong.zinc_diverges",
+  "Cycles.zinc_ne_clean": "Zinc/Loop/Cycles.html#Zinc.Cycles.zinc_ne_clean",
+  "flat_sound": "Zinc/Bridges/Flat.html#Zinc.Flat.flat_sound",
+  "Sam.fix_sound": "Zinc/Features/Sam.html#Zinc.Sam.fix_sound",
+  "SplitProof.Spec.joint_not_comp": "Zinc/Features/SplitProof.html#Zinc.SplitProof.Spec.joint_not_comp",
+  "ZincBridgeScala3.not_comp": "Links/ZincBridgeScala3.html#Links.ZincBridgeScala3.not_comp",
+  "Chain.compose": "IntelliJ/Chain.html#Chain.compose",
+  "chain_is_intended": "IntelliJ/Chain.html#Chain.chain_is_intended",
+  "once_is_scalac": "IntelliJ/Chain.html#Chain.once_is_scalac",
+  "selfRooted_twice_diverges": "IntelliJ/Chain.html#Chain.selfRooted_twice_diverges",
+  "IntelliJ.agrees": "IntelliJ/Plugin.html#IntelliJ.agrees",
+};
+const HREF = {
+  "T2 · T3a · T3 · T5": "https://github.com/retronym/jvm-lang-models#the-theorems",
+  "scala/scala3#27351": "https://github.com/scala/scala3/issues/27351",
+  "mima#993–996": "https://github.com/scala-garden/mima/issues/993",
+  "check_axioms.py": REPO + "scripts/check_axioms.py",
+};
+const LIT_ROOT = "literate/";
+// `<code>name</code>` becomes a link into the API documentation when the name is known.
+const linkify = html => html.replace(/<code>([^<]+)<\/code>/g, (m, n) => API[n] ? `<a href="${API_ROOT}${API[n]}"><code>${n}</code></a>` : m);
+const tag = ([k, v]) => {
+  const href = API[v] ? API_ROOT + API[v] : HREF[v];
+  return href ? `<a class="tag ${k}" href="${href}">${v}</a>` : `<span class="tag ${k}">${v}</span>`;
+};
+for (const id in L) { const s = STATS.packages && STATS.packages[id]; L[id].th = s ? s.theorems : 0; L[id].ex = s ? s.examples : 0; }
+const E = [["harness","zinc"],["harness","mima"],["harness","links"],["harness","java"],
+  ["links","inc-comp"],["links","scala"],["java","jvm"],["mima","jvm"],["scala","jvm"],["scala","scala-types"],
+  ["intellij","scala-types"],["zinc","inc-comp"],["jvm","query"],["scala-types","query"],["inc-comp","query"]];
+
+const P = [
+ { id:"zinc", label:"Zinc / build-tool maintainer", cards:[
+   { h:"Is my change to invalidation sound?", t:"State your bridge as keys, hashes and what each key covers, then discharge four obligations. The loop theorems do the rest: if it returns, every unit is up to date (T3a); under acyclic dependencies, incremental equals clean (T3).", ev:[["p","T2 · T3a · T3 · T5"],["p","90 theorems axiom-checked in CI"]], l:["inc-comp","zinc"] },
+   { h:"Why did this bug undercompile?", t:"Look the bug up in the bug map: each row names the failed obligation and the Lean witness that has the bug's trace.", ev:[["c","56 covered · 38 partial · 50 gaps"],["c","52 with the exact trace"]], l:["zinc"], link:"docs/evidence/bug-map.md" },
+   { h:"Give me test cases that fail today", t:"The conformance harness renders each program of a model space, applies each edit, and diffs incremental classfiles against a clean build. Witnesses become scripted tests.", ev:[["c","2,331 + 2,372 cases agree with Zinc"],["c","20 predicted failures failed on develop"]], l:["harness","zinc"], link:"packages/zinc/docs/10-names.md" },
+   { h:"Will the loop terminate?", t:"With a policy that is monotone from some round, yes, within a stated bound. Without transitiveStep, three mutually inferred classes make Zinc's loop diverge for every fuel.", ev:[["p","XCompiler.zinc_some_of_monotoneFrom"],["p","PingPong.zinc_diverges"]], l:["inc-comp","zinc"] },
+   { h:"How few files can I recompile?", t:"Every bridge design shares a floor, the necessary set. The phase 30 table compares presets against it over 216,000 hierarchies.", ev:[["p","XCompiler.necessary_invalidated"],["c","precision table"]], l:["inc-comp","zinc"], link:"packages/zinc/docs/30-precision.md" },
+ ]},
+ { id:"comp", label:"scalac / dotc / javac maintainer", cards:[
+   { h:"What exactly does my compiler emit here?", t:"The lowering models state classfile shape, mixin and static forwarders and binary names for a subset, and agree with the compilers on every probed program.", ev:[["c","scalac 1,353/1,353"],["c","dotc 1,368/1,368"],["c","javac 17·21·25 on 99"]], l:["scala","java"] },
+   { h:"Where do joint and separate compilation differ?", t:"Compositionality (comp) is an obligation; F4, F5 and F6 are proved failures of it. The bug map's comp rows are the open ones.", ev:[["p","SplitProof.Spec.joint_not_comp"],["p","ZincBridgeScala3.not_comp"]], l:["scala","zinc","links"], link:"packages/scala/Scala/Facts.lean" },
+   { h:"What must my Zinc bridge record?", t:"The obligations are the specification for ExtractAPI and ExtractDependencies: every traced query, misses included, covered by a recorded key whose hash decides the answer.", ev:[["p","coverage · abstraction · locality"]], l:["inc-comp","zinc"] },
+   { h:"Has the model found compiler bugs?", t:"Calibration disagreements are findings: dotc's shortening of unencoded class names, and 4 membership disagreements on scalac 2.", ev:[["g","scala/scala3#27351"],["c","4,700/4,704 hierarchies"]], l:["scala","scala-types"] },
+ ]},
+ { id:"lib", label:"Library author / MiMa maintainer", cards:[
+   { h:"Will this edit break already-compiled clients?", t:"The JVM linkage model says which method a client resolves to before and after your edit, and matches HotSpot on every probed program.", ev:[["p","link_congr"],["c","196,972 programs · HotSpot 21·25·27"]], l:["jvm"], lit:"Binary-compatibility" },
+   { h:"What does MiMa miss?", t:"Modelled as a bridge design, MiMa has six gaps: 40 edits it passes that break on HotSpot. A corrected rule set closes them on the edit space.", ev:[["g","6 gaps · 40 false negatives"],["g","mima#993–996"],["p","MiMa.Sound"]], l:["mima","jvm"], link:"packages/mima/docs/track-b.md" },
+   { h:"Is a Zinc-clean build safe to link?", t:"Yes, for a front end meeting Zinc's obligations with explicit interfaces: a unit Zinc never recompiles equals the clean build's. The converse fails, and that gap is what MiMa reports.", ev:[["p","XCompiler.untouched_eq_clean"]], l:["links","inc-comp"] },
+   { h:"What does JLS chapter 13 actually promise?", t:"The literate pages quote each JLS and JVMS clause next to the model and check an example by evaluation and by the kernel.", ev:[["c","quotes checked verbatim"]], l:["java","jvm"], href:"literate/" },
+ ]},
+ { id:"ij", label:"IntelliJ Scala plugin developer", cards:[
+   { h:"Is this substitutor chain right?", t:"A chain is correct when it composes to scalac's single asSeenFrom. The theorems say when, and a self-rooted chain applied twice provably diverges.", ev:[["p","once_is_scalac"],["p","selfRooted_twice_diverges"]], l:["intellij","scala-types"], link:"packages/intellij/IntelliJ/Chain.lean" },
+   { h:"Can I catch bad substitutors where they are built?", t:"Each theorem is a runtime check (SubstitutorInvariants) so a wrong rewrite fails at its source, not as a false error on some unrelated expression.", ev:[["p","IntelliJ.agrees"],["c","TCK corpus vs scalac"]], l:["intellij"] },
+ ]},
+ { id:"contrib", label:"Contributor / researcher", cards:[
+   { h:"How do I add a language feature?", t:"Copy the SAM template: the compiler's algorithm as a task, today's bridge as keys, failing cases as witnesses, the fix with obligations and fix_sound.", ev:[["p","Sam.fix_sound"],["c","witnesses fail on develop"]], l:["zinc","inc-comp"], link:"packages/zinc/Zinc/Features/Sam.lean" },
+   { h:"What is worth modelling next?", t:"The bug map clusters its 50 gaps into candidate phases: constructors, stale middle files, macros, local classes, pipelining, exports.", ev:[["g","50 gaps, clustered"]], l:["zinc"], link:"docs/evidence/bug-map.md" },
+   { h:"How much can I trust a result?", t:"No sorry, admit or axiom. native_decide only in examples. CI checks the core theorems use only propext, Classical.choice and Quot.sound.", ev:[["p","0 sorry"],["p","check_axioms.py"]], l:["query","inc-comp","links"], link:"scripts/check_axioms.py" },
+ ]},
+];
+
+const svg = document.getElementById("svg"), NS = "http://www.w3.org/2000/svg";
+const W = 128, H = 54;
+const el = (t, a, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); (p||svg).appendChild(e); return e; };
+const logw = v => v <= 0 ? 0 : Math.max(3, Math.round(Math.log10(v + 1) / Math.log10(1000) * (W - 20)));
+const edges = E.map(([a, b]) => {
+  const A = L[a], B = L[b], x1 = A.x, y1 = A.y + H/2, x2 = B.x, y2 = B.y - H/2, my = (y1 + y2) / 2;
+  return { a, b, p: el("path", { class: "edge", d: `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`, "marker-end": "url(#arr)" }) };
+});
+const defs = el("defs", {}); const m = el("marker", { id: "arr", viewBox: "0 0 8 8", refX: "7", refY: "4", markerWidth: "7", markerHeight: "7", orient: "auto" }, defs);
+el("path", { d: "M0,0 L8,4 L0,8 z", fill: "var(--edge)" }, m);
+const toolPos = { jvm:[-1], java:[-1], mima:[-1], "scala-types":[1], scala:[0], intellij:[0], zinc:[1] };
+for (const id in L) {
+  const n = L[id], g = el("g", { class: "node", tabindex: "0", role: "button", "aria-label": `${id}: ${n.q}`, "data-id": id });
+  el("rect", { class: "box", x: n.x - W/2, y: n.y - H/2, width: W, height: H, rx: 7 }, g);
+  const t1 = el("text", { class: "nm", x: n.x - W/2 + 10, y: n.y - 6 }, g); t1.textContent = id;
+  const t2 = el("text", { class: "q", x: n.x - W/2 + 10, y: n.y + 9 }, g); t2.textContent = n.q;
+  const bars = el("g", { class: "bars" }, g);
+  if (n.th) el("rect", { class: "bar-p", x: n.x - W/2 + 10, y: n.y + 15, width: logw(n.th), height: 3, rx: 1 }, bars);
+  if (n.ex) el("rect", { class: "bar-c", x: n.x - W/2 + 10, y: n.y + 20, width: logw(n.ex), height: 3, rx: 1 }, bars);
+  g.addEventListener("click", () => showLayer(id));
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showLayer(id); } });
+}
+// calibration targets: small dashed tags beside the row-2/3 layers
+const toolY = { 210: 258, 320: 368 };
+for (const id in L) {
+  const n = L[id]; if (!n.tools) continue;
+  n.tools.forEach((t, i) => {
+    const y = toolY[n.y] + i * 12;
+    el("line", { class: "toolline", x1: n.x - W/2 + 10, y1: n.y + H/2, x2: n.x - W/2 + 10, y2: y - 4 });
+    const tx = el("text", { class: "tool", x: n.x - W/2 + 14, y }); tx.textContent = t;
+  });
+}
+
+let sel = "inc-comp", lens = "zinc";
+function render() {
+  const lit = new Set(P.find(p => p.id === lens).cards.flatMap(c => c.l));
+  svg.querySelectorAll(".node").forEach(g => {
+    const id = g.dataset.id;
+    g.classList.toggle("lit", lit.has(id)); g.classList.toggle("dim", !lit.has(id)); g.classList.toggle("sel", id === sel);
+  });
+  edges.forEach(e => e.p.classList.toggle("hot", lit.has(e.a) && lit.has(e.b)));
+}
+function showLayer(id) {
+  sel = id; const n = L[id];
+  document.getElementById("detail").innerHTML = `
+    <h3>${n.full} <small>${n.ask}</small></h3>
+    <dl class="rows">
+      <dt class="p">Proved</dt><dd>${linkify(n.proved)}</dd>
+      <dt class="c">Calibrated</dt><dd>${linkify(n.calib)}</dd>
+      <dt class="g">Gaps</dt><dd>${linkify(n.gaps)}</dd>
+      ${n.lit ? `<dt class="s">Read</dt><dd>${n.lit.map(c => `<a href="${LIT_ROOT}${c}/">${c.replace(/-/g, " ")}</a>`).join(" · ")}</dd>` : ""}
+      <dt class="s">Start here</dt><dd><a href="${REPO}${n.start}"><code>${n.start}</code></a></dd>
+    </dl>`;
+  render();
+}
+function showLens(id) {
+  lens = id;
+  document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.id === id));
+  const p = P.find(p => p.id === id);
+  document.getElementById("cards").innerHTML = p.cards.map((c, i) => `
+    <article class="card">
+      <div class="n">${i + 1}</div>
+      <h4>${c.h}</h4>
+      <p>${c.t}${c.lit ? ` <a href="${LIT_ROOT}${c.lit}/">Read the literate page</a>` : c.link ? ` <a href="${REPO}${c.link}">Read&nbsp;more</a>` : c.href ? ` <a href="${c.href}">Read&nbsp;more</a>` : ""}</p>
+      <div class="ev">${c.ev.map(tag).join("")}${c.l.map(x => `<button class="tag l" data-l="${x}">${x}</button>`).join("")}</div>
+    </article>`).join("");
+  document.querySelectorAll(".tag.l").forEach(b => b.addEventListener("click", () => showLayer(b.dataset.l)));
+  try { localStorage.setItem("lens", id); } catch (e) {}
+  render();
+}
+const chips = document.getElementById("chips");
+P.forEach(p => { const b = document.createElement("button"); b.className = "chip"; b.dataset.id = p.id; b.textContent = p.label; b.addEventListener("click", () => showLens(p.id)); chips.appendChild(b); });
+let saved = null; try { saved = localStorage.getItem("lens"); } catch (e) {}
+showLayer(sel); showLens(P.some(p => p.id === saved) ? saved : "zinc");
+</script>
+</body>
+</html>
