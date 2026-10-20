@@ -1,0 +1,18 @@
+== p.T
+== p.A
+  typer          after the run, added: met p$A$$secret; removed: met secret
+  refchecks      after the run, added: met p$A$$secret; removed: met secret
+  uncurry        after the run, added: met p$A$$secret; removed: met secret
+  fields         after the run, added: met p$A$$secret; removed: met secret
+  specialize     after the run, added: met p$A$$secret, met O$lzycompute$1, cla L$1, met $anonfun$f$1; removed: met secret
+  posterasure    after the run, added: met O$lzycompute$1, cla L$1, met $anonfun$f$1
+  flatten        after the run, added: met t
+== p.A.L
+  posterasure    after the run, added: ; removed: met p$A$L$$$outer
+  lambdalift     after the run, added: ; removed: met p$A$L$$$outer
+== p.A.O$
+  posterasure    after the run, added: ; removed: met p$A$O$$$outer, val $outer 
+  lambdalift     after the run, added: ; removed: met p$A$O$$$outer, val $outer 
+== p.A.Inner
+== p.A$
+6 classes, 12 phases: 11 (class, phase) answers changed after the run

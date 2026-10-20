@@ -1,0 +1,41 @@
+== p.F
+  typer          after the run, added: met apply$mcII$sp
+  posttyper      after the run, added: met apply$mcII$sp
+  pickler        after the run, added: met apply$mcII$sp
+  inlining       after the run, added: met apply$mcII$sp
+  firstTransform after the run, added: met apply$mcII$sp
+== p.S
+  typer          after the run, added: val t, met <clinit>
+  posttyper      after the run, added: val t, met <clinit>
+  pickler        after the run, added: val t, met <clinit>
+  inlining       after the run, added: val t, met <clinit>
+  firstTransform after the run, added: val t, met <clinit>
+  erasure        after the run, added: val t, met <clinit>
+  mixin          after the run, added: val t, met <clinit>
+  lambdaLift     after the run, added: val t, met <clinit>
+== p.S$
+  typer          after the run, added: met writeReplace; removed: val t
+  posttyper      after the run, added: ; removed: val t
+  pickler        after the run, added: ; removed: val t
+  inlining       after the run, added: ; removed: val t
+  firstTransform after the run, added: ; removed: val t
+  erasure        after the run, added: ; removed: val t
+  mixin          after the run, added: ; removed: val t
+  lambdaLift     after the run, added: ; removed: val t
+== p.U
+== p.E
+  typer          after the run, added: val _$name, val _$ordinal
+  posttyper      after the run, added: val _$name, val _$ordinal
+  pickler        after the run, added: val _$name, val _$ordinal
+  inlining       after the run, added: val _$name, val _$ordinal
+  firstTransform after the run, added: val _$name, val _$ordinal
+  erasure        after the run, added: val _$name, val _$ordinal
+  lambdaLift     after the run, added: met <clinit>
+== p.E$
+  typer          after the run, added: met writeReplace
+== p.E.$anon
+== p.P
+== p.P.I
+== p.O$
+  typer          after the run, added: met writeReplace
+10 classes, 9 phases: 30 (class, phase) answers changed after the run

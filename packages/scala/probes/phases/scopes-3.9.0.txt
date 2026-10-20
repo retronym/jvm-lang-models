@@ -1,0 +1,10 @@
+== p.T
+== p.A
+  mixin          after the run, added: met <clinit>
+  lambdaLift     after the run, added: met <clinit>
+== p.A.L
+== p.A.O$
+== p.A.Inner
+== p.A$
+  typer          after the run, added: met writeReplace
+6 classes, 9 phases: 3 (class, phase) answers changed after the run
