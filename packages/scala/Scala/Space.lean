@@ -18,6 +18,8 @@ and its lowered classfiles, and `packages/scala/probes/probe.py` diffs those aga
 * `initProgram`: trait initialisers, with the trait compiled in the same run as its subclasses
   and in a run of its own (F6).
 * `scala3Space`: `@static` members and extension methods.
+* `fwdSpace`: mixin and static forwarder shapes read off scalac's source (`nestSpace` has nested
+  companion pairs).
 -/
 
 namespace Scala
@@ -284,7 +286,35 @@ def nestSpace : List Program :=
      { name := "Top$TN", cls := some { name := "Top$TN", kind := .trt }, outer := some "Top", inObj := true }],
     [{ name := "C", cls := some (d "C" "c"), obj := some { name := "C", kind := .obj } },
      { name := "C$N", cls := some (d "C$N" "n"), outer := some "C", inObj := true },
-     { name := "C$I", cls := some (d "C$I" "i"), outer := some "C" }] ]
+     { name := "C$I", cls := some (d "C$I" "i"), outer := some "C" }],
+    -- a companion pair nested in an object: static forwarders in Scala 3 only (a pair nested in a
+    -- class gets none in either, but an object nested in a class is not modelled)
+    [{ name := "A", cls := some (d "A" "a") },
+     { name := "Top", obj := some { name := "Top", kind := .obj } },
+     { name := "Top$P", cls := some (d "Top$P" "p"),
+       obj := some { name := "Top$P", kind := .obj, super := some ("A", []), members := [{ name := "f", res := .int, nullary := true }] },
+       outer := some "Top", inObj := true }] ]
+
+/-! ## Forwarders: shapes read off scalac's `Mixin.mixinTraitForwarders` and `BCodeHelpers.addForwarders`
+
+A trait mixed in through another trait (`clazz.mixinClasses` is every trait outside the superclass's
+linearization, not just the direct parents); a static forwarder's descriptor is the member's erasure in
+its owner, not as seen from the object (scala/bug#3452); a trait's companion object that extends a class
+(forwarders in the interface); a companion class that inherits a name the object has (no forwarder). -/
+
+def fwdSpace : List Program :=
+  let m (n : String) (r : Ty := .int) (ps : List Ty := []) : Mem := { name := n, res := r, params := ps }
+  [ [{ name := "T", cls := some { name := "T", kind := .trt, members := [m "m"] } },
+     { name := "U", cls := some { name := "U", kind := .trt, traits := [("T", [])], members := [m "u"] } },
+     { name := "C", cls := some { name := "C", traits := [("U", [])] } },
+     { name := "O", obj := some { name := "O", kind := .obj, traits := [("U", [])] } }],
+    [{ name := "G", cls := some { name := "G", tparams := 1, members := [m "g" (Ty.X "G") [Ty.X "G"]] } },
+     { name := "O", obj := some { name := "O", kind := .obj, super := some ("G", [.str]) } }],
+    [{ name := "A", cls := some { name := "A", members := [m "k"] } },
+     { name := "T", cls := some { name := "T", kind := .trt }, obj := some { name := "T", kind := .obj, super := some ("A", []) } }],
+    [{ name := "A", cls := some { name := "A", members := [m "k", m "j"] } },
+     { name := "P", cls := some { name := "P", members := [m "k"] } },
+     { name := "C", cls := some { name := "C", super := some ("P", []) }, obj := some { name := "C", kind := .obj, super := some ("A", []) } }] ]
 
 /-! ## Enums (Scala 3), and a sealed trait with case objects -/
 
@@ -334,7 +364,7 @@ def space : List Case :=
   (mixinSpace.map ({ fam := "mixin", prog := · })) ++ (genericSpace.map ({ fam := "generic", prog := · })) ++
   (vclsSpace.map ({ fam := "vcls", prog := · })) ++ (traitCompanionSpace.map ({ fam := "tcomp", prog := · })) ++
   (miscSpace.map ({ fam := "misc", prog := · })) ++ (caseSpace.map ({ fam := "case", prog := · })) ++
-  (nestSpace.map ({ fam := "nest", prog := · })) ++ (sealedSpace.map ({ fam := "sealed", prog := · })) ++
+  (nestSpace.map ({ fam := "nest", prog := · })) ++ (fwdSpace.map ({ fam := "fwd", prog := · })) ++ (sealedSpace.map ({ fam := "sealed", prog := · })) ++
   (enumSpace.map ({ fam := "enum", prog := ·, only3 := true })) ++
   (inlineSpace.map ({ fam := "inline", prog := ·, only3 := true })) ++ (asfSpace.map ({ fam := "asf", prog := · })) ++
   ([0, 1, 2].map fun k => { fam := "init", prog := initProgram k }) ++

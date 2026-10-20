@@ -9,7 +9,7 @@ forwarders, bridges, `$init$` calls and erasure.
 * `Scala.lower_congr`: an edit outside a unit's trace leaves its classfiles unchanged; the hook to
   `IncComp.XCompiler` and to B4 in `Links`.
 
-Calibrated against scalac 2.12.21 and 2.13.18 on 1,348 programs and dotc 3.9.0 on 1,363.
+Calibrated against scalac 2.12.21 and 2.13.18 on 1,353 programs and dotc 3.9.0 on 1,368.
 -/
 
 /-- The results this page states, as checked names: the build fails if one is renamed or removed. -/

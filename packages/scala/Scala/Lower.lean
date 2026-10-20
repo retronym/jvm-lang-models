@@ -47,7 +47,7 @@ its declaration.
 Spec: cites SLS §3.7
 Spec: unspecified SLS §3.7: the erasure of a value class to its underlying type (SIP-15, outside the
 specification); calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
-`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
+`packages/scala/probes/probe.py` (1,353 programs for Scala 2, 1,368 for Scala 3). -/
 def erase : Ty → M String
   | .int => pure "I"
   | .long => pure "J"
@@ -76,7 +76,7 @@ def erase : Ty → M String
 /-- Erasure as a parameter: `Unit` is boxed.
 
 Spec: unspecified SLS §3.7: that `Unit` is boxed as a parameter; calibrated against scalac 2.12.21,
-2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for
+2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353 programs for Scala 2, 1,368 for
 Scala 3). -/
 def eraseP (t : Ty) : M String := do
   let e ← erase t
@@ -177,8 +177,8 @@ a `lazy val` or an extension method (even an abstract one). Read from TASTy, suc
 
 Spec: unspecified SLS §5.3.3: when a trait has an initialiser `$init$` and a subclass's constructor
 calls it, which differs between Scala 2 and 3 and, in Scala 3, with separate compilation; calibrated
-against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs
-for Scala 2, 1,363 for Scala 3). -/
+against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353 programs
+for Scala 2, 1,368 for Scala 3). -/
 def hasInit (dl : Dialect) (inRun : Bool) (t : Decl) : Bool :=
   match dl with
   | .s212 | .s213 => t.members.any (!·.abs)
@@ -214,7 +214,7 @@ ancestor's member it overrides (`overridesIn`, by `memberType`) whose erasure di
 superclass already pairs the two.
 
 Spec: unspecified SLS §3.7: which bridge methods a class gets; calibrated against scalac 2.12.21,
-2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for
+2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353 programs for Scala 2, 1,368 for
 Scala 3). -/
 def bridges (self : String) (l : List Anc) (sup : List Anc) (ms : List MOut) :
     M (List MOut) := do
@@ -244,8 +244,8 @@ object are static from 2.13 on; a trait's field implemented in a class is final 
 
 Spec: unspecified SLS §5.3.3: the encoding of a trait's concrete members in a class that mixes it
 in: mixin forwarders to static `m$` methods, and fields with setters for a trait's `val`s;
-calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348
-programs for Scala 2, 1,363 for Scala 3). -/
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353
+programs for Scala 2, 1,368 for Scala 3). -/
 def classBody (dl : Dialect) (d : Decl) (isObj : Bool) (l : List Anc) :
     M (List MOut × List FOut × List Anc) := do
   let mut ms : List MOut := []
@@ -327,7 +327,7 @@ parameter before the others.
 
 Spec: unspecified SLS §5.3: the outer instance of an inner class, as a field, an accessor and a
 constructor parameter; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
-`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
+`packages/scala/probes/probe.py` (1,353 programs for Scala 2, 1,368 for Scala 3). -/
 def lowerClass (dl : Dialect) (d : Decl) (outer : Option String := none) : M ClassOut := do
   let l ← lin fuel d
   let (ms, fs, mx) ← classBody dl d false l
@@ -351,7 +351,7 @@ method in the companion, and `hashCode`/`equals` likewise.
 
 Spec: unspecified SLS §5.3: the encoding of value classes and their extension methods (SIP-15,
 outside the specification); calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by
-`packages/scala/probes/probe.py` (1,348 programs for Scala 2, 1,363 for Scala 3). -/
+`packages/scala/probes/probe.py` (1,353 programs for Scala 2, 1,368 for Scala 3). -/
 def lowerVcls (d : Decl) : M ClassOut := do
   let some (x, u) := d.under | throw "value class without parameter"
   let eu ← erase u
@@ -385,8 +385,8 @@ def extensions (d : Decl) : M (List MOut) := do
 Scala 3.
 
 Spec: unspecified SLS §5.4: the encoding of an object as a module class with a `MODULE$` field;
-calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348
-programs for Scala 2, 1,363 for Scala 3). -/
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353
+programs for Scala 2, 1,368 for Scala 3). -/
 def lowerObject (dl : Dialect) (d : Decl) (vc : Option Decl) (nested : Bool := false) : M ClassOut := do
   let self := moduleName d.name
   let l ← lin fuel d
@@ -417,12 +417,15 @@ def lowerObject (dl : Dialect) (d : Decl) (vc : Option Decl) (nested : Bool := f
          partly := part }
 
 /-- Static forwarders in the companion class (or a mirror class) for the object's public methods,
-its own and inherited, except those whose name the companion class also has. Scala 2 skips
-trait setters and bridges; Scala 3 forwards setters, and some bridges.
+its own and inherited, except those whose name the companion class also has (its own or
+inherited). Scala 2 skips trait setters and bridges; Scala 3 forwards setters, and some bridges.
+The descriptor is the member's erasure in its owner, not as seen from the object (scala/bug#3452:
+`object O extends G[String]` gets `g(Object)Object`). Only a top-level object gets them in Scala 2;
+Scala 3 also forwards for a static nested one (`lowerSrc`).
 
 Spec: unspecified SLS §5.4: which static forwarders a companion class gets; calibrated against
-scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,348 programs for Scala
-2, 1,363 for Scala 3). -/
+scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/probe.py` (1,353 programs for Scala
+2, 1,368 for Scala 3). -/
 def forwarders (dl : Dialect) (od : Decl) (o : ClassOut) (clsNames : List String) : M (List MOut) := do
   let l ← lin fuel od
   let mut cands := o.methods.filter fun m =>
@@ -474,6 +477,12 @@ def lowerSrc (dl : Dialect) (s : Src) : M (List ClassOut) := do
     let o ← lowerObject dl od vc (s.outer.isSome && s.inObj)
     match c with
     | some c =>
+      -- a nested companion class gets no static forwarders in Scala 2 (`!lmoc.isNestedClass`); in
+      -- Scala 3 it does when the object is static (`lmoc.isStatic`): nested in an object, not a class
+      -- (an object nested in a class nested in an object is taken for static here)
+      if s.outer.isSome && (dl != .s3 || !s.inObj) then
+        let (sm, sf) ← statics od
+        return [{ c with methods := c.methods ++ sm, fields := c.fields ++ sf }, o]
       let clsNames := (← match s.cls with
         | some d => do pure (memberNames (← lin fuel d))
         | none => pure []) ++ c.methods.map (·.name)
@@ -493,6 +502,7 @@ def lowerSrc (dl : Dialect) (s : Src) : M (List ClassOut) := do
       -- a value class always has a companion
       let od : Decl := { name := v.name, kind := .obj }
       let o ← lowerObject dl od vc
+      if s.outer.isSome && (dl != .s3 || !s.inObj) then return [c, o]
       pure [{ c with methods := c.methods ++ (← forwarders dl od o (c.methods.map (·.name))) }, o]
     | _, _ => pure c.toList
 
@@ -514,7 +524,7 @@ theorem lower_congr (dl : Dialect) (s : Src) (e e' : (q : Q) → Ans q)
 mirror class, and in Scala 3 also in the module class), and in Scala 3 a static field in a module
 class for each object nested in it. -/
 def nesting (dl : Dialect) (q : Program) (cs : List ClassOut) : List ClassOut :=
-  let entry (n : Src) : List (String × String × String × List String) :=
+  let entry (n : Src) (cls obj : Bool := true) : List (String × String × String × List String) :=
     match n.outer, n.anonIn with
     | none, some _ => [(n.name, "", "", ["public", "static", "final"])]
     | none, none => []
@@ -522,8 +532,8 @@ def nesting (dl : Dialect) (q : Program) (cs : List ClassOut) : List ClassOut :=
       let fl (obj : Bool) := ["public"] ++ (if n.inObj then ["static"] else []) ++
         (if (obj && dl == .s3) || (!obj && (n.cls.map (·.final)).getD false) then ["final"] else []) ++
         (if (n.cls.map (·.kind == .trt)).getD false && !obj then ["interface", "abstract"] else [])
-      (n.cls.toList.map fun _ => (n.name, o, n.simple, fl false)) ++
-      (n.obj.toList.map fun _ => (n.name ++ "$", o, n.simple ++ "$", fl true))
+      ((if cls then n.cls.toList else []).map fun _ => (n.name, o, n.simple, fl false)) ++
+      ((if obj then n.obj.toList else []).map fun _ => (n.name ++ "$", o, n.simple ++ "$", fl true))
   let membersOf (u : String) (inObjOnly : Bool) : List Src :=
     q.filter fun n => n.outer == some u && (n.inObj || !inObjOnly)
   let anonsOf (u : String) : List Src := q.filter fun n => n.anonIn == some u
@@ -531,10 +541,14 @@ def nesting (dl : Dialect) (q : Program) (cs : List ClassOut) : List ClassOut :=
     -- which unit is `c` the class part (or mirror) of, or the module class of?
     let asCls := q.find? fun u => u.name == c.name
     let asMod := q.find? fun u => u.name ++ "$" == c.name && u.obj.isSome
-    -- a nested class and its companion module list both their entries
+    -- a nested companion pair: the class lists the module's entry too in Scala 3 only (its static
+    -- forwarders name the module); the module lists the class's only when it names the class, as a
+    -- case class's `apply` does
+    let refsCls (u : Src) : Bool :=
+      (u.obj.map fun o => o.members.any fun m => m.res == .ref u.name).getD false
     let own := match asCls, asMod with
-      | some u, _ => if u.cls.isSome || u.obj.isNone then entry u else []
-      | _, some u => entry u
+      | some u, _ => if u.cls.isSome || u.obj.isNone then entry u true (dl == .s3) else []
+      | _, some u => entry u (refsCls u) true
       | _, _ => []
     let members := match asCls, asMod with
       | some u, _ => (membersOf u.name false).flatMap entry

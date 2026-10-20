@@ -139,7 +139,7 @@ A static promise across three layers ([`packages/scala/Scala/Refchecks.lean`](..
 
 - `Members` (typer's inheritance checks and refchecks, `reported`) accepts exactly the programs the compiler accepts (772, 772 and 672);
 - for an accepted program and each concrete class `C` whose `m` `Members` says comes from owner `O`, HotSpot ran `O`'s `m` (the oracle is `members.py`'s run of `new C().m` on each accepted program, written by [`members_lean.py`](../probes/members_lean.py) into `RefchecksData`, as Track T's `PathsOracle` does);
-- the program lowered by [`Scala.lowerProgram`](../Scala/Lower.lean#L551) and linked by `Jvm` (constructor and `$init$` bodies run) enters `O`'s lowered method last, directly or through `C`'s mixin forwarder and `O.m$`, or, for a trait's `val`, the class's accessor; so it links, and throws no `AbstractMethodError`.
+- the program lowered by [`Scala.lowerProgram`](../Scala/Lower.lean#L565) and linked by `Jvm` (constructor and `$init$` bodies run) enters `O`'s lowered method last, directly or through `C`'s mixin forwarder and `O.m$`, or, for a trait's `val`, the class's accessor; so it links, and throws no `AbstractMethodError`.
 
 The exclusions are named:
 

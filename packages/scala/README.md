@@ -4,7 +4,7 @@ What scalac and dotc emit for a Scala subset: lowering to classfiles as a `Task`
 
 **Start here.** [`Scala/Lower.lean`](Scala/Lower.lean).
 
-**Calibration.** [`probes/probe.py`](probes/probe.py) compiles the spaces with scalac 2.12, 2.13 and dotc 3 and diffs the classfiles: 1,348 programs agree for 2.12 and 2.13, 1,363 for 3.9. [`docs/track-s.md`](docs/track-s.md).
+**Calibration.** [`probes/probe.py`](probes/probe.py) compiles the spaces with scalac 2.12, 2.13 and dotc 3 and diffs the classfiles: 1,353 programs agree for 2.12 and 2.13, 1,368 for 3.9. [`docs/track-s.md`](docs/track-s.md).
 
 **Gaps.** Case classes with type parameters or several parameter lists, nested and local classes, overloading, Java-defined parents ([`docs/roadmap.md`](../../docs/roadmap.md) at the repository root).
 
