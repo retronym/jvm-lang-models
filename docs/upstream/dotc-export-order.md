@@ -1,6 +1,21 @@
-# dotc: mutual wildcard exports compile or not by file order
+# dotc: what a wildcard export exports depends on file order
 
-Venue: scala/scala3 issue (area:export). Draft, not posted.
+Venue: scala/scala3 issue (area:export). Draft, not posted. Two programs; the first is the more serious, since nothing reports it.
+
+## 1. An exported member silently missing
+
+```scala
+// A.scala
+object A { export B.*; def a = 1 }
+// B.scala
+object B { def b = A.a + 1 }
+```
+
+`scala A.scala B.scala`: `A` has the forwarder `b` (`javap`: `A$.b()` and the static forwarder `A.b()`). `scala B.scala A.scala`: no error, and `A` has no `b`: `A$` has only `a`. A client calling `A.b` compiles against one build and not the other; compiled separately against the first, it throws `NoSuchMethodError` against the second. Typing `B.scala` first, `b`'s inferred type types `A.a`, which completes `A`, whose wildcard export reads `B`'s members while `b` is still being completed, and leaves `b` out. (Where it is left out was not traced; no cyclic reference is reported.) The same with three objects (`export B.*` in `A`, `export C.c` in `B`, `export A.a` in `C`): two of the six file orders give `A` different members.
+
+## 2. Mutual wildcard exports compile or not
+
+The original report follows.
 
 ## Compiler version
 

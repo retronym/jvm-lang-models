@@ -1,134 +1,388 @@
 == companion-cross-file
-  2.12.21  in order: ok, reversed: ok, C.scala alone: ok, D.scala alone: ok
-  2.13.18  in order: ok, reversed: ok, C.scala alone: ok, D.scala alone: ok
-  3.9.0    in order: cycle, reversed: cycle
-           in order: Overloaded or recursive method $lessinit$greater$default$1 needs return type
-           reversed: Overloaded or recursive method d needs return type
+  2.12.21 
+           joint C.scala, D.scala (reference): same
+           joint D.scala, C.scala: same
+           C.scala from source: same
+           D.scala from source: same
+           separate C.scala→D.scala: n/a
+           separate D.scala→C.scala: n/a
+  2.13.18 
+           joint C.scala, D.scala (reference): same
+           joint D.scala, C.scala: same
+           C.scala from source: same
+           D.scala from source: same
+           separate C.scala→D.scala: n/a
+           separate D.scala→C.scala: n/a
+  3.9.0   
+           joint C.scala, D.scala: cycle  (Overloaded or recursive method $lessinit$greater$default$1 needs return type)
+           joint D.scala, C.scala: cycle  (Overloaded or recursive method d needs return type)
+           separate C.scala→D.scala: n/a
+           separate D.scala→C.scala: n/a
+== determinism-lambdalift
+  2.12.21 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  2.13.18 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  3.9.0   
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+== determinism-refinement-override
+  2.12.21 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  2.13.18 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  3.9.0   
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+== determinism-synthetic-module-location
+  2.12.21 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  2.13.18 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  3.9.0   
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+== determinism-typer-fresh-name
+  2.12.21 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  2.13.18 
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
+  3.9.0   
+           joint a.scala, b.scala (reference): same
+           joint b.scala, a.scala: same
+           a.scala from source: same
+           b.scala from source: same
+           separate a.scala→b.scala: same
+           separate b.scala→a.scala: n/a
 == export-class-member
-  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
-           in order: value x is not a member of o1.C
-           reversed: Overloaded or recursive method y needs return type
+  3.9.0      (diagnostic differs)
+           joint C.scala, D.scala: error  (value x is not a member of o5.C)
+           joint D.scala, C.scala: cycle  (Overloaded or recursive method y needs return type)
+           separate C.scala→D.scala: n/a
+           separate D.scala→C.scala: n/a
 == export-given
-  3.9.0    in order: error, reversed: error
-           in order: Conflicting definitions:
-           reversed: Conflicting definitions:
+  3.9.0   
+           joint A.scala, B.scala: error  (Conflicting definitions:)
+           joint B.scala, A.scala: error  (Conflicting definitions:)
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-inferred-back
-  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+  3.9.0   
+           joint A.scala, B.scala (reference): same
+           joint B.scala, A.scala: same
+           A.scala from source: tasty  (o7/A.class, o7/A.tasty)
+           B.scala from source: same
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-inferred-cross
-  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+  3.9.0      <-- classfile members depend on order
+           joint A.scala, B.scala (reference): same
+           joint B.scala, A.scala: members  (o8/A$.class, o8/A.class)
+           A.scala from source: same
+           B.scala from source: same
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-inferred-from-forwarder
-  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+  3.9.0   
+           joint A.scala, B.scala (reference): same
+           joint B.scala, A.scala: same
+           A.scala from source: tasty  (o9/A.class, o9/A.tasty)
+           B.scala from source: same
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: tasty  (o9/A.class, o9/A.tasty)
 == export-mutual-named
-  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
+  3.9.0   
+           joint A.scala, B.scala (reference): same
+           joint B.scala, A.scala: same
+           A.scala from source: tasty  (o10/A.class, o10/A.tasty)
+           B.scala from source: tasty  (o10/B.class, o10/B.tasty)
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-mutual-wildcard
-  3.9.0    in order: error, reversed: ok   <-- compiles or not by order
-           in order: Conflicting definitions:
+  3.9.0      <-- compiles or not by order
+           joint A.scala, B.scala: error  (Conflicting definitions:)
+           joint B.scala, A.scala (reference): same
+           A.scala from source: error  (Conflicting definitions:)
+           B.scala from source: tasty  (o11/B.class, o11/B.tasty)
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-three-cycle
-  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok, C.scala alone: ok
+  3.9.0      <-- classfile members depend on order
+           joint A.scala, B.scala, C.scala (reference): same
+           joint A.scala, C.scala, B.scala: same
+           joint B.scala, A.scala, C.scala: members  (o12/A$.class, o12/A.class)
+           joint B.scala, C.scala, A.scala: members  (o12/A$.class, o12/A.class)
+           joint C.scala, A.scala, B.scala: same
+           joint C.scala, B.scala, A.scala: same
+           A.scala, B.scala from source: tasty  (o12/A.class, o12/A.tasty, o12/B.class)
+           A.scala from source: tasty  (o12/A.class, o12/A.tasty)
+           A.scala, C.scala from source: tasty  (o12/A.class, o12/A.tasty)
+           B.scala, A.scala from source: tasty  (o12/A.class, o12/A.tasty, o12/B.class)
+           B.scala from source: tasty  (o12/B.class, o12/B.tasty)
+           B.scala, C.scala from source: tasty  (o12/C.class, o12/C.tasty)
+           C.scala, A.scala from source: tasty  (o12/A.class, o12/A.tasty)
+           C.scala from source: tasty  (o12/C.class, o12/C.tasty)
+           C.scala, B.scala from source: tasty  (o12/C.class, o12/C.tasty)
+           separate A.scala→B.scala→C.scala: n/a
+           separate A.scala→C.scala→B.scala: n/a
+           separate B.scala→A.scala→C.scala: n/a
+           separate B.scala→C.scala→A.scala: n/a
+           separate C.scala→A.scala→B.scala: n/a
+           separate C.scala→B.scala→A.scala: n/a
 == export-wildcard-both
-  3.9.0    in order: error, reversed: error
-           in order: Conflicting definitions:
-           reversed: Conflicting definitions:
+  3.9.0   
+           joint A.scala, B.scala: error  (Conflicting definitions:)
+           joint B.scala, A.scala: error  (Conflicting definitions:)
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == export-wildcard-mutual-defs
-  3.9.0    in order: error, reversed: error
-           in order: Conflicting definitions:
-           reversed: Conflicting definitions:
+  3.9.0   
+           joint A.scala, B.scala: error  (Conflicting definitions:)
+           joint B.scala, A.scala: error  (Conflicting definitions:)
+           separate A.scala→B.scala: n/a
+           separate B.scala→A.scala: n/a
 == extension-inferred-mutual
-  3.9.0    in order: ok, reversed: ok, E.scala alone: ok, U.scala alone: ok
+  3.9.0   
+           joint E.scala, U.scala (reference): same
+           joint U.scala, E.scala: same
+           E.scala from source: same
+           U.scala from source: same
+           separate E.scala→U.scala: n/a
+           separate U.scala→E.scala: n/a
 == extension-overload-completing
-  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
-           in order: value f is not a member of String.
-           reversed: Overloaded or recursive method g needs return type
+  3.9.0      (diagnostic differs)
+           joint E.scala, U.scala: error  (value f is not a member of String.)
+           joint U.scala, E.scala: cycle  (Overloaded or recursive method g needs return type)
+           separate E.scala→U.scala: n/a
+           separate U.scala→E.scala: n/a
 == given-anonymous-mutual
-  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+  3.9.0   
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: same
+           O.scala from source: same
+           U.scala from source: tasty  (o17/U.class, o17/U.tasty)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == given-from-inferred-def
-  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+  3.9.0   
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: tasty  (o18/O.class, o18/O.tasty)
+           O.scala from source: tasty  (o18/O.class, o18/O.tasty)
+           U.scala from source: same
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == given-two-candidates-one-completing
-  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+  3.9.0   
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: same
+           O.scala from source: same
+           U.scala from source: same
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == implicit-explicit-type
-  2.12.21  in order: error, reversed: error
-           in order: ambiguous implicit values:
-           reversed: ambiguous implicit values:
-  2.13.18  in order: error, reversed: error
-           in order: ambiguous implicit values:
-           reversed: ambiguous implicit values:
-  3.9.0    in order: error, reversed: error
-           in order: Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of 
-           reversed: Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of 
+  2.12.21 
+           joint O.scala, U.scala: error  (ambiguous implicit values:)
+           joint U.scala, O.scala: error  (ambiguous implicit values:)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  2.13.18 
+           joint O.scala, U.scala: error  (ambiguous implicit values:)
+           joint U.scala, O.scala: error  (ambiguous implicit values:)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  3.9.0   
+           joint O.scala, U.scala: error  (Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of )
+           joint U.scala, O.scala: error  (Ambiguous given instances: both value x in object O and method y in object O match type Int of parameter e of )
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == implicit-skip
-  2.12.21  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
-           reversed: recursive method z needs result type
-           U.scala alone: ambiguous implicit values:
-  2.13.18  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
-           reversed: recursive method z needs result type
-           U.scala alone: ambiguous implicit values:
-  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
-           in order: result type of implicit definition needs to be given explicitly
-           reversed: result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur
+  2.12.21    <-- compiles or not by order
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: cycle  (recursive method z needs result type)
+           O.scala from source: same
+           U.scala from source: error  (ambiguous implicit values:)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  2.13.18    <-- compiles or not by order
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: cycle  (recursive method z needs result type)
+           O.scala from source: same
+           U.scala from source: error  (ambiguous implicit values:)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  3.9.0      (diagnostic differs)
+           joint O.scala, U.scala: error  (result type of implicit definition needs to be given explicitly)
+           joint U.scala, O.scala: cycle  (result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == implicit-skip-conversion
-  2.12.21  in order: error, reversed: error
-           in order: type mismatch;
-           reversed: type mismatch;
-  2.13.18  in order: error, reversed: error
-           in order: type mismatch;
-           reversed: type mismatch;
-  3.9.0    in order: error, reversed: error
-           in order: result type of implicit definition needs to be given explicitly
-           reversed: result type of implicit definition needs to be given explicitly | Found:    ("abc" : String)
+  2.12.21 
+           joint O.scala, U.scala: error  (type mismatch;)
+           joint U.scala, O.scala: error  (type mismatch;)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  2.13.18 
+           joint O.scala, U.scala: error  (type mismatch;)
+           joint U.scala, O.scala: error  (type mismatch;)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  3.9.0   
+           joint O.scala, U.scala: error  (result type of implicit definition needs to be given explicitly)
+           joint U.scala, O.scala: error  (result type of implicit definition needs to be given explicitly | Found:    ("abc" : String))
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == implicit-skip-conversion-inferred
-  2.12.21  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
-           reversed: recursive method n needs result type
-           U.scala alone: type mismatch;
-  2.13.18  in order: ok, reversed: cycle, O.scala alone: ok, U.scala alone: error   <-- compiles or not by order
-           reversed: recursive method n needs result type
-           U.scala alone: type mismatch;
-  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
-           in order: result type of implicit definition needs to be given explicitly
-           reversed: result type of implicit definition needs to be given explicitly | Overloaded or recursive method n needs retur
+  2.12.21    <-- compiles or not by order
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: cycle  (recursive method n needs result type)
+           O.scala from source: same
+           U.scala from source: error  (type mismatch;)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  2.13.18    <-- compiles or not by order
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: cycle  (recursive method n needs result type)
+           O.scala from source: same
+           U.scala from source: error  (type mismatch;)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  3.9.0      (diagnostic differs)
+           joint O.scala, U.scala: error  (result type of implicit definition needs to be given explicitly)
+           joint U.scala, O.scala: cycle  (result type of implicit definition needs to be given explicitly | Overloaded or recursive method n needs retur)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == implicit-skip-same-file
-  2.12.21  in order: ok
-  2.13.18  in order: ok
-  3.9.0    in order: error
-           in order: result type of implicit definition needs to be given explicitly
+  2.12.21 
+           joint A.scala (reference): same
+  2.13.18 
+           joint A.scala (reference): same
+  3.9.0   
+           joint A.scala: error  (result type of implicit definition needs to be given explicitly)
 == implicit-skip-same-file-reversed
-  2.12.21  in order: ok
-  2.13.18  in order: ok
-  3.9.0    in order: cycle
-           in order: result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur
+  2.12.21 
+           joint A.scala (reference): same
+  2.13.18 
+           joint A.scala (reference): same
+  3.9.0   
+           joint A.scala: cycle  (result type of implicit definition needs to be given explicitly | Overloaded or recursive method z needs retur)
 == inherited-cross-file
-  2.12.21  in order: cycle, reversed: cycle
-           in order: recursive method m needs result type
-           reversed: recursive method m needs result type
-  2.13.18  in order: cycle, reversed: cycle
-           in order: recursive method m needs result type
-           reversed: recursive method m needs result type
-  3.9.0    in order: cycle, reversed: cycle
-           in order: Overloaded or recursive method m needs return type
-           reversed: Overloaded or recursive method m needs return type
+  2.12.21 
+           joint T.scala, C.scala: cycle  (recursive method m needs result type)
+           joint C.scala, T.scala: cycle  (recursive method m needs result type)
+           separate T.scala→C.scala: n/a
+           separate C.scala→T.scala: n/a
+  2.13.18 
+           joint T.scala, C.scala: cycle  (recursive method m needs result type)
+           joint C.scala, T.scala: cycle  (recursive method m needs result type)
+           separate T.scala→C.scala: n/a
+           separate C.scala→T.scala: n/a
+  3.9.0   
+           joint T.scala, C.scala: cycle  (Overloaded or recursive method m needs return type)
+           joint C.scala, T.scala: cycle  (Overloaded or recursive method m needs return type)
+           separate T.scala→C.scala: n/a
+           separate C.scala→T.scala: n/a
 == overload-cross-file
-  2.12.21  in order: error, reversed: cycle   (diagnostic differs)
-           in order: overloaded method f needs result type
-           reversed: recursive method g needs result type
-  2.13.18  in order: error, reversed: cycle   (diagnostic differs)
-           in order: overloaded method f needs result type
-           reversed: recursive method g needs result type
-  3.9.0    in order: cycle, reversed: cycle
-           in order: Overloaded or recursive method f needs return type
-           reversed: Overloaded or recursive method g needs return type
+  2.12.21    (diagnostic differs)
+           joint O.scala, U.scala: error  (overloaded method f needs result type)
+           joint U.scala, O.scala: cycle  (recursive method g needs result type)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  2.13.18    (diagnostic differs)
+           joint O.scala, U.scala: error  (overloaded method f needs result type)
+           joint U.scala, O.scala: cycle  (recursive method g needs result type)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+  3.9.0   
+           joint O.scala, U.scala: cycle  (Overloaded or recursive method f needs return type)
+           joint U.scala, O.scala: cycle  (Overloaded or recursive method g needs return type)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
 == parent-member-cross-file
-  2.12.21  in order: cycle, reversed: cycle
-           in order: illegal cyclic reference involving class C
-           reversed: illegal cyclic reference involving class C
-  2.13.18  in order: cycle, reversed: cycle
-           in order: illegal cyclic reference involving class C
-           reversed: illegal cyclic reference involving class C
-  3.9.0    in order: ok, reversed: ok, B.scala alone: ok, C.scala alone: ok
+  2.12.21 
+           joint B.scala, C.scala: cycle  (illegal cyclic reference involving class C)
+           joint C.scala, B.scala: cycle  (illegal cyclic reference involving class C)
+           separate B.scala→C.scala: cycle  (illegal cyclic reference involving class C)
+           separate C.scala→B.scala: n/a
+  2.13.18 
+           joint B.scala, C.scala: cycle  (illegal cyclic reference involving class C)
+           joint C.scala, B.scala: cycle  (illegal cyclic reference involving class C)
+           separate B.scala→C.scala: cycle  (illegal cyclic reference involving class C)
+           separate C.scala→B.scala: n/a
+  3.9.0   
+           joint B.scala, C.scala (reference): same
+           joint C.scala, B.scala: same
+           B.scala from source: same
+           C.scala from source: same
+           separate B.scala→C.scala: same
+           separate C.scala→B.scala: n/a
 == transparent-inline
-  2.12.21  in order: error, reversed: error
-           in order: ';' expected but 'def' found.
-           reversed: ';' expected but 'def' found.
-  2.13.18  in order: error, reversed: error
-           in order: ';' expected but 'def' found.
-           reversed: ';' expected but 'def' found.
-  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
-26 programs, 3 compilers: 5 (program, compiler) pairs that compile or not by order
+  2.12.21 
+           joint O.scala, U.scala: error  (';' expected but 'def' found.)
+           joint U.scala, O.scala: error  (';' expected but 'def' found.)
+           separate O.scala→U.scala: error  (';' expected but 'def' found.)
+           separate U.scala→O.scala: n/a
+  2.13.18 
+           joint O.scala, U.scala: error  (';' expected but 'def' found.)
+           joint U.scala, O.scala: error  (';' expected but 'def' found.)
+           separate O.scala→U.scala: error  (';' expected but 'def' found.)
+           separate U.scala→O.scala: n/a
+  3.9.0   
+           joint O.scala, U.scala (reference): same
+           joint U.scala, O.scala: same
+           O.scala from source: tasty  (o29/O.class, o29/O.tasty)
+           U.scala from source: tasty  (o29/U.class, o29/U.tasty)
+           separate O.scala→U.scala: n/a
+           separate U.scala→O.scala: n/a
+30 programs, 3 compilers: 7 (program, compiler) pairs that compile or not, or compile differently, by order
