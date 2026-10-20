@@ -81,6 +81,24 @@ Proved for every hierarchy: scalac's join of two unrelated classes is commutativ
 
 The model is deliberately at the level of classes: no type arguments, no refinements, no depth. That is enough for the order and associativity questions, which are about which classes and in which order, and it is where the compilers' algorithms are simple enough to state in a page.
 
+### With type arguments
+
+[`ScalaTypes/LubArgs.lean`](../ScalaTypes/LubArgs.lean) adds type parameters with a variance and an upper bound that may mention the parameters (`trait Fb[T <: Fb[T]]`), base types by substitution, variance-aware subtyping with wildcards, scalac's `mergePrefixAndArgs` (a covariant argument joined and a contravariant one met at `depth - 1`, an invariant one a wildcard `_ >: meet <: join`, and at depth zero `NoType`, which drops the base type), `lubDepth`, dotc's `lubArgs` (union, intersection, `? >: a & b <: a | b`) and each compiler's bounds check as calibrated. Everything runs on fuel, so every witness is a `decide` that prints the model's type and compares it with the compiler's:
+
+* LUB3: scalac's depth for `Ga`, `Gc` is 2, the merge gives up at depth zero, the base type `Gb[…]` drops out and `Object` remains, so the join is `Gb[Gb[Object]]`, which fails the bound; dotc's `Gb[Ga | Gc]` passes ([`lub3_covariant`](../ScalaTypes/LubArgs.lean#L403)).
+* LUB6: for the invariant `Fb`, scalac's `Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]` passes and dotc's `Fb[? >: Fa & Fc <: Fa | Fc]` fails ([`lub6_invariant`](../ScalaTypes/LubArgs.lean#L410)).
+* LUB2: `Inv[_ >: Int with String]` against `Inv[_ >: String with Int]` by branch order, and the generic signature's class with it ([`lub2_glb_order`](../ScalaTypes/LubArgs.lean#L418)).
+* Both joins are upper bounds of their inputs on every pair of the world ([`upper_bounds`](../ScalaTypes/LubArgs.lean#L436)).
+
+### A systematic fix for scalac
+
+The scalac findings come from two places, and the model checks a fix for each ([`fix_laws`](../ScalaTypes/LubArgs.lean#L457)):
+
+1. **One canonical order for the parents of `lub` and `glb`.** [scala/scala#11291](https://github.com/scala/scala/issues/11291) orders `lub`'s ties by name instead of by id, which fixes LUB1; LUB2 needs the same order in `glb`, which today keeps its inputs' order. With both, the join of every pair in the world is the same in either order ([`fix_lub2`](../ScalaTypes/LubArgs.lean#L451)).
+2. **A merged argument that violates its parameter's bound becomes a wildcard below it.** `mergePrefixAndArgs` already does this for an invariant parameter whose join is not below its meet; doing it for every variance makes the covariant F-bounded join `Gb[_ <: Gb[_ <: Object]]`, which is well-formed and an upper bound ([`fix_lub3`](../ScalaTypes/LubArgs.lean#L447)). Checked on 2.12.21 and 2.13.18: that type, written as an annotation, is accepted.
+
+Not a fix for LUB7 (existentials are not in the model), and dotc's LUB5 has its own: erase a union as the specification says, by `erasedGlb` of its join ([`eraseJoin_symm`](../ScalaTypes/Lub.lean#L330)).
+
 ## 6. Why it matters
 
 * **Reproducible builds.** A classfile should be a function of its sources. scalac's id-order makes it a function of the compilation batch, so an incremental build (Zinc compiles the changed files against the rest's classfiles) and a clean one differ in descriptors, which is what [scala/scala#11291](https://github.com/scala/scala/issues/11291) found in Spark. dotc is stable here.
@@ -89,7 +107,8 @@ The model is deliberately at the level of classes: no type arguments, no refinem
 
 ## 7. Future work
 
-* **Type arguments and depth in the model.** `mergePrefixAndArgs` and `lubDepth`, to state LUB3 (the truncated argument violates the bound) and scalac's associativity-up-to-equivalence for F-bounds.
+* **Existentials in the model.** Type arguments and depth are in ([`LubArgs`](../ScalaTypes/LubArgs.lean)); general existentials are not, so LUB7 (an existential operand is not absorbed) and scalac's associativity up to equivalence for F-bounds are not stated.
+* **The fix as a scalac patch.** The two changes of §5 against scala/scala, with the probe as its test.
 * **glb.** scalac's unsorted `glb` (LUB2) as a model of its own, and dotc's `&` with `erasedGlb`'s total order (commutative, proved upstream by construction).
 * **Refinements.** scalac's `lubRefined` and dotc's treatment of structural members (the `refine` and `anon` worlds: scalac `R{def m: Int}`, dotc `R`, and dotc's anonymous classes keep a refinement of `m` only).
 * **The fixed tie-break, measured.** Rerun the probe against a build of [scala/scala#11291](https://github.com/scala/scala/issues/11291) and of [scala/scala#11313](https://github.com/scala/scala/issues/11313): the `traits` world should then agree jointly and separately.

@@ -36,4 +36,6 @@ The invariant variant (`trait Fb[T <: Fb[T]]`) is accepted by scalac, as an exis
 
 ## Notes
 
-A possible fix: when the truncated argument would violate the parameter's bound, fall back to an existential with that bound (`Fb[_ <: Fb[_]]`, as for the invariant case), or to the parameter's bound itself. An explicit `val x: Fb[Fb[_]] = …` is rejected for the same reason; `Fb[_]` and `Fb[_ <: Fb[_]]` are accepted (checked on 2.13.18), so the workaround is an annotation.
+A possible fix: when the truncated argument would violate the parameter's bound, fall back to an existential with that bound (`Fb[_ <: Fb[_]]`, as for the invariant case), or to the parameter's bound itself. An explicit `val x: Fb[Fb[_]] = …` is rejected for the same reason; `Fb[_]` and `Fb[_ <: Fb[_]]` are accepted (checked on 2.13.18). An annotation does not help an inferred type argument: `val y: List[Fb[_ <: Fb[_]]] = List(new Fa, new Fc)` still instantiates `List.apply`'s type parameter to the join and fails the same way; only `List[Fb[_ <: Fb[_]]](new Fa, new Fc)` compiles.
+
+The general rule for the fix, checked in the model ([`LubArgs.fix_lub3`](https://github.com/retronym/jvm-lang-models/blob/a695f0fd1a/packages/scala-types/ScalaTypes/LubArgs.lean#L447)): a merged argument that violates its parameter's bound becomes a wildcard bounded above by it, as `mergePrefixAndArgs` already does for an invariant parameter whose join is not below its meet. Here that gives `Fb[_ <: Fb[_ <: Object]]`, which 2.12.21 and 2.13.18 accept as an annotation.

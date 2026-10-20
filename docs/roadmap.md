@@ -73,7 +73,7 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Why.** An inferred join is a public signature: its parent order and its erasure are what callers link against and what Zinc hashes, and both compilers let them depend on branch order or symbol creation order ([`track-lub.md`](../packages/scala-types/docs/track-lub.md)).
 
-**Done looks like.** The future work of [`track-lub.md`](../packages/scala-types/docs/track-lub.md): type arguments and `lubDepth` in the model (LUB3), `glb` (LUB2), refinements, the probe rerun on builds of [scala/scala#11291](https://github.com/scala/scala/issues/11291) and #11313, and the LUB3 draft filed.
+**Done looks like.** The future work of [`track-lub.md`](../packages/scala-types/docs/track-lub.md): existentials in the model (LUB7), the model's fix as a scalac patch, refinements, the probe rerun on builds of [scala/scala#11291](https://github.com/scala/scala/issues/11291) and #11313, and the LUB3 draft filed.
 
 ### Track P: phases, the rest
 
