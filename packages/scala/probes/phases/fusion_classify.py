@@ -22,6 +22,7 @@ for line in open(sys.argv[1]):
         import difflib
         d = [l for l in difflib.unified_diff(na, nb, lineterm='', n=0) if l[:1] in '+-' and l[:3] not in ('+++', '---')]
         if all(re.match(r'[+-]\s+line \d+: \d+', l) for l in d): kinds.add('line numbers')
+        elif all(re.match(r'[+-]\s+(ScalaInlineInfo: length|[0-9A-F]{2}( [0-9A-F]{2})*\s*$)', l) or re.match(r'[+-]\s*$', l) for l in d): kinds.add('ScalaInlineInfo only')
         else:
             sig = set()
             if any('ObjectRef' in l for l in d) and any(re.search(r'Lazy(Ref|Int|Long|Boolean|Byte|Short|Char|Float|Double|Unit)', l) for l in d): sig.add('lazy holder boxed (unfused)')

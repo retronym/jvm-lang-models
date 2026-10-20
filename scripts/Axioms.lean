@@ -132,3 +132,4 @@ import ScalaTypes.Fusion
 #print axioms ScalaTypes.Scopes.enteredAfter_sound
 #print axioms ScalaTypes.Scopes.lifted_unsound
 #print axioms ScalaTypes.Fusion.fused_eq_seq_of_relabel
+#print axioms ScalaTypes.Scopes.flatname_guarded

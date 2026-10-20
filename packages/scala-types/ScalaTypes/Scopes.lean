@@ -1,3 +1,4 @@
+import Query.Freeze
 /-!
 # Scopes across phases: mutated, not copied
 
@@ -199,5 +200,44 @@ theorem moveStatics_typer :
 theorem moveStatics_enteredAfter :
     let s := run [.enter 0 "t", .copy (dMoveStatics + 1), .drop (dMoveStatics + 1) "t"]
     s.read dTyper = ["t"] ∧ s.read (dMoveStatics + 1) = [] := by decide
+
+/-! ## Caches that freeze at the first read
+
+Some facts are memoized: the first read computes and stores the answer, later reads return it.
+scalac's `ClassSymbol.flattenedName` caches `flattenedName(rawowner, rawname)` the first time a
+class's name is asked at or after flatten, and `javaBinaryNameString` caches `fullName('/')` the
+first time it is asked at any phase. Both inputs are overwritten later: LambdaLift re-owns and
+renames a local class. A read before that freezes the old answer, silently. Measured with
+`packages/scala/probes/phases/Eager2.scala`: asking a local class's flat name before LambdaLift
+emits `m$E.class` (named after the method, in the empty package) instead of `C$E$1.class`; asking
+`javaBinaryNameString` before flatten emits `p/A/Inner.class`. Nothing in scalac or Zinc asks that
+early (Zinc's API phase skips local classes); a plugin or macro may. It is Track L's freeze without
+the guard. -/
+
+/-- A memoized fact: the first read stores what has been pushed so far; later reads return it. -/
+def memo {C : Type} : List (Query.Freeze.Ev C) → List C → Option (List C) → List (List C)
+  | [], _, _ => []
+  | .push c :: es, acc, m => memo es (acc ++ [c]) m
+  | .read :: es, acc, none => acc :: memo es acc (some acc)
+  | .read :: es, acc, some v => v :: memo es acc (some v)
+
+/-- The namer's owner and name for `class E` local to `C.m`, then LambdaLift's. The backend reads
+after LambdaLift; an early reader (a plugin asking the flat name) reads before it. -/
+def namerFacts : List (Query.Freeze.Ev String) := [.push "owner m", .push "name E"]
+def liftFacts : List (Query.Freeze.Ev String) := [.push "owner C", .push "name E$1"]
+
+/-- Without an early reader, the backend sees LambdaLift's answer. -/
+theorem flatname_late :
+    memo (namerFacts ++ liftFacts ++ [.read]) [] none =
+      [["owner m", "name E", "owner C", "name E$1"]] := by decide
+
+/-- With one, the backend gets the namer's answer: the class is emitted as `m$E`. -/
+theorem flatname_early :
+    memo (namerFacts ++ [.read] ++ liftFacts ++ [.read]) [] none =
+      [["owner m", "name E"], ["owner m", "name E"]] := by decide
+
+/-- The guard turns the stale read into a failure. -/
+theorem flatname_guarded :
+    Query.Freeze.guarded (namerFacts ++ [.read] ++ liftFacts ++ [.read]) [] false = none := by decide
 
 end ScalaTypes.Scopes

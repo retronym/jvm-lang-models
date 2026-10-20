@@ -1,0 +1,1220 @@
+# Eager2 -Dforce=flatten over scala/scala test/files/run/*.scala (single files), scalac 2.13.18, tests from b4ad4458da
+1757 files: same 228, differ 1101, one-sided 102, both fail 326
+
+## crashes
+  98 java.lang.AssertionError: assertion failed:  
+   3 <path>
+   1 scala.reflect.internal.Symbols$CyclicReferenc
+
+## classified, a sample of 150 differing files (fusion_classify.py)
+128 ScalaInlineInfo only   e.g. abstype_implicits.scala array-charSeq.scala bigDecimalTest.scala byname-implicits-29.scala
+19 ScalaInlineInfo only+other   e.g. caseClassEquality.scala Course-2002-13.scala existentials3-new.scala implicits.scala
+2 other   e.g. t2162.scala t6506.scala
+1 file set+other   e.g. t9408.scala
+
+## differing
+DIFFER test/files/run/abstype_implicits.scala: Test$.class data/MaybeImpl$.class
+DIFFER test/files/run/abstypetags_core.scala: Test$.class
+DIFFER test/files/run/abstypetags_serialize.scala: Test$.class
+DIFFER test/files/run/adding-growing-set.scala: Test$.class
+DIFFER test/files/run/all-overridden.scala: Test$.class
+DIFFER test/files/run/amp.scala: Test$.class
+DIFFER test/files/run/anyval-box-types.scala: Test$.class
+DIFFER test/files/run/array-charSeq.scala: Test$.class
+DIFFER test/files/run/arrayclone-new.scala: PolymorphicArrayClone$Mangler.class Test$.class
+DIFFER test/files/run/arrayclone-old.scala: PolymorphicArrayClone$Mangler.class Test$.class
+DIFFER test/files/run/arraycopy.scala: Test$.class
+DIFFER test/files/run/arrays.scala: Test$.class
+DIFFER test/files/run/arrayview.scala: Test$.class
+DIFFER test/files/run/arybufgrow.scala: Test$.class
+DIFFER test/files/run/bigDecimalTest.scala: Test$.class
+DIFFER test/files/run/bitsets.scala: Test$.class TestImmutable2$.class TestImmutable3$.class TestMutable$.class TestMutable2$.class
+DIFFER test/files/run/blame_eye_triple_eee-double.scala: Test$.class
+DIFFER test/files/run/blame_eye_triple_eee-float.scala: Test$.class
+DIFFER test/files/run/blank.scala: Test$.class
+DIFFER test/files/run/boolexprs.scala: Test$.class
+DIFFER test/files/run/bridges.scala: MixZIfeFooX__.class MixZIfeFooX__wBarY__.class MixZIfeFooX__wBarY_f.class MixZIfeFooX__wBar___.class MixZIfeFooX__wBar__f.class MixZIfeFooX_f.class MixZIfeFooX_fwBarY__.class MixZIfeFooX_fwBarY_f.class MixZIfeFooX_fwBar___.class MixZIfeFooX_fwBar__f.class MixZIfeFoo___.class MixZIfeFoo___wBarY__.class MixZIfeFoo___wBarY_f.class MixZIfeFoo___wBar___.class MixZIfeFoo___wBar__f.class MixZIfeFoo__f.class MixZIfeFoo__fwBarY__.class MixZIfeFoo__fwBarY_f.class MixZIfeFoo__fwBar___.class MixZIfeFoo__fwBar__f.class MixZIfwFooX__.class MixZIfwFooX__wBarY__.class MixZIfwFooX__wBarY_f.class MixZIfwFooX__wBar___.class MixZIfwFooX__wBar__f.class MixZIfwFooX_f.class MixZIfwFooX_fwBarY__.class MixZIfwFooX_fwBarY_f.class MixZIfwFooX_fwBar___.class MixZIfwFooX_fwBar__f.class MixZIfwFoo___.class MixZIfwFoo___wBarY__.class MixZIfwFoo___wBarY_f.class MixZIfwFoo___wBar___.class MixZIfwFoo___wBar__f.class MixZIfwFoo__f.class MixZIfwFoo__fwBarY__.class MixZIfwFoo__fwBarY_f.class MixZIfwFoo__fwBar___.class MixZIfwFoo__fwBar__f.class MixZ__eFooXI_wBarY_f.class MixZ__eFooXI_wBar__f.class MixZ__eFooXIfwBarY__.class MixZ__eFooXIfwBar___.class MixZ__eFooX__wBarYIf.class MixZ__eFooX__wBar_If.class MixZ__eFooX_fwBarYI_.class MixZ__eFooX_fwBar_I_.class MixZ__eFoo_I_wBarY_f.class MixZ__eFoo_I_wBar__f.class MixZ__eFoo_IfwBarY__.class MixZ__eFoo_IfwBar___.class MixZ__eFoo___wBarYIf.class MixZ__eFoo___wBar_If.class MixZ__eFoo__fwBarYI_.class MixZ__eFoo__fwBar_I_.class MixZ__wFooXI_wBarY_f.class MixZ__wFooXI_wBar__f.class MixZ__wFooXIfwBarY__.class MixZ__wFooXIfwBar___.class MixZ__wFooX__wBarYIf.class MixZ__wFooX__wBar_If.class MixZ__wFooX_fwBarYI_.class MixZ__wFooX_fwBar_I_.class MixZ__wFoo_I_wBarY_f.class MixZ__wFoo_I_wBar__f.class MixZ__wFoo_IfwBarY__.class MixZ__wFoo_IfwBar___.class MixZ__wFoo___wBarYIf.class MixZ__wFoo___wBar_If.class MixZ__wFoo__fwBarYI_.class MixZ__wFoo__fwBar_I_.class MixZ_feFooXI_wBarY__.class MixZ_feFooXI_wBarY_f.class MixZ_feFooXI_wBar___.class MixZ_feFooXI_wBar__f.class MixZ_feFooXIfwBarY__.class MixZ_feFooXIfwBarY_f.class MixZ_feFooXIfwBar___.class MixZ_feFooXIfwBar__f.class MixZ_feFooX__wBarYI_.class MixZ_feFooX__wBarYIf.class MixZ_feFooX__wBar_I_.class MixZ_feFooX__wBar_If.class MixZ_feFooX_fwBarYI_.class MixZ_feFooX_fwBarYIf.class MixZ_feFooX_fwBar_I_.class MixZ_feFooX_fwBar_If.class MixZ_feFoo_I_wBarY__.class MixZ_feFoo_I_wBarY_f.class MixZ_feFoo_I_wBar___.class MixZ_feFoo_I_wBar__f.class MixZ_feFoo_IfwBarY__.class MixZ_feFoo_IfwBarY_f.class MixZ_feFoo_IfwBar___.class MixZ_feFoo_IfwBar__f.class MixZ_feFoo___wBarYI_.class MixZ_feFoo___wBarYIf.class MixZ_feFoo___wBar_I_.class MixZ_feFoo___wBar_If.class MixZ_feFoo__fwBarYI_.class MixZ_feFoo__fwBarYIf.class MixZ_feFoo__fwBar_I_.class MixZ_feFoo__fwBar_If.class MixZ_fwFooXI_wBarY__.class MixZ_fwFooXI_wBarY_f.class MixZ_fwFooXI_wBar___.class MixZ_fwFooXI_wBar__f.class MixZ_fwFooXIfwBarY__.class MixZ_fwFooXIfwBarY_f.class MixZ_fwFooXIfwBar___.class MixZ_fwFooXIfwBar__f.class MixZ_fwFooX__wBarYI_.class MixZ_fwFooX__wBarYIf.class MixZ_fwFooX__wBar_I_.class MixZ_fwFooX__wBar_If.class MixZ_fwFooX_fwBarYI_.class MixZ_fwFooX_fwBarYIf.class MixZ_fwFooX_fwBar_I_.class MixZ_fwFooX_fwBar_If.class MixZ_fwFoo_I_wBarY__.class MixZ_fwFoo_I_wBarY_f.class MixZ_fwFoo_I_wBar___.class MixZ_fwFoo_I_wBar__f.class MixZ_fwFoo_IfwBarY__.class MixZ_fwFoo_IfwBarY_f.class MixZ_fwFoo_IfwBar___.class MixZ_fwFoo_IfwBar__f.class MixZ_fwFoo___wBarYI_.class MixZ_fwFoo___wBarYIf.class MixZ_fwFoo___wBar_I_.class MixZ_fwFoo___wBar_If.class MixZ_fwFoo__fwBarYI_.class MixZ_fwFoo__fwBarYIf.class MixZ_fwFoo__fwBar_I_.class MixZ_fwFoo__fwBar_If.class Mix_IfeFooX__.class Mix_IfeFooX__wBarY__.class Mix_IfeFooX__wBarY_f.class Mix_IfeFooX__wBar___.class Mix_IfeFooX__wBar__f.class Mix_IfeFooX_f.class Mix_IfeFooX_fwBarY__.class Mix_IfeFooX_fwBarY_f.class Mix_IfeFooX_fwBar___.class Mix_IfeFooX_fwBar__f.class Mix_IfeFoo___.class Mix_IfeFoo___wBarY__.class Mix_IfeFoo___wBarY_f.class Mix_IfeFoo___wBar___.class Mix_IfeFoo___wBar__f.class Mix_IfeFoo__f.class Mix_IfeFoo__fwBarY__.class Mix_IfeFoo__fwBarY_f.class Mix_IfeFoo__fwBar___.class Mix_IfeFoo__fwBar__f.class Mix_IfwFooX__.class Mix_IfwFooX__wBarY__.class Mix_IfwFooX__wBarY_f.class Mix_IfwFooX__wBar___.class Mix_IfwFooX__wBar__f.class Mix_IfwFooX_f.class Mix_IfwFooX_fwBarY__.class Mix_IfwFooX_fwBarY_f.class Mix_IfwFooX_fwBar___.class Mix_IfwFooX_fwBar__f.class Mix_IfwFoo___.class Mix_IfwFoo___wBarY__.class Mix_IfwFoo___wBarY_f.class Mix_IfwFoo___wBar___.class Mix_IfwFoo___wBar__f.class Mix_IfwFoo__f.class Mix_IfwFoo__fwBarY__.class Mix_IfwFoo__fwBarY_f.class Mix_IfwFoo__fwBar___.class Mix_IfwFoo__fwBar__f.class Mix___eFooXI_wBarY_f.class Mix___eFooXI_wBar__f.class Mix___eFooXIfwBarY__.class Mix___eFooXIfwBar___.class Mix___eFooX__wBarYIf.class Mix___eFooX__wBar_If.class Mix___eFooX_fwBarYI_.class Mix___eFooX_fwBar_I_.class Mix___eFoo_I_wBarY_f.class Mix___eFoo_I_wBar__f.class Mix___eFoo_IfwBarY__.class Mix___eFoo_IfwBar___.class Mix___eFoo___wBarYIf.class Mix___eFoo___wBar_If.class Mix___eFoo__fwBarYI_.class Mix___eFoo__fwBar_I_.class Mix___wFooXI_wBarY_f.class Mix___wFooXI_wBar__f.class Mix___wFooXIfwBarY__.class Mix___wFooXIfwBar___.class Mix___wFooX__wBarYIf.class Mix___wFooX__wBar_If.class Mix___wFooX_fwBarYI_.class Mix___wFooX_fwBar_I_.class Mix___wFoo_I_wBarY_f.class Mix___wFoo_I_wBar__f.class Mix___wFoo_IfwBarY__.class Mix___wFoo_IfwBar___.class Mix___wFoo___wBarYIf.class Mix___wFoo___wBar_If.class Mix___wFoo__fwBarYI_.class Mix___wFoo__fwBar_I_.class Mix__feFooXI_wBarY__.class Mix__feFooXI_wBarY_f.class Mix__feFooXI_wBar___.class Mix__feFooXI_wBar__f.class Mix__feFooXIfwBarY__.class Mix__feFooXIfwBarY_f.class Mix__feFooXIfwBar___.class Mix__feFooXIfwBar__f.class Mix__feFooX__wBarYI_.class Mix__feFooX__wBarYIf.class Mix__feFooX__wBar_I_.class Mix__feFooX__wBar_If.class Mix__feFooX_fwBarYI_.class Mix__feFooX_fwBarYIf.class Mix__feFooX_fwBar_I_.class Mix__feFooX_fwBar_If.class Mix__feFoo_I_wBarY__.class Mix__feFoo_I_wBarY_f.class Mix__feFoo_I_wBar___.class Mix__feFoo_I_wBar__f.class Mix__feFoo_IfwBarY__.class Mix__feFoo_IfwBarY_f.class Mix__feFoo_IfwBar___.class Mix__feFoo_IfwBar__f.class Mix__feFoo___wBarYI_.class Mix__feFoo___wBarYIf.class Mix__feFoo___wBar_I_.class Mix__feFoo___wBar_If.class Mix__feFoo__fwBarYI_.class Mix__feFoo__fwBarYIf.class Mix__feFoo__fwBar_I_.class Mix__feFoo__fwBar_If.class Mix__fwFooXI_wBarY__.class Mix__fwFooXI_wBarY_f.class Mix__fwFooXI_wBar___.class Mix__fwFooXI_wBar__f.class Mix__fwFooXIfwBarY__.class Mix__fwFooXIfwBarY_f.class Mix__fwFooXIfwBar___.class Mix__fwFooXIfwBar__f.class Mix__fwFooX__wBarYI_.class Mix__fwFooX__wBarYIf.class Mix__fwFooX__wBar_I_.class Mix__fwFooX__wBar_If.class Mix__fwFooX_fwBarYI_.class Mix__fwFooX_fwBarYIf.class Mix__fwFooX_fwBar_I_.class Mix__fwFooX_fwBar_If.class Mix__fwFoo_I_wBarY__.class Mix__fwFoo_I_wBarY_f.class Mix__fwFoo_I_wBar___.class Mix__fwFoo_I_wBar__f.class Mix__fwFoo_IfwBarY__.class Mix__fwFoo_IfwBarY_f.class Mix__fwFoo_IfwBar___.class Mix__fwFoo_IfwBar__f.class Mix__fwFoo___wBarYI_.class Mix__fwFoo___wBarYIf.class Mix__fwFoo___wBar_I_.class Mix__fwFoo___wBar_If.class Mix__fwFoo__fwBarYI_.class Mix__fwFoo__fwBarYIf.class Mix__fwFoo__fwBar_I_.class Mix__fwFoo__fwBar_If.class S_TZI_eFooX__.class S_TZI_eFooX__wBarY__.class S_TZI_eFooX__wBar___.class S_TZI_eFoo___.class S_TZI_eFoo___wBarY__.class S_TZI_eFoo___wBar___.class S_TZI_wFooX__.class S_TZI_wFooX__wBarY__.class S_TZI_wFooX__wBar___.class S_TZI_wFoo___.class S_TZI_wFoo___wBarY__.class S_TZI_wFoo___wBar___.class S_TZ__eFooXI_wBarY__.class S_TZ__eFooXI_wBar___.class S_TZ__eFooX__.class S_TZ__eFooX__wBarYI_.class S_TZ__eFooX__wBarY__.class S_TZ__eFooX__wBar_I_.class S_TZ__eFooX__wBar___.class S_TZ__eFoo_I_wBarY__.class S_TZ__eFoo_I_wBar___.class S_TZ__eFoo___.class S_TZ__eFoo___wBarYI_.class S_TZ__eFoo___wBarY__.class S_TZ__eFoo___wBar_I_.class S_TZ__eFoo___wBar___.class S_TZ__wFooXI_wBarY__.class S_TZ__wFooXI_wBar___.class S_TZ__wFooX__.class S_TZ__wFooX__wBarYI_.class S_TZ__wFooX__wBarY__.class S_TZ__wFooX__wBar_I_.class S_TZ__wFooX__wBar___.class S_TZ__wFoo_I_wBarY__.class S_TZ__wFoo_I_wBar___.class S_TZ__wFoo___.class S_TZ__wFoo___wBarYI_.class S_TZ__wFoo___wBarY__.class S_TZ__wFoo___wBar_I_.class S_TZ__wFoo___wBar___.class S_T_I_eFooX__.class S_T_I_eFooX__wBarY__.class S_T_I_eFooX__wBar___.class S_T_I_eFoo___.class S_T_I_eFoo___wBarY__.class S_T_I_eFoo___wBar___.class S_T_I_wFooX__.class S_T_I_wFooX__wBarY__.class S_T_I_wFooX__wBar___.class S_T_I_wFoo___.class S_T_I_wFoo___wBarY__.class S_T_I_wFoo___wBar___.class S_T___eFooXI_wBarY__.class S_T___eFooXI_wBar___.class S_T___eFooX__.class S_T___eFooX__wBarYI_.class S_T___eFooX__wBarY__.class S_T___eFooX__wBar_I_.class S_T___eFooX__wBar___.class S_T___eFoo_I_wBarY__.class S_T___eFoo_I_wBar___.class S_T___eFoo___.class S_T___eFoo___wBarYI_.class S_T___eFoo___wBarY__.class S_T___eFoo___wBar_I_.class S_T___eFoo___wBar___.class S_T___wFooXI_wBarY__.class S_T___wFooXI_wBar___.class S_T___wFooX__.class S_T___wFooX__wBarYI_.class S_T___wFooX__wBarY__.class S_T___wFooX__wBar_I_.class S_T___wFooX__wBar___.class S_T___wFoo_I_wBarY__.class S_T___wFoo_I_wBar___.class S_T___wFoo___.class S_T___wFoo___wBarYI_.class S_T___wFoo___wBarY__.class S_T___wFoo___wBar_I_.class S_T___wFoo___wBar___.class S__ZI_eFooX__.class S__ZI_eFooX__wBarY__.class S__ZI_eFooX__wBar___.class S__ZI_eFoo___.class S__ZI_eFoo___wBarY__.class S__ZI_eFoo___wBar___.class S__ZI_wFooX__.class S__ZI_wFooX__wBarY__.class S__ZI_wFooX__wBar___.class S__ZI_wFoo___.class S__ZI_wFoo___wBarY__.class S__ZI_wFoo___wBar___.class S__Z__eFooXI_wBarY__.class S__Z__eFooXI_wBar___.class S__Z__eFooX__.class S__Z__eFooX__wBarYI_.class S__Z__eFooX__wBarY__.class S__Z__eFooX__wBar_I_.class S__Z__eFooX__wBar___.class S__Z__eFoo_I_wBarY__.class S__Z__eFoo_I_wBar___.class S__Z__eFoo___.class S__Z__eFoo___wBarYI_.class S__Z__eFoo___wBarY__.class S__Z__eFoo___wBar_I_.class S__Z__eFoo___wBar___.class S__Z__wFooXI_wBarY__.class S__Z__wFooXI_wBar___.class S__Z__wFooX__.class S__Z__wFooX__wBarYI_.class S__Z__wFooX__wBarY__.class S__Z__wFooX__wBar_I_.class S__Z__wFooX__wBar___.class S__Z__wFoo_I_wBarY__.class S__Z__wFoo_I_wBar___.class S__Z__wFoo___.class S__Z__wFoo___wBarYI_.class S__Z__wFoo___wBarY__.class S__Z__wFoo___wBar_I_.class S__Z__wFoo___wBar___.class S___I_eFooX__.class S___I_eFooX__wBarY__.class S___I_eFooX__wBar___.class S___I_eFoo___.class S___I_eFoo___wBarY__.class S___I_eFoo___wBar___.class S___I_wFooX__.class S___I_wFooX__wBarY__.class S___I_wFooX__wBar___.class S___I_wFoo___.class S___I_wFoo___wBarY__.class S___I_wFoo___wBar___.class S_____eFooXI_wBarY__.class S_____eFooXI_wBar___.class S_____eFooX__.class S_____eFooX__wBarYI_.class S_____eFooX__wBarY__.class S_____eFooX__wBar_I_.class S_____eFooX__wBar___.class S_____eFoo_I_wBarY__.class S_____eFoo_I_wBar___.class S_____eFoo___.class S_____eFoo___wBarYI_.class S_____eFoo___wBarY__.class S_____eFoo___wBar_I_.class S_____eFoo___wBar___.class S_____wFooXI_wBarY__.class S_____wFooXI_wBar___.class S_____wFooX__.class S_____wFooX__wBarYI_.class S_____wFooX__wBarY__.class S_____wFooX__wBar_I_.class S_____wFooX__wBar___.class S_____wFoo_I_wBarY__.class S_____wFoo_I_wBar___.class S_____wFoo___.class S_____wFoo___wBarYI_.class S_____wFoo___wBarY__.class S_____wFoo___wBar_I_.class S_____wFoo___wBar___.class Test$.class
+DIFFER test/files/run/byname-implicits-29.scala: Test$LazyDefns$1$1.class
+DIFFER test/files/run/byname-implicits-30.scala: Test$LazyDefns$1$1.class
+DIFFER test/files/run/byname-implicits-5.scala: Test$.class
+DIFFER test/files/run/byname.scala: Test$.class
+DIFFER test/files/run/case_class_equals_fields_sort.scala: Test$.class Test$C$2$.class Test$X$1.class
+DIFFER test/files/run/case-class-23-redefined-unapply.scala: Test$.class
+DIFFER test/files/run/case-class-23.scala: Test$.class
+DIFFER test/files/run/caseClassEquality.scala: Test$C1$.class Test$C2.class Test$C3.class Test$CS1$.class Test$CS2.class Test$CS3.class Test$H1$.class Test$H2.class
+DIFFER test/files/run/caseClassHash.scala: Test$.class Timing$.class
+DIFFER test/files/run/castsingleton.scala: Test$.class Test$L$.class
+DIFFER test/files/run/checked.scala: Test$.class
+DIFFER test/files/run/checkinit.scala: Test$.class Test$U1$1.class Test$U1$2.class
+DIFFER test/files/run/classmanifests_new_alias.scala: Test$.class
+DIFFER test/files/run/classmanifests_new_core.scala: Test$.class
+DIFFER test/files/run/classtags_contextbound.scala: Test$.class
+DIFFER test/files/run/classtags_core.scala: Test$.class
+DIFFER test/files/run/classtags_multi.scala: Test$.class
+DIFFER test/files/run/collection-stacks.scala: Test$.class
+DIFFER test/files/run/collections.scala: Test$.class
+DIFFER test/files/run/colltest.scala: Test$.class TestSet.class
+DIFFER test/files/run/colltest1.scala: Test$.class
+DIFFER test/files/run/comparable-comparator.scala: Test$$anon$1.class Test$.class Test$C1.class
+DIFFER test/files/run/complicatedmatch.scala: Test$.class
+DIFFER test/files/run/constant-optimization.scala: Test$.class
+DIFFER test/files/run/contrib674.scala: Test$.class
+DIFFER test/files/run/Course-2002-01.scala: M0$.class M1$.class M2$.class M3$.class
+DIFFER test/files/run/Course-2002-02.scala: M1$.class M2$.class M3$.class M4$.class M5$.class M6$.class M7$.class M8$.class M9$.class MA$.class MB$.class MC$.class MD$.class ME$.class MG$.class
+DIFFER test/files/run/Course-2002-03.scala: M6$Boolean.class M8$.class M8$IntSet.class
+DIFFER test/files/run/Course-2002-04.scala: M0$.class M1$.class M3$.class
+DIFFER test/files/run/Course-2002-05.scala: M0$.class M1$.class M2$.class M3$.class M4$.class
+DIFFER test/files/run/Course-2002-06.scala: M0$.class PostScript.class
+DIFFER test/files/run/Course-2002-07.scala: M0$Var.class M2$Number$.class M2$Sum$.class M3$Number$.class M3$Sum$.class M7$.class M8$.class M9$Number$.class M9$Prod$.class M9$Sum$.class M9$Var$.class MA$.class MA$Number$.class MA$Prod$.class MA$Prod.class MA$Sum$.class MA$Var$.class MB$.class MB$Add$.class MB$Expr.class MB$Lit$.class MB$Mul$.class MB$Mul.class MB$Pow$.class MB$Pow.class MB$Var$.class
+DIFFER test/files/run/Course-2002-08.scala: BasicCircuitSimulator.class CircuitSimulator.class M2$.class M4$.class M5$BasicCircuitSimulation.class M5$Simulation.class M5$Test.class M5$Wire.class Main.class Simulator.class Wire.class
+DIFFER test/files/run/Course-2002-09.scala: Constant.class Quantity.class
+DIFFER test/files/run/Course-2002-10.scala: M0$.class M1$.class M2$IntIterator.class M2$PrimeIterator.class
+DIFFER test/files/run/Course-2002-13.scala: Parser.class Programs$.class Programs$Clause$.class Programs$Clause.class Prolog$.class Terms$Binding$.class Terms$Con$.class Terms$Con.class Terms$Var$.class Tokenizer.class
+DIFFER test/files/run/ctor-order.scala: Outer$global$.class Outer.class Test$.class
+DIFFER test/files/run/dead-code-elimination.scala: A$B.class
+DIFFER test/files/run/deadlock.scala: Test$.class
+DIFFER test/files/run/delambdafy-nested-by-name.scala: Test$.class
+DIFFER test/files/run/delambdafy-two-lambdas.scala: Test$.class
+DIFFER test/files/run/delay-bad.scala: D.class E.class Test$$anon$2.class Test$$anon$4.class Test$$anon$6.class Test$$anon$9.class Test$.class
+DIFFER test/files/run/delay-good.scala: Test$.class
+DIFFER test/files/run/disable-assertions.scala: Test$.class
+DIFFER test/files/run/distinct.scala: Test$.class
+DIFFER test/files/run/dotty-i11332.scala: Test$.class
+DIFFER test/files/run/duration-coarsest.scala: Test$.class
+DIFFER test/files/run/elidable-opt.scala: C.class O$.class T.class Test$.class
+DIFFER test/files/run/elidable.scala: Test$.class
+DIFFER test/files/run/emptypf.scala: Test$$anonfun$1.class
+DIFFER test/files/run/enums.scala: Test$.class Test1$.class Test2$.class Test3$.class Test5$.class
+DIFFER test/files/run/equality.scala: Test$.class
+DIFFER test/files/run/eta-expand-star.scala: Test$.class
+DIFFER test/files/run/exceptions-2.scala: Leaf$.class Node$.class Test$.class
+DIFFER test/files/run/exceptions-nest.scala: Test$.class
+DIFFER test/files/run/existentials.scala: Foo$Line$Cell$.class Foo$Line.class FooW$Line$Cell$.class FooW$Line.class Test$$anon$1.class Test$$anon$2.class Test$.class
+DIFFER test/files/run/existentials3-new.scala: Misc$.class Misc$o1$B$5.class Test$.class Test$A$10.class Test$A$4.class Test$A$5.class Test$A$9.class Test$Bar$18$.class Test$Bar$2$.class Test$Bar$21$.class Test$Bar$5$.class
+DIFFER test/files/run/existentials3-old.scala: Misc$.class Misc$o1$B$5.class Test$.class Test$A$10.class Test$A$4.class Test$A$5.class Test$A$9.class Test$Bar$18$.class Test$Bar$2$.class Test$Bar$21$.class Test$Bar$5$.class
+DIFFER test/files/run/exprs_serialize.scala: Test$.class
+DIFFER test/files/run/extend-global.scala: Test.class
+DIFFER test/files/run/finally.scala: Test$.class
+DIFFER test/files/run/fors.scala: Test$.class
+DIFFER test/files/run/forvaleq.scala: Test$.class
+DIFFER test/files/run/freetypes_false_alarm1.scala: Test$.class
+DIFFER test/files/run/freetypes_false_alarm2.scala: Test$.class
+DIFFER test/files/run/function-null-unbox.scala: Test$.class
+DIFFER test/files/run/gadts.scala: IsZero$.class Lit$.class Succ$.class Test$.class
+DIFFER test/files/run/genericValueClass.scala: Test$.class
+DIFFER test/files/run/getClassTest-new.scala: MoreAnyRefs$$anon$1.class MoreAnyRefs$$anon$2.class MoreAnyRefs$$anon$3.class MoreAnyRefs$$anon$4.class Test$.class
+DIFFER test/files/run/getClassTest-old.scala: MoreAnyRefs$$anon$1.class MoreAnyRefs$$anon$2.class MoreAnyRefs$$anon$3.class MoreAnyRefs$$anon$4.class Test$.class
+DIFFER test/files/run/groupby.scala: Test$.class
+DIFFER test/files/run/hashCodeDistribution.scala: Test$.class Test$C$.class
+DIFFER test/files/run/hashCodeStatics.scala: Test$.class
+DIFFER test/files/run/hashhash.scala: Test$.class
+DIFFER test/files/run/hashsetremove.scala: Test$.class
+DIFFER test/files/run/idempotency-case-classes.scala: Test$.class
+DIFFER test/files/run/idempotency-extractors.scala: Test$.class
+DIFFER test/files/run/idempotency-labels.scala: Test$.class
+DIFFER test/files/run/idempotency-lazy-vals.scala: Test$.class
+DIFFER test/files/run/idempotency-this.scala: Test$.class
+DIFFER test/files/run/impconvtimes.scala: Test$Measure$.class
+DIFFER test/files/run/implicit-caching.scala: Test$.class
+DIFFER test/files/run/implicit-class-implicit-param-with-default.scala: Test$C.class
+DIFFER test/files/run/implicitclasses.scala: Test$.class
+DIFFER test/files/run/implicits.scala: C$Inner$.class C.class Test$.class TestPriority$.class
+DIFFER test/files/run/indexedSeq-apply.scala: Test$.class
+DIFFER test/files/run/indexedSeq.scala: Test$.class
+DIFFER test/files/run/InferOverloadedPartialFunction.scala: CC.class MyMap.class Test$$anonfun$1.class Test$$anonfun$2.class Test$$anonfun$3.class Test$$anonfun$4.class Test$$anonfun$5.class Test$$anonfun$6.class Test$$anonfun$7.class Test$$anonfun$8.class Test$$anonfun$9.class Test$.class
+DIFFER test/files/run/infiniteloop.scala: Test$.class
+DIFFER test/files/run/infix.scala: Test$.class op$.class
+DIFFER test/files/run/inlineAddDeserializeLambda.scala: C.class Test$.class
+DIFFER test/files/run/inliner-infer.scala: Test$.class
+DIFFER test/files/run/interop_classtags_are_classmanifests.scala: Test$.class
+DIFFER test/files/run/interop_manifests_are_classtags.scala: Test$.class
+DIFFER test/files/run/interop_typetags_are_manifests.scala: Test$.class
+DIFFER test/files/run/interpolation.scala: Test$.class
+DIFFER test/files/run/interpolationArgs.scala: Test$.class
+DIFFER test/files/run/interpolationMultiline1.scala: Test$.class
+DIFFER test/files/run/interpolationMultiline2.scala: Test$$anonfun$1.class Test$.class
+DIFFER test/files/run/intmap.scala: Test$.class
+DIFFER test/files/run/iq.scala: iq$.class
+DIFFER test/files/run/is-valid-num.scala: Test$.class
+DIFFER test/files/run/issue192.scala: Test$.class
+DIFFER test/files/run/iterables.scala: Test$.class Test$Test$$anon$1.class Test$Test.class Test$TestStrict.class
+DIFFER test/files/run/iterator-from.scala: Test$.class
+DIFFER test/files/run/kmpSliceSearch.scala: Test$.class
+DIFFER test/files/run/lambda-serialization-security.scala: Capture$.class Test$.class
+DIFFER test/files/run/lambda-serialization.scala: C.class Test$.class
+DIFFER test/files/run/lazy_local_labels.scala: Test$.class
+DIFFER test/files/run/lazy-exprs.scala: Test$.class TestExpressions$.class
+DIFFER test/files/run/lazy-leaks.scala: Test$.class
+DIFFER test/files/run/lazy-locals-2.scala: C.class E$T$.class E$T$1$.class E.class Logs$.class T.class Test$.class
+DIFFER test/files/run/lazy-locals.scala: Test$.class Test$CtorBlock.class Test$NestedLazyVals$.class Test$TNestedLazyVals.class Test$Test.class
+DIFFER test/files/run/lazy-override-run.scala: Test$.class
+DIFFER test/files/run/lazy-traits.scala: LocalLazyVal.class Test$.class x/y/OuterClass$InnerObject$.class x/y/OuterClass.class
+DIFFER test/files/run/lift-and-unlift.scala: Test$$anonfun$1.class Test$.class
+DIFFER test/files/run/list-apply-eval.scala: Test$.class
+DIFFER test/files/run/lists-run.scala: Test1$.class Test2$.class Test_multiset$.class
+DIFFER test/files/run/literal-type-varargs.scala: Test$.class
+DIFFER test/files/run/literals.scala: Test$.class
+DIFFER test/files/run/local_obj.scala: C$x$1$.class C.class Test$.class
+DIFFER test/files/run/longmap.scala: Test$.class
+DIFFER test/files/run/manifests-old.scala: Test$.class Test$VarianceTester.class
+DIFFER test/files/run/manifests-undeprecated-in-2.10.0.scala: Test$.class
+DIFFER test/files/run/map_test.scala: Test$.class
+DIFFER test/files/run/mapConserve.scala: Test$.class
+DIFFER test/files/run/mapValues.scala: Test$.class
+DIFFER test/files/run/matchbytes.scala: Test$.class
+DIFFER test/files/run/matchintasany.scala: Test$.class
+DIFFER test/files/run/matchonseq.scala: Test$.class
+DIFFER test/files/run/matchonstream.scala: Test$.class
+DIFFER test/files/run/mirror_symbolof_x.scala: Test$.class
+DIFFER test/files/run/misc.scala: <local Test>$O$X.class <local Test>$O$Y$.class <local Test>$O$Y.class <local Test>$O.class Test$.class Test$B.class Test$Bar$.class Test$Foo$.class Test$O$1$Y$.class Test$O$1$Y.class Test$O$1.class Test$O$2$X.class Test$O$2$Y$.class Test$O$2$Y.class Test$O$2.class Test$Y$.class
+DIFFER test/files/run/missingparams.scala: Foo.class Test$.class
+DIFFER test/files/run/mixin-bridge-methods.scala: Test$.class
+DIFFER test/files/run/mixin-signatures.scala: Foo3.class Foo4.class Test$.class Test$bar1$.class Test$bar2$.class Test$bar3$.class Test$bar4$.class Test$bar5$.class
+DIFFER test/files/run/mixins.scala: Test3$A.class
+DIFFER test/files/run/module-serialization-proxy-class-unload.scala: Test$.class
+DIFFER test/files/run/module-static.scala: Test$.class
+DIFFER test/files/run/mutable-treeset.scala: Test$.class
+DIFFER test/files/run/name-based-patmat.scala: Test$.class p0/Single.class p1/Triple.class p3/Foo$.class
+DIFFER test/files/run/names-defaults-nest.scala: Test$.class
+DIFFER test/files/run/names-defaults.scala: A2$B2$.class A2.class A3.class A4.class A5.class Fact2.class Factory.class MN.class Test$$anon$3.class Test$.class Test$A2489.class Test$A2489x2.class Test$C$2$.class Test$C4441a$.class Test$O$I$.class Test$O.class Test$P3207$Inner$.class Test$TT.class Test$Test2489$Foo$1.class Test$Test2489$Foo$2$.class Test$Test2489.class Test$Test2784$t$.class Test$Test2784.class Test$Test2820$A$.class Test$Test2820$A.class Test$Test2820.class Test$Test3207_1$$anon$4.class Test$Test3207_2$$anon$6$$anon$7.class Test$Test3207_2$$anon$6.class Test$t3338$Container$GenericClass$.class Test$t3338$Container$GenericClass.class Test$t3338$Container.class Test$t5$.class
+DIFFER test/files/run/NestedClasses.scala: A1.class
+DIFFER test/files/run/newTags.scala: Test$.class
+DIFFER test/files/run/nonlocalreturn.scala: Test$.class
+DIFFER test/files/run/nothingTypeDce.scala: Test$.class
+DIFFER test/files/run/nothingTypeNoOpt.scala: Test$.class
+DIFFER test/files/run/nullable-lazyvals.scala: Test$.class
+DIFFER test/files/run/number-parsing.scala: Test$.class Test$Foo$.class
+DIFFER test/files/run/numbereq.scala: Test$.class
+DIFFER test/files/run/numeric-range.scala: Test$.class
+DIFFER test/files/run/optimizer-array-load.scala: Test$.class
+DIFFER test/files/run/option-fold.scala: Test$.class Test$C$.class
+DIFFER test/files/run/OrderingTest.scala: Test$.class
+DIFFER test/files/run/outertest.scala: Test$.class
+DIFFER test/files/run/partialfun.scala: Test$$anon$1.class Test$$anon$2.class Test$$anon$3.class Test$$anonfun$1.class Test$$anonfun$fromFunctionLiteralTest$2.class Test$$anonfun$isEven$1$1.class Test$$anonfun$testEtaExpansion$5.class Test$$anonfun$testEtaExpansion$6.class Test$$anonfun$testEtaExpansion$7.class Test$$anonfun$testOverloadingWithFunction1$4.class Test$$anonfun$testOverloadingWithFunction1$5.class Test$$anonfun$testOverloadingWithFunction1$6.class Test$$anonfun$testOverloadingWithFunction1$8.class Test$$anonfun$testOverloadingWithFunction1$9.class Test$.class
+DIFFER test/files/run/patmat_unapp_abstype-new.scala: RealFoos$Foo$.class Test$.class TestUnappDynamicSynth$.class TestUnappDynamicSynth$NotAFoo$.class TestUnappStaticallyKnownSynthetic$.class TypesAPI$MethodType$.class TypesImpl$TypeRef$.class
+DIFFER test/files/run/patmat-behavior-2.scala: Foo$.class Test$.class
+DIFFER test/files/run/patmat-bind-typed.scala: Test$.class
+DIFFER test/files/run/patmat-finally.scala: Test$.class
+DIFFER test/files/run/patmat-mix-case-extractor.scala: A.class B$CaseClass$.class B$CaseClass0$.class B$CaseClass0v$.class B$CaseSeq$.class B$Extractor$.class B$ExtractorSeq$.class B.class CaseClass1$.class CaseClass2$.class CaseClass3$.class CaseClass4$.class p1/Y$.class p1/_X$_Bar$.class p1/_X$_Foo$.class
+DIFFER test/files/run/patmat-seqs.scala: Test$.class
+DIFFER test/files/run/patmatnew.scala: Test$.class Test$Bug1094$X$.class Test$Bug1270$Buffer$$anonfun$1.class Test$Bug1270$Buffer$Get$.class Test$Bug1270$Buffer.class Test$Bug1281$Buffer$$anonfun$2.class Test$Bug508$Operator$.class Test$Bug881$Foo$Bar$.class Test$Bug881$Foo.class Test$ClassDefInGuard$$anonfun$3.class Test$ClassDefInGuard$$anonfun$4.class Test$ClassDefInGuard$.class Test$NullMatch$.class Test$Outer_2$Foo$.class Test$Outer_2.class Test$SeqUnapply$.class Test$SeqUnapply$SFB$.class Test$Test1163_Order$Const$.class Test$Test1163_Order$Var$.class Test$Test717$Foo$Bar$.class Test$Test717$Foo.class Test$TestGuards$.class Test$TestSequence04$Foo$.class Test$TestSequence05$Bar$.class Test$TestSequence05$Foo$.class Test$TestSequence06$A$.class Test$Ticket11$.class Test$Ticket2$.class Test$Treez$Beez$.class Test$Treez$HagbardCeline$.class Test$Y$.class Test$_X$_Bar$.class Test$_X$_Foo$.class
+DIFFER test/files/run/pf-catch.scala: Test$$anonfun$1.class Test$$anonfun$2.class Test$.class
+DIFFER test/files/run/phantomValueClass.scala: Test$.class
+DIFFER test/files/run/pr7593.scala: Test$.class
+DIFFER test/files/run/predef-cycle.scala: Force$$anon$1.class Force$$anon$2.class
+DIFFER test/files/run/Predef.readLine.scala: Test$.class
+DIFFER test/files/run/preinits.scala: Test$.class
+DIFFER test/files/run/primitive-sigs-2-new.scala: Arr.class C.class Test$.class
+DIFFER test/files/run/primitive-sigs-2-old.scala: Arr.class C.class Test$.class
+DIFFER test/files/run/programmatic-main.scala: Test$.class
+DIFFER test/files/run/proxy.scala: Test$$anon$1.class Test$.class Test$Bippy$.class Test$Bippy.class
+DIFFER test/files/run/pure-args-byname-noinline.scala: Test$.class
+DIFFER test/files/run/QueueTest.scala: Test$.class
+DIFFER test/files/run/range-unit.scala: Test$.class
+DIFFER test/files/run/range.scala: Test$.class Test$GR.class
+DIFFER test/files/run/rawstrings.scala: Test$.class
+DIFFER test/files/run/reflect-priv-ctor.scala: Test$.class
+DIFFER test/files/run/reflection-allmirrors-tostring.scala: C$M$.class C.class Test$.class
+DIFFER test/files/run/reflection-companion.scala: Test$.class
+DIFFER test/files/run/reflection-companiontype.scala: Test$.class
+DIFFER test/files/run/reflection-constructormirror-inner-badpath.scala: Foo$$typecreator1$1.class Foo$R$.class Foo.class Test$.class
+DIFFER test/files/run/reflection-constructormirror-inner-good.scala: Foo$$typecreator1$1.class Foo$R$.class Foo.class Test$.class
+DIFFER test/files/run/reflection-constructormirror-nested-badpath.scala: Foo$$typecreator1$1.class Test$.class Test$R$.class
+DIFFER test/files/run/reflection-constructormirror-nested-good.scala: Foo$$typecreator1$1.class Test$.class Test$R$.class
+DIFFER test/files/run/reflection-constructormirror-toplevel-badpath.scala: Foo$$typecreator1$1.class R$.class Test$.class
+DIFFER test/files/run/reflection-constructormirror-toplevel-good.scala: Foo$$typecreator1$1.class R$.class Test$.class
+DIFFER test/files/run/reflection-enclosed-basic.scala: Test$.class
+DIFFER test/files/run/reflection-enclosed-inner-basic.scala: B$B3$.class B$B4$.class B$B5$.class B$B6$.class B.class Test$.class
+DIFFER test/files/run/reflection-enclosed-inner-inner-basic.scala: B$BB$B3$.class B$BB$B4$.class B$BB$B5$.class B$BB$B6$.class B$BB.class Test$.class
+DIFFER test/files/run/reflection-enclosed-inner-nested-basic.scala: B$BB$.class B$BB$B3$.class B$BB$B4$.class B$BB$B5$.class B$BB$B6$.class B.class Test$.class
+DIFFER test/files/run/reflection-enclosed-nested-basic.scala: Test$.class
+DIFFER test/files/run/reflection-enclosed-nested-inner-basic.scala: B$BB$B3$.class B$BB$B4$.class B$BB$B5$.class B$BB$B6$.class B$BB.class Test$.class
+DIFFER test/files/run/reflection-enclosed-nested-nested-basic.scala: Test$.class
+DIFFER test/files/run/reflection-fieldmirror-accessorsareokay.scala: Test$.class
+DIFFER test/files/run/reflection-fieldmirror-ctorparam.scala: Test$.class Test$A.class
+DIFFER test/files/run/reflection-fieldmirror-getsetval.scala: Test$.class
+DIFFER test/files/run/reflection-fieldmirror-getsetvar.scala: Test$.class
+DIFFER test/files/run/reflection-fieldmirror-nmelocalsuffixstring.scala: Test$.class
+DIFFER test/files/run/reflection-fieldmirror-privatethis.scala: Test$.class
+DIFFER test/files/run/reflection-fieldsymbol-navigation.scala: Test$.class
+DIFFER test/files/run/reflection-idtc.scala: Test$.class
+DIFFER test/files/run/reflection-implicit.scala: Test$.class
+DIFFER test/files/run/reflection-magicsymbols-invoke.scala: Test$.class
+DIFFER test/files/run/reflection-magicsymbols-vanilla.scala: Test$.class
+DIFFER test/files/run/reflection-methodsymbol-params.scala: Test$.class
+DIFFER test/files/run/reflection-methodsymbol-returntype.scala: Test$.class
+DIFFER test/files/run/reflection-methodsymbol-typeparams.scala: Test$.class
+DIFFER test/files/run/reflection-modulemirror-inner-badpath.scala: Foo$R$.class Foo.class Test$.class
+DIFFER test/files/run/reflection-modulemirror-inner-good.scala: Foo$R$.class Foo.class Test$.class
+DIFFER test/files/run/reflection-modulemirror-nested-badpath.scala: Test$.class
+DIFFER test/files/run/reflection-modulemirror-nested-good.scala: Test$.class
+DIFFER test/files/run/reflection-modulemirror-toplevel-badpath.scala: Test$.class
+DIFFER test/files/run/reflection-modulemirror-toplevel-good.scala: Test$.class
+DIFFER test/files/run/reflection-names.scala: Test$.class
+DIFFER test/files/run/reflection-sanitychecks.scala: C$O$.class C.class E$O$.class E.class Test$.class
+DIFFER test/files/run/reflection-scala-annotations.scala: Test$.class jann.class sann.class
+DIFFER test/files/run/reflection-sorted-decls.scala: Test$.class
+DIFFER test/files/run/reflection-sorted-members.scala: Test$.class
+DIFFER test/files/run/reflection-tags.scala: Test$.class
+DIFFER test/files/run/reflection-valueclasses-derived.scala: Test$.class
+DIFFER test/files/run/reflection-valueclasses-magic.scala: Test$.class
+DIFFER test/files/run/reflection-valueclasses-standard.scala: Test$.class
+DIFFER test/files/run/reflinit.scala: Test$.class
+DIFFER test/files/run/reify_ann1a.scala: Test$.class ann.class
+DIFFER test/files/run/reify_ann1b.scala: Test$.class ann0.class ann1.class
+DIFFER test/files/run/reify_ann2a.scala: Test$.class
+DIFFER test/files/run/reify_ann2b.scala: Test$.class
+DIFFER test/files/run/reify_ann3.scala: Test$.class
+DIFFER test/files/run/reify_ann4.scala: Test$.class
+DIFFER test/files/run/reify_ann5.scala: Test$.class
+DIFFER test/files/run/reify_anonymous.scala: Test$.class
+DIFFER test/files/run/reify_closure1.scala: Test$.class
+DIFFER test/files/run/reify_closure8a.scala: Test$.class Test$Foo$$treecreator1$1.class Test$Foo$$typecreator2$1.class
+DIFFER test/files/run/reify_closure8b.scala: Test$.class Test$Foo$$treecreator1$1.class Test$Foo$$typecreator2$1.class Test$Foo.class
+DIFFER test/files/run/reify_closures10.scala: Test$.class
+DIFFER test/files/run/reify_complex.scala: Test$.class
+DIFFER test/files/run/reify_copypaste1.scala: Test$.class
+DIFFER test/files/run/reify_copypaste2.scala: Test$.class
+DIFFER test/files/run/reify_csv.scala: Test$.class
+DIFFER test/files/run/reify_extendbuiltins.scala: Test$.class
+DIFFER test/files/run/reify_for1.scala: Test$.class
+DIFFER test/files/run/reify_fors_newpatmat.scala: Test$.class
+DIFFER test/files/run/reify_fors_oldpatmat.scala: Test$.class
+DIFFER test/files/run/reify_generic.scala: Test$.class
+DIFFER test/files/run/reify_generic2.scala: Test$.class
+DIFFER test/files/run/reify_getter.scala: Test$.class
+DIFFER test/files/run/reify_implicits-new.scala: Test$.class
+DIFFER test/files/run/reify_implicits-old.scala: Test$.class
+DIFFER test/files/run/reify_inheritance.scala: Test$.class
+DIFFER test/files/run/reify_inner1.scala: Test$.class
+DIFFER test/files/run/reify_inner2.scala: Test$.class
+DIFFER test/files/run/reify_inner3.scala: Test$.class
+DIFFER test/files/run/reify_inner4.scala: Test$.class
+DIFFER test/files/run/reify_lazyevaluation.scala: Test$.class
+DIFFER test/files/run/reify_lazyunit.scala: Test$.class
+DIFFER test/files/run/reify_magicsymbols.scala: Test$.class
+DIFFER test/files/run/reify_maps_newpatmat.scala: Test$.class
+DIFFER test/files/run/reify_maps_oldpatmat.scala: Test$.class
+DIFFER test/files/run/reify_metalevel_breach_-1_refers_to_0_a.scala: Test$.class
+DIFFER test/files/run/reify_metalevel_breach_-1_refers_to_0_b.scala: Test$.class
+DIFFER test/files/run/reify_metalevel_breach_-1_refers_to_1.scala: Test$.class
+DIFFER test/files/run/reify_metalevel_breach_+0_refers_to_1.scala: Test$.class
+DIFFER test/files/run/reify_nested_inner_refers_to_local.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_03.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_04.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_05.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_06.scala: Test$.class Test$C$$treecreator2$1.class Test$C$$typecreator4$1.class
+DIFFER test/files/run/reify_newimpl_11.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_12.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_13.scala: Test$.class Test$C$1$$treecreator1$1.class Test$C$1$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_14.scala: Test$.class Test$C$1$$treecreator1$1.class Test$C$1$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_15.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_18.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_19.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_20.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_21.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_27.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_29.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_30.scala: Test$.class Test$C$1$$treecreator1$1.class Test$C$1$$typecreator2$1.class
+DIFFER test/files/run/reify_newimpl_31.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_33.scala: Test$.class
+DIFFER test/files/run/reify_newimpl_45.scala: Test$.class Test$C$$treecreator1$1.class Test$C$$typecreator2$1.class
+DIFFER test/files/run/reify_printf.scala: Test$.class
+DIFFER test/files/run/reify_properties.scala: Test$.class
+DIFFER test/files/run/reify_renamed_term_basic.scala: Test$.class
+DIFFER test/files/run/reify_renamed_term_local_to_reifee.scala: Test$.class
+DIFFER test/files/run/reify_renamed_term_overloaded_method.scala: Test$.class
+DIFFER test/files/run/reify_renamed_term_t5841.scala: Test$.class
+DIFFER test/files/run/reify_renamed_type_basic.scala: Test$.class
+DIFFER test/files/run/reify_renamed_type_local_to_reifee.scala: Test$.class
+DIFFER test/files/run/reify_sort.scala: Test$.class
+DIFFER test/files/run/reify_sort1.scala: Test$.class
+DIFFER test/files/run/reify_this.scala: Test$.class
+DIFFER test/files/run/reify_timeofday.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_1a.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_1b.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_2a.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_2b.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_3a.scala: Test$.class
+DIFFER test/files/run/reify_typerefs_3b.scala: Test$.class
+DIFFER test/files/run/reify_varargs.scala: Test$.class
+DIFFER test/files/run/reify-aliases.scala: Test$.class
+DIFFER test/files/run/reify-each-node-type.scala: Test$N$.class s$NN$$treecreator1$1.class s$NN$$treecreator10$1.class s$NN$$treecreator11$1.class s$NN$$treecreator12$1.class s$NN$$treecreator13$1.class s$NN$$treecreator14$1.class s$NN$$treecreator15$1.class s$NN$$treecreator16$1.class s$NN$$treecreator17$1.class s$NN$$treecreator18$1.class s$NN$$treecreator19$1.class s$NN$$treecreator2$1.class s$NN$$treecreator20$1.class s$NN$$treecreator21$1.class s$NN$$treecreator22$1.class s$NN$$treecreator23$1.class s$NN$$treecreator24$1.class s$NN$$treecreator25$1.class s$NN$$treecreator26$1.class s$NN$$treecreator27$1.class s$NN$$treecreator28$1.class s$NN$$treecreator29$1.class s$NN$$treecreator3$1.class s$NN$$treecreator30$1.class s$NN$$treecreator31$1.class s$NN$$treecreator32$1.class s$NN$$treecreator33$1.class s$NN$$treecreator34$1.class s$NN$$treecreator35$1.class s$NN$$treecreator4$1.class s$NN$$treecreator5$1.class s$NN$$treecreator6$1.class s$NN$$treecreator7$1.class s$NN$$treecreator8$1.class s$NN$$treecreator9$1.class s$NN$$typecreator10$1.class s$NN$$typecreator12$1.class s$NN$$typecreator14$1.class s$NN$$typecreator16$1.class s$NN$$typecreator18$1.class s$NN$$typecreator2$1.class s$NN$$typecreator20$1.class s$NN$$typecreator22$1.class s$NN$$typecreator24$1.class s$NN$$typecreator26$1.class s$NN$$typecreator28$1.class s$NN$$typecreator30$1.class s$NN$$typecreator32$1.class s$NN$$typecreator34$1.class s$NN$$typecreator36$1.class s$NN$$typecreator38$1.class s$NN$$typecreator4$1.class s$NN$$typecreator40$1.class s$NN$$typecreator42$1.class s$NN$$typecreator44$1.class s$NN$$typecreator46$1.class s$NN$$typecreator48$1.class s$NN$$typecreator50$1.class s$NN$$typecreator52$1.class s$NN$$typecreator54$1.class s$NN$$typecreator56$1.class s$NN$$typecreator58$1.class s$NN$$typecreator6$1.class s$NN$$typecreator60$1.class s$NN$$typecreator62$1.class s$NN$$typecreator64$1.class s$NN$$typecreator66$1.class s$NN$$typecreator68$1.class s$NN$$typecreator70$1.class s$NN$$typecreator8$1.class
+DIFFER test/files/run/reify-staticXXX.scala: Test$.class
+DIFFER test/files/run/repl-inline.scala: Test$.class
+DIFFER test/files/run/resetattrs-this.scala: Test$.class
+DIFFER test/files/run/retclosure.scala: Test$.class
+DIFFER test/files/run/ReverseSeqView.scala: Test$.class
+DIFFER test/files/run/run-bug4840.scala: Test$.class
+DIFFER test/files/run/runtime-richChar.scala: Test$.class
+DIFFER test/files/run/runtime.scala: Test$.class Test1Test$.class Test3Test$Foo.class
+DIFFER test/files/run/runtimeEval1.scala: Test$.class
+DIFFER test/files/run/runtimeEval2.scala: Test$.class
+DIFFER test/files/run/sammy_cbn.scala: Test$.class
+DIFFER test/files/run/sammy_erasure_cce.scala: Test$.class
+DIFFER test/files/run/sammy_restrictions_LMF.scala: Test$.class
+DIFFER test/files/run/sammy_return.scala: PF.class TO.class Test$.class
+DIFFER test/files/run/sammy_seriazable.scala: Test$.class
+DIFFER test/files/run/sammy_vararg_cbn.scala: Test$.class
+DIFFER test/files/run/scan.scala: Test$.class
+DIFFER test/files/run/sd242.scala: T.class Test$.class
+DIFFER test/files/run/sd329.scala: Test$.class
+DIFFER test/files/run/seqlike-kmp.scala: Test$.class
+DIFFER test/files/run/sequenceComparisons.scala: Test$.class Test$Data$Method$.class Test$Data.class Test$test1$.class
+DIFFER test/files/run/settings-parse.scala: Test$.class
+DIFFER test/files/run/showraw_aliases.scala: Test$.class
+DIFFER test/files/run/showraw_mods.scala: Test$.class
+DIFFER test/files/run/showraw_nosymbol.scala: Test$.class
+DIFFER test/files/run/showraw_tree_ids.scala: Test$.class
+DIFFER test/files/run/showraw_tree_kinds.scala: Test$.class
+DIFFER test/files/run/showraw_tree_types_ids.scala: Test$.class
+DIFFER test/files/run/showraw_tree_types_typed.scala: Test$.class
+DIFFER test/files/run/showraw_tree_types_untyped.scala: Test$.class
+DIFFER test/files/run/showraw_tree_ultimate.scala: Test$.class
+DIFFER test/files/run/showraw_tree.scala: Test$.class
+DIFFER test/files/run/shutdownhooks.scala: Test$.class
+DIFFER test/files/run/sip23-cast-1.scala: Test$.class
+DIFFER test/files/run/sip23-initialization1.scala: Test$.class
+DIFFER test/files/run/sip23-no-constant-folding.scala: Test$.class
+DIFFER test/files/run/sip23-patterns.scala: Test$.class
+DIFFER test/files/run/sip23-rangepos.scala: Test$.class
+DIFFER test/files/run/sip23-rec-constant.scala: Test$.class
+DIFFER test/files/run/sip23-singleton-isas.scala: Test$.class
+DIFFER test/files/run/sip23-toolbox-eval.scala: Test$.class
+DIFFER test/files/run/sip23-type-equality.scala: Test$.class
+DIFFER test/files/run/sip23-valueof.scala: Test$.class
+DIFFER test/files/run/sip23-widen2.scala: Test$.class
+DIFFER test/files/run/slice-strings.scala: Test$.class
+DIFFER test/files/run/sm-interpolator.scala: Test$.class
+DIFFER test/files/run/sort.scala: Test$.class
+DIFFER test/files/run/spec-nlreturn.scala: Test$.class
+DIFFER test/files/run/spec-self.scala: Foo0.class Foo1.class
+DIFFER test/files/run/static-module-method.scala: Test$.class
+DIFFER test/files/run/stream_flatmap_odds.scala: Test$.class
+DIFFER test/files/run/stream-gc.scala: Test$$anonfun$1.class Test$$anonfun$2.class Test$$anonfun$3.class Test$$anonfun$4.class Test$.class
+DIFFER test/files/run/stream-stack-overflow-filter-map.scala: Test$.class
+DIFFER test/files/run/streamWithFilter.scala: Test$.class
+DIFFER test/files/run/string-switch.scala: Test$.class
+DIFFER test/files/run/stringbuilder.scala: Test$.class
+DIFFER test/files/run/structural.scala: Test$.class test1$.class test3$Exc$.class
+DIFFER test/files/run/SymbolsTest.scala: Test$$anon$3.class Test$.class Test$Compl$1$inner$.class Test$Local$1$.class Test$Local$1$inner2$.class
+DIFFER test/files/run/synchronized.scala: C1$C.class C1$O$.class C1.class C2.class O1$.class O1$C.class O1$O$.class O2$.class T$C.class T$O$.class T.class Test$.class Util$.class
+DIFFER test/files/run/sysprops.scala: Test$.class
+DIFFER test/files/run/t0042.scala: Test$.class
+DIFFER test/files/run/t0091.scala: C$.class
+DIFFER test/files/run/t0325.scala: RS$.class RS.class Test$.class
+DIFFER test/files/run/t0412.scala: Test$.class
+DIFFER test/files/run/t0432.scala: Test$StringValue.class
+DIFFER test/files/run/t0508.scala: Test$.class Test$Foo$.class
+DIFFER test/files/run/t0607.scala: Test$.class Test$A$.class
+DIFFER test/files/run/t0631.scala: Test$.class Test$Bar$.class
+DIFFER test/files/run/t0668.scala: Test$.class
+DIFFER test/files/run/t0677-new.scala: Test$.class Test$X.class
+DIFFER test/files/run/t0677-old.scala: Test$.class Test$X.class
+DIFFER test/files/run/t0807.scala: Test$.class
+DIFFER test/files/run/t0883.scala: Baz$.class Foo.class Test$.class
+DIFFER test/files/run/t0911.scala: Test$.class
+DIFFER test/files/run/t10032.scala: Test$.class
+DIFFER test/files/run/t10069.scala: Test$.class
+DIFFER test/files/run/t10072.scala: C.class Test$.class
+DIFFER test/files/run/t10094.scala: C.class T.class
+DIFFER test/files/run/t102.scala: Test$$anon$1.class
+DIFFER test/files/run/t10232.scala: Test$.class
+DIFFER test/files/run/t10277.scala: LongColumn.class
+DIFFER test/files/run/t10277b.scala: B.class
+DIFFER test/files/run/t10283.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t10298.scala: Test$.class
+DIFFER test/files/run/t10334.scala: Test$$anon$1.class Test$$anon$2.class Test$.class
+DIFFER test/files/run/t10363.scala: Concrete.class Impl$$anon$1.class Impl.class
+DIFFER test/files/run/t10389.scala: Test$.class
+DIFFER test/files/run/t1042.scala: B$.class Test$.class
+DIFFER test/files/run/t1044.scala: Test$.class
+DIFFER test/files/run/t10477.scala: DistributedBackend.class DistributedDriver.class DistributedProfile$SimpleQlImpl.class Test$.class
+DIFFER test/files/run/t10487.scala: Test$.class
+DIFFER test/files/run/t10513.scala: Test$.class
+DIFFER test/files/run/t10522.scala: Test$.class
+DIFFER test/files/run/t10527.scala: AppleFactory.class Test$.class
+DIFFER test/files/run/t10539.scala: B$.class Test$.class
+DIFFER test/files/run/t10545.scala: Test$.class
+DIFFER test/files/run/t10551.scala: Test$.class
+DIFFER test/files/run/t10611.scala: Test$.class
+DIFFER test/files/run/t10625.scala: Test$.class WhyNot$.class
+DIFFER test/files/run/t10646.scala: Test$.class
+DIFFER test/files/run/t1074.scala: Test$.class
+DIFFER test/files/run/t10853.scala: AbstractSet.class
+DIFFER test/files/run/t11042.scala: Test$.class
+DIFFER test/files/run/t1110.scala: Stuff$$anon$1.class Test$.class
+DIFFER test/files/run/t11196.scala: Test$.class
+DIFFER test/files/run/t11397.scala: Test$.class
+DIFFER test/files/run/t1141.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t11465.scala: Test$.class
+DIFFER test/files/run/t11476.scala: Foo$.class
+DIFFER test/files/run/t11476b.scala: Foo$.class
+DIFFER test/files/run/t11534b.scala: Test$.class Test$O$.class
+DIFFER test/files/run/t11534c.scala: Test$.class Test$M.class Test$WrongOuter$.class
+DIFFER test/files/run/t11609.scala: Foo$Bar$.class Foo.class
+DIFFER test/files/run/t11665.scala: Test$.class
+DIFFER test/files/run/t1167.scala: Test$.class Test1.class
+DIFFER test/files/run/t11756.scala: Test$.class
+DIFFER test/files/run/t11934.scala: C.class T.class Test$.class
+DIFFER test/files/run/t11938.scala: Test$.class
+DIFFER test/files/run/t1195-new.scala: A1$B1$D$1.class A1$B1$D$2$.class A1$B1.class Test$.class Test$Bar$2$.class Test$Bar$5$.class
+DIFFER test/files/run/t1195-old.scala: A1$B1$D$1.class A1$B1$D$2$.class A1$B1.class Test$.class Test$Bar$2$.class Test$Bar$5$.class
+DIFFER test/files/run/t12002.scala: A.class B.class G.class Test$.class
+DIFFER test/files/run/t12074-norange.scala: Test$.class
+DIFFER test/files/run/t12182.scala: Test$ImplD.class Test$ImplI.class
+DIFFER test/files/run/t1220.scala: Test$$anonfun$1.class Test$.class Test$QSRichIterable.class
+DIFFER test/files/run/t12221.scala: Test$SpecializedClass.class
+DIFFER test/files/run/t12301.scala: Test$.class
+DIFFER test/files/run/t12301c.scala: Test$.class
+DIFFER test/files/run/t12312.scala: A$X$.class A.class
+DIFFER test/files/run/t12348.scala: Test$.class
+DIFFER test/files/run/t12390.scala: Test$.class
+DIFFER test/files/run/t12403.scala: Test$.class
+DIFFER test/files/run/t1247.scala: Test$.class
+DIFFER test/files/run/t12481.scala: Test$.class
+DIFFER test/files/run/t12494.scala: Test$.class
+DIFFER test/files/run/t12532.scala: ImplAsync.class StrangeClass.class
+DIFFER test/files/run/t12550.scala: Test$.class
+DIFFER test/files/run/t12560.scala: Test$.class
+DIFFER test/files/run/t12774.scala: Test$.class
+DIFFER test/files/run/t12893.scala: Test$.class
+DIFFER test/files/run/t12918.scala: Test$.class
+DIFFER test/files/run/t1300.scala: Test$.class
+DIFFER test/files/run/t13022.scala: R$$anon$1.class R.class StringValue$.class Test$.class
+DIFFER test/files/run/t13033.scala: C1$.class C2.class C3.class C4$.class C5$.class C7$.class C8.class Test$.class VCC$.class
+DIFFER test/files/run/t13043.scala: Test$.class
+DIFFER test/files/run/t1309.scala: Test$.class
+DIFFER test/files/run/t13142.scala: IntVal$.class Test$.class
+DIFFER test/files/run/t1323.scala: Test$.class
+DIFFER test/files/run/t1333.scala: Test$A.class
+DIFFER test/files/run/t1373.scala: Test$.class Test$Foo$.class
+DIFFER test/files/run/t1406b.scala: C$.class Test$.class
+DIFFER test/files/run/t1423.scala: Test$.class
+DIFFER test/files/run/t1427.scala: Test$.class
+DIFFER test/files/run/t1466.scala: IOvervalueMyPrivacy$.class Test$.class
+DIFFER test/files/run/t1503.scala: Test$.class
+DIFFER test/files/run/t1505.scala: Q.class R.class Test$.class
+DIFFER test/files/run/t1524.scala: Test$.class
+DIFFER test/files/run/t153.scala: Test$.class
+DIFFER test/files/run/t1535.scala: Test$.class
+DIFFER test/files/run/t1537.scala: Syntax$Foo$.class Test$.class Test$syntax$.class
+DIFFER test/files/run/t1591.scala: A$bar$.class A.class Test$.class
+DIFFER test/files/run/t1618.scala: Test$.class
+DIFFER test/files/run/t1697.scala: Add$.class Num$.class
+DIFFER test/files/run/t1718.scala: Test$.class
+DIFFER test/files/run/t1747.scala: Test$.class
+DIFFER test/files/run/t1766.scala: Test$.class Test$C$$anon$1.class Test$C.class
+DIFFER test/files/run/t1909.scala: Test$.class
+DIFFER test/files/run/t1909b.scala: Test$.class Ticket1909.class
+DIFFER test/files/run/t1909c.scala: Base.class Sub.class Test$.class
+DIFFER test/files/run/t1939.scala: Test$.class
+DIFFER test/files/run/t1980.scala: LazyList.class Test$.class Test$C$4.class
+DIFFER test/files/run/t2027.scala: Test$.class
+DIFFER test/files/run/t2030.scala: Test$.class
+DIFFER test/files/run/t2075.scala: Test$.class
+DIFFER test/files/run/t2087-and-2400.scala: Test$$anon$1.class
+DIFFER test/files/run/t2111.scala: Test$.class
+DIFFER test/files/run/t2147.scala: Test$.class
+DIFFER test/files/run/t216.scala: Test$.class Test$m$.class
+DIFFER test/files/run/t2162.scala: Foo.class
+DIFFER test/files/run/t2175.scala: Property.class
+DIFFER test/files/run/t2176.scala: Test$.class
+DIFFER test/files/run/t2177.scala: Test$.class
+DIFFER test/files/run/t2241.scala: Test$.class
+DIFFER test/files/run/t2255.scala: Test$.class
+DIFFER test/files/run/t2316_run.scala: T2$.class
+DIFFER test/files/run/t2333.scala: A.class
+DIFFER test/files/run/t2386-new.scala: Test$.class
+DIFFER test/files/run/t2446.scala: Test$.class
+DIFFER test/files/run/t2488.scala: Test$.class
+DIFFER test/files/run/t2503.scala: Test$.class
+DIFFER test/files/run/t2512.scala: Test$.class
+DIFFER test/files/run/t2526.scala: Test$.class
+DIFFER test/files/run/t2544.scala: Test$.class Test$Foo$.class
+DIFFER test/files/run/t2552.scala: Test$.class
+DIFFER test/files/run/t2594_tcpoly.scala: Test$$anon$1.class
+DIFFER test/files/run/t266.scala: O.class P.class
+DIFFER test/files/run/t2754.scala: FooBarImpl.class FooBarPlusImpl.class FooImpl.class
+DIFFER test/files/run/t2755.scala: Test$.class
+DIFFER test/files/run/t2788.scala: Test$.class
+DIFFER test/files/run/t2818.scala: Test$.class
+DIFFER test/files/run/t2849.scala: Test$.class
+DIFFER test/files/run/t2857.scala: Test$.class
+DIFFER test/files/run/t2866.scala: Test$.class
+DIFFER test/files/run/t2867.scala: Test$A$.class
+DIFFER test/files/run/t2873.scala: RedBlack$Empty$.class RedBlack.class Test$.class
+DIFFER test/files/run/t2876.scala: Test$.class
+DIFFER test/files/run/t298.scala: Test$.class
+DIFFER test/files/run/t3026.scala: Test$.class
+DIFFER test/files/run/t3038.scala: A$B$.class A.class Test$.class
+DIFFER test/files/run/t3038b.scala: Test$.class
+DIFFER test/files/run/t3097.scala: ListValue$.class Test$.class
+DIFFER test/files/run/t3126.scala: Test$C$.class
+DIFFER test/files/run/t3186.scala: Dist1.class Dist2.class Test$.class
+DIFFER test/files/run/t3194.scala: B.class Test$.class
+DIFFER test/files/run/t3220-213.scala: Test$.class
+DIFFER test/files/run/t3232.scala: Test$.class
+DIFFER test/files/run/t3242.scala: Test$.class
+DIFFER test/files/run/t3242b.scala: Test$.class
+DIFFER test/files/run/t3269.scala: Test$.class
+DIFFER test/files/run/t3273.scala: Test$.class
+DIFFER test/files/run/t3346a.scala: Test$.class Test$Rep.class Test$SomeOps.class
+DIFFER test/files/run/t3346d.scala: Test$$anon$1$$anon$2.class Test$$anon$1.class Test$.class
+DIFFER test/files/run/t3346e.scala: FilterMap.class FilterMapFixed.class QuickSort.class Test$.class
+DIFFER test/files/run/t3346f.scala: Test$.class
+DIFFER test/files/run/t3346g.scala: A$.class Test$.class
+DIFFER test/files/run/t3346h.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t3353.scala: Test$.class
+DIFFER test/files/run/t3425.scala: Test$$anon$4.class
+DIFFER test/files/run/t3452.scala: StringPair.class
+DIFFER test/files/run/t3452c.scala: DBag.class EBag.class FBag.class GBag1.class GBag2.class GBag3.class
+DIFFER test/files/run/t3452f.scala: Set.class
+DIFFER test/files/run/t3452h.scala: Mix___eFoo_I_wBar__f.class Test$.class
+DIFFER test/files/run/t3488.scala: Test$.class
+DIFFER test/files/run/t3502.scala: Test$GeneratePrimeFactorsLazy$.class
+DIFFER test/files/run/t3507-new.scala: A$b$.class A$b$c$.class A.class Test$.class
+DIFFER test/files/run/t3508.scala: Test$.class
+DIFFER test/files/run/t3540.scala: Test$.class
+DIFFER test/files/run/t3563.scala: Test$.class
+DIFFER test/files/run/t3569.scala: Test$.class Test$Y$.class
+DIFFER test/files/run/t3575.scala: Two.class TwoCool.class TwoLong.class TwoMinimal.class TwoShort.class
+DIFFER test/files/run/t3603.scala: Test$.class
+DIFFER test/files/run/t3613.scala: Boopy$Schnuck$$anonfun$1.class
+DIFFER test/files/run/t3616.scala: Fruit.class X.class
+DIFFER test/files/run/t3619.scala: Dep.class Test$.class
+DIFFER test/files/run/t3645.scala: Test$.class
+DIFFER test/files/run/t3651.scala: Klass.class LongKlass.class
+DIFFER test/files/run/t3667.scala: Outer4$Inner$.class Outer4$Inner.class Outer4.class Outer5$Inner$.class Outer5.class Outer6$Inner$.class Outer6.class Test$.class Test$C$2$.class
+DIFFER test/files/run/t3670.scala: C.class M.class Test$.class
+DIFFER test/files/run/t3687.scala: Test$.class t.class
+DIFFER test/files/run/t3699.scala: Test$.class
+DIFFER test/files/run/t3714.scala: BreakImpl$.class
+DIFFER test/files/run/t3719.scala: Days.class Test$.class
+DIFFER test/files/run/t3726.scala: Test$.class
+DIFFER test/files/run/t3761-overload-byname.scala: Test$.class
+DIFFER test/files/run/t3763.scala: Test$.class
+DIFFER test/files/run/t3832.scala: Test$.class t3832.class
+DIFFER test/files/run/t3835.scala: Test$.class
+DIFFER test/files/run/t3855.scala: Test$.class
+DIFFER test/files/run/t3877.scala: Test$.class
+DIFFER test/files/run/t3895b.scala: DryRun$compiler$.class DryRun$compiler$test1$.class DryRun$compiler$test3$.class DryRun.class
+DIFFER test/files/run/t3932.scala: O2$.class O3$f$.class O3.class
+DIFFER test/files/run/t3950.scala: NegativeId$.class NegativeId.class Test$.class
+DIFFER test/files/run/t3980.scala: A$.class
+DIFFER test/files/run/t3984.scala: MapBug$.class MapBug$IH$.class SetBug$.class SetBug$IH$.class
+DIFFER test/files/run/t3989.scala: Test$.class
+DIFFER test/files/run/t3994.scala: Crash$ElementOrdering$.class Crash.class Test$$anon$1.class Test$.class
+DIFFER test/files/run/t4013.scala: Suba.class Subopt.class
+DIFFER test/files/run/t4013b.scala: Sub3.class
+DIFFER test/files/run/t4013c.scala: Suba.class
+DIFFER test/files/run/t4023.scala: Test$.class Test$TestHelper$.class
+DIFFER test/files/run/t4024.scala: Test$.class
+DIFFER test/files/run/t4027.scala: Test$.class
+DIFFER test/files/run/t4047.scala: A.class B.class C.class D.class Test$.class
+DIFFER test/files/run/t405.scala: Test$.class
+DIFFER test/files/run/t4054.scala: Test$.class
+DIFFER test/files/run/t4072.scala: Test$DryRun$$anon$1.class
+DIFFER test/files/run/t4110-new.scala: Test$.class
+DIFFER test/files/run/t4110-old.scala: Test$.class
+DIFFER test/files/run/t4122.scala: Test$.class
+DIFFER test/files/run/t4148.scala: Test$.class
+DIFFER test/files/run/t4190.scala: Test$.class
+DIFFER test/files/run/t4225d.scala: Test$.class Test$Foo$Bar$.class Test$Foo.class
+DIFFER test/files/run/t4225e.scala: Test$.class Test$Foo$Bar$.class Test$Foo.class
+DIFFER test/files/run/t4288.scala: Test$.class
+DIFFER test/files/run/t4297.scala: Test$.class
+DIFFER test/files/run/t4332b.scala: Test$.class
+DIFFER test/files/run/t4396.scala: C.class Main$.class Main$Bip$1$Foo.class Main$Bip$1$Main$.class Main$Bip$1$Main$delayedInit$body.class Main$Bip$1.class Test$.class main$Bip$Foo.class main$Bip$Main$.class main$Bip$Main$delayedInit$body.class main$Bip.class
+DIFFER test/files/run/t4482.scala: Spam$.class
+DIFFER test/files/run/t4511.scala: B.class
+DIFFER test/files/run/t4535.scala: Test$.class
+DIFFER test/files/run/t4558.scala: Test$.class
+DIFFER test/files/run/t4560.scala: B$$anon$1.class B2$$anon$2.class B3$$anon$3.class
+DIFFER test/files/run/t4565_1.scala: T$A$1$.class T.class
+DIFFER test/files/run/t4570.scala: Test$.class Test.class
+DIFFER test/files/run/t4577.scala: Test$.class
+DIFFER test/files/run/t4582.scala: Test$.class
+DIFFER test/files/run/t4592.scala: Test$.class
+DIFFER test/files/run/t4617.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t4658.scala: Test$.class Test$R$.class
+DIFFER test/files/run/t4660.scala: Test$.class
+DIFFER test/files/run/t4680.scala: D.class E.class Test$$anon$2.class Test$$anon$4.class Test$$anon$6.class Test$$anon$9.class
+DIFFER test/files/run/t4697.scala: Test$.class
+DIFFER test/files/run/t4742.scala: Test$.class
+DIFFER test/files/run/t4750.scala: Test$.class
+DIFFER test/files/run/t4752.scala: Test$.class
+DIFFER test/files/run/t4766.scala: Test$.class
+DIFFER test/files/run/t4770.scala: crasher/Z.class
+DIFFER test/files/run/t4777.scala: DefaultsTest.class Test$.class
+DIFFER test/files/run/t4794.scala: Arr.class Test$.class
+DIFFER test/files/run/t4809.scala: Test$.class
+DIFFER test/files/run/t4813.scala: Test$.class
+DIFFER test/files/run/t4835.scala: Test$.class
+DIFFER test/files/run/t4859.scala: O$N$.class
+DIFFER test/files/run/t4897.scala: CSuper$A$.class CSuper.class Test$.class
+DIFFER test/files/run/t4930.scala: Test$.class
+DIFFER test/files/run/t4935.scala: Test$.class
+DIFFER test/files/run/t4954.scala: Test$.class
+DIFFER test/files/run/t498.scala: Test$.class
+DIFFER test/files/run/t4996.scala: C$.class D$.class
+DIFFER test/files/run/t5009.scala: Test$.class Test$C.class
+DIFFER test/files/run/t5018.scala: Test$.class
+DIFFER test/files/run/t5045.scala: Test$.class
+DIFFER test/files/run/t5053.scala: Test$.class
+DIFFER test/files/run/t5125.scala: O2$.class Test$.class
+DIFFER test/files/run/t5125b.scala: C2.class C4.class C5.class Test$.class
+DIFFER test/files/run/t5134.scala: Test$.class
+DIFFER test/files/run/t5147.scala: Bar.class
+DIFFER test/files/run/t5158.scala: B$.class
+DIFFER test/files/run/t5171.scala: Test$.class
+DIFFER test/files/run/t5201.scala: Test$.class
+DIFFER test/files/run/t5224.scala: Foo.class Test$.class
+DIFFER test/files/run/t5225_1.scala: Test$.class
+DIFFER test/files/run/t5225_2.scala: Test$.class
+DIFFER test/files/run/t5229_1.scala: Test$.class
+DIFFER test/files/run/t5229_2.scala: Test$.class
+DIFFER test/files/run/t5230.scala: Test$.class
+DIFFER test/files/run/t5256a.scala: Test$.class
+DIFFER test/files/run/t5256b.scala: Test$.class
+DIFFER test/files/run/t5256c.scala: Test$.class
+DIFFER test/files/run/t5256e.scala: Test$.class
+DIFFER test/files/run/t5256f.scala: Test$.class
+DIFFER test/files/run/t5256g.scala: Test$.class
+DIFFER test/files/run/t5256h.scala: Test$.class
+DIFFER test/files/run/t5258a.scala: Test$.class
+DIFFER test/files/run/t5266_1.scala: Test$.class
+DIFFER test/files/run/t5266_2.scala: Test$.class
+DIFFER test/files/run/t5269.scala: Test$.class
+DIFFER test/files/run/t5270.scala: Test$.class
+DIFFER test/files/run/t5271_1.scala: Test$.class
+DIFFER test/files/run/t5271_2.scala: Test$.class
+DIFFER test/files/run/t5271_3.scala: Test$.class
+DIFFER test/files/run/t5271_4.scala: Test$.class
+DIFFER test/files/run/t5272_1_newpatmat.scala: Test$.class
+DIFFER test/files/run/t5272_1_oldpatmat.scala: Test$.class
+DIFFER test/files/run/t5272_2_newpatmat.scala: Test$.class
+DIFFER test/files/run/t5272_2_oldpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_1_newpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_1_oldpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_2a_newpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_2a_oldpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_2b_newpatmat.scala: Test$.class
+DIFFER test/files/run/t5273_2b_oldpatmat.scala: Test$.class
+DIFFER test/files/run/t5274_1.scala: Test$.class
+DIFFER test/files/run/t5274_2.scala: Test$.class
+DIFFER test/files/run/t5275.scala: Test$.class
+DIFFER test/files/run/t5276_1a.scala: Test$.class
+DIFFER test/files/run/t5276_1b.scala: Test$.class
+DIFFER test/files/run/t5276_2a.scala: Test$.class
+DIFFER test/files/run/t5276_2b.scala: Test$.class
+DIFFER test/files/run/t5277_1.scala: Test$.class
+DIFFER test/files/run/t5277_2.scala: Test$.class
+DIFFER test/files/run/t5279.scala: Test$.class
+DIFFER test/files/run/t5284.scala: Blarg.class Test$.class
+DIFFER test/files/run/t5284b.scala: Foo.class
+DIFFER test/files/run/t5284c.scala: Foo.class
+DIFFER test/files/run/t5294.scala: Test$.class
+DIFFER test/files/run/t5328.scala: Test$.class
+DIFFER test/files/run/t5334_1.scala: Test$.class
+DIFFER test/files/run/t5334_2.scala: Test$.class
+DIFFER test/files/run/t5335.scala: Test$.class
+DIFFER test/files/run/t5380.scala: Test$.class
+DIFFER test/files/run/t5387.scala: Test$.class
+DIFFER test/files/run/t5394.scala: Test$.class
+DIFFER test/files/run/t5407.scala: Foo$.class Test$.class
+DIFFER test/files/run/t5415.scala: Test$.class
+DIFFER test/files/run/t5418.scala: Test$.class
+DIFFER test/files/run/t5418a.scala: Test$.class
+DIFFER test/files/run/t5418b.scala: Test$.class
+DIFFER test/files/run/t5419.scala: Test$.class
+DIFFER test/files/run/t5423.scala: Test$.class
+DIFFER test/files/run/t5488-fn.scala: Test$.class
+DIFFER test/files/run/t5488.scala: Test$.class
+DIFFER test/files/run/t5530.scala: Test$.class
+DIFFER test/files/run/t5532.scala: Test$.class
+DIFFER test/files/run/t5543.scala: Test$.class Test$A.class
+DIFFER test/files/run/t5552.scala: C.class
+DIFFER test/files/run/t5577.scala: Test$.class
+DIFFER test/files/run/t5610.scala: Test$.class
+DIFFER test/files/run/t5610a.scala: Test$.class
+DIFFER test/files/run/t5612.scala: Foo.class L.class
+DIFFER test/files/run/t5614.scala: Test$.class
+DIFFER test/files/run/t5629.scala: IntChild.class
+DIFFER test/files/run/t5648.scala: C$.class
+DIFFER test/files/run/t5665.scala: O$T.class
+DIFFER test/files/run/t5680.scala: Test$.class
+DIFFER test/files/run/t5688.scala: Test$.class
+DIFFER test/files/run/t5710-1.scala: Test$.class
+DIFFER test/files/run/t5710-2.scala: Test$.class
+DIFFER test/files/run/t5733.scala: Test$.class
+DIFFER test/files/run/t576.scala: Test$.class
+DIFFER test/files/run/t5770.scala: Test$.class
+DIFFER test/files/run/t5816.scala: Test$.class
+DIFFER test/files/run/t5824.scala: Test$.class
+DIFFER test/files/run/t5830.scala: Test$.class
+DIFFER test/files/run/t5840.scala: Test$.class
+DIFFER test/files/run/t5857.scala: Test$.class
+DIFFER test/files/run/t5879.scala: Test$.class
+DIFFER test/files/run/t5881.scala: Test$.class
+DIFFER test/files/run/t5907.scala: C4$.class Test$.class
+DIFFER test/files/run/t5912.scala: Test$.class
+DIFFER test/files/run/t5914.scala: Test$.class Test$TypeTree$.class
+DIFFER test/files/run/t594.scala: Test$.class
+DIFFER test/files/run/t5942.scala: Test$.class
+DIFFER test/files/run/t5943a1.scala: Test$.class
+DIFFER test/files/run/t5943a2.scala: Test$.class
+DIFFER test/files/run/t5966.scala: Test$.class
+DIFFER test/files/run/t5971.scala: Test$.class
+DIFFER test/files/run/t5974.scala: Test$.class
+DIFFER test/files/run/t5986.scala: Test$.class
+DIFFER test/files/run/t6011b.scala: Test$.class
+DIFFER test/files/run/t6011c.scala: Test$.class
+DIFFER test/files/run/t6023.scala: Test$.class
+DIFFER test/files/run/t603.scala: Test$.class forceDelay$Susp.class
+DIFFER test/files/run/t6064.scala: Test$.class
+DIFFER test/files/run/t6070.scala: IntBomb.class Mean$.class StringBomb.class Test$.class
+DIFFER test/files/run/t6077_patmat_cse_irrefutable.scala: Test$.class
+DIFFER test/files/run/t6086-vanilla.scala: Test$.class X$.class
+DIFFER test/files/run/t6089.scala: Foo$.class
+DIFFER test/files/run/t6111.scala: Test$.class
+DIFFER test/files/run/t6113.scala: Test$.class
+DIFFER test/files/run/t6114.scala: Test$.class
+DIFFER test/files/run/t6135.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t6175.scala: Test$.class
+DIFFER test/files/run/t6178.scala: Test$.class
+DIFFER test/files/run/t6181.scala: Test$.class
+DIFFER test/files/run/t6187b.scala: Test$$anonfun$1.class Test$.class
+DIFFER test/files/run/t6188.scala: Test$.class
+DIFFER test/files/run/t6199-mirror.scala: Test$.class
+DIFFER test/files/run/t6199-toolbox.scala: Test$.class
+DIFFER test/files/run/t6206.scala: Outer1$Inner.class
+DIFFER test/files/run/t6223.scala: Test$.class
+DIFFER test/files/run/t6246.scala: Test$.class
+DIFFER test/files/run/t6259.scala: DoubleOk$.class DoubleTrouble.class E$F$$typecreator1$3.class E$F$.class Early$.class G$H$$typecreator1$4.class G$H$.class G.class HasX$.class Test$$anon$7.class Test$.class
+DIFFER test/files/run/t6260-delambdafy.scala: Test$.class
+DIFFER test/files/run/t6260.scala: Box$.class Test$.class
+DIFFER test/files/run/t6260b.scala: Test$.class
+DIFFER test/files/run/t6260c.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t6265.scala: Test$C$.class
+DIFFER test/files/run/t6271.scala: Test$.class
+DIFFER test/files/run/t6272.scala: A$.class
+DIFFER test/files/run/t6277.scala: Test$.class
+DIFFER test/files/run/t6287.scala: Test$.class
+DIFFER test/files/run/t629.scala: C.class
+DIFFER test/files/run/t6318_derived.scala: Test$.class
+DIFFER test/files/run/t6318_primitives.scala: Test$.class
+DIFFER test/files/run/t6323b.scala: Test$.class Test$Test$2$.class
+DIFFER test/files/run/t6327.scala: Test$.class
+DIFFER test/files/run/t6329_vanilla_bug.scala: Test$.class
+DIFFER test/files/run/t6329_vanilla.scala: Test$.class
+DIFFER test/files/run/t6333.scala: Test$$anonfun$tryMethods$17.class Test$$anonfun$tryMethods$4.class Test$$anonfun$tryMethods$5.class Test$.class
+DIFFER test/files/run/t6337a.scala: X$.class XX$.class
+DIFFER test/files/run/t6344.scala: C7.class RefInt.class RefInteger.class Test$.class ValueInt.class
+DIFFER test/files/run/t6353.scala: Test$.class
+DIFFER test/files/run/t6380.scala: Test$.class
+DIFFER test/files/run/t6387.scala: Test$$anon$1.class
+DIFFER test/files/run/t6392a.scala: Test$.class
+DIFFER test/files/run/t6392b.scala: Test$.class
+DIFFER test/files/run/t6411a.scala: Test$.class a$.class
+DIFFER test/files/run/t6411b.scala: Bar$.class Foo$.class Test$.class
+DIFFER test/files/run/t6443-by-name.scala: Test$.class
+DIFFER test/files/run/t6443-varargs.scala: Test$.class
+DIFFER test/files/run/t6443.scala: B$.class Test$.class
+DIFFER test/files/run/t6443b.scala: B$.class Test$.class
+DIFFER test/files/run/t6481.scala: Test$$anon$1.class Test$$anon$2.class
+DIFFER test/files/run/t6488.scala: Test$.class
+DIFFER test/files/run/t6500.scala: Test$.class Test$Bar.class
+DIFFER test/files/run/t6506.scala: Test$WL.class
+DIFFER test/files/run/t6534.scala: Test$.class
+DIFFER test/files/run/t6541.scala: B.class C$.class D$.class E$.class Test$.class
+DIFFER test/files/run/t6554.scala: Test$.class
+DIFFER test/files/run/t6559.scala: Test$.class
+DIFFER test/files/run/t657.scala: Test$.class Test1$MatchableImpl1.class
+DIFFER test/files/run/t6574b.scala: Test$.class
+DIFFER test/files/run/t6584.scala: Test$.class
+DIFFER test/files/run/t6591_1.scala: Test$.class
+DIFFER test/files/run/t6591_2.scala: A$$anon$1.class Test$.class
+DIFFER test/files/run/t6591_3.scala: Test$.class
+DIFFER test/files/run/t6591_5.scala: Test$.class
+DIFFER test/files/run/t6591_6.scala: A$$treecreator1$1.class A$$typecreator2$1.class Test$.class
+DIFFER test/files/run/t6608.scala: Test$.class
+DIFFER test/files/run/t6611.scala: Test$.class
+DIFFER test/files/run/t6614.scala: Test$.class
+DIFFER test/files/run/t6622.scala: C2$B$1.class Test$.class
+DIFFER test/files/run/t6628.scala: Test$$anon$1.class
+DIFFER test/files/run/t6632.scala: Test$.class
+DIFFER test/files/run/t6633.scala: Test$.class
+DIFFER test/files/run/t6634.scala: Test$.class
+DIFFER test/files/run/t6637.scala: Test$.class
+DIFFER test/files/run/t6644.scala: Test$.class
+DIFFER test/files/run/t6646.scala: Test$.class
+DIFFER test/files/run/t6663.scala: Test$.class
+DIFFER test/files/run/t6666a.scala: A.class Test$.class
+DIFFER test/files/run/t6673.scala: Test$.class
+DIFFER test/files/run/t6677b.scala: C$$anon$1.class
+DIFFER test/files/run/t6687.scala: Test$.class
+DIFFER test/files/run/t6695.scala: Test$.class
+DIFFER test/files/run/t6706.scala: Test$.class
+DIFFER test/files/run/t6714.scala: A$.class Test$.class
+DIFFER test/files/run/t6715.scala: Test$.class
+DIFFER test/files/run/t6719.scala: Test$.class
+DIFFER test/files/run/t6725-1.scala: Test$.class
+DIFFER test/files/run/t6725-2.scala: Test$.class
+DIFFER test/files/run/t6731.scala: Util$.class
+DIFFER test/files/run/t6732.scala: Test$.class
+DIFFER test/files/run/t6733.scala: Foo$Pri8$.class Foo$Pro8$.class Test$.class
+DIFFER test/files/run/t6793.scala: Test$.class
+DIFFER test/files/run/t6793b.scala: Test$.class a/C2.class
+DIFFER test/files/run/t6793c.scala: Test$.class a/C2.class
+DIFFER test/files/run/t6827.scala: Test$.class
+DIFFER test/files/run/t6860.scala: Test$.class
+DIFFER test/files/run/t6863.scala: Test$.class
+DIFFER test/files/run/t6888.scala: C$$$.class C.class Test$.class
+DIFFER test/files/run/t6900.scala: Test$.class
+DIFFER test/files/run/t6911.scala: K$CC$.class K$DD$.class Test$.class Test$Bar$.class Test$Foo$.class
+DIFFER test/files/run/t6957.scala: Test$Parent$1.class
+DIFFER test/files/run/t6968.scala: Test$.class
+DIFFER test/files/run/t6988.scala: IdentifyMessage1$.class IdentifyMessage2$.class Test$.class User$.class
+DIFFER test/files/run/t7015.scala: B.class
+DIFFER test/files/run/t7039.scala: Test$.class
+DIFFER test/files/run/t7045.scala: Test$.class
+DIFFER test/files/run/t7046.scala: Test$.class
+DIFFER test/files/run/t7088.scala: Test$.class
+DIFFER test/files/run/t7120b.scala: Test$.class
+DIFFER test/files/run/t7151.scala: Test$.class Test$InnerCase$.class TopLevelCase$.class TopLevelNonCase$.class
+DIFFER test/files/run/t7171.scala: T$A$.class T$A.class Test$$anon$1.class Test$$anon$2.class Test$.class
+DIFFER test/files/run/t7181.scala: CaughtException$.class Test$.class UncaughtException$.class
+DIFFER test/files/run/t7198.scala: Test$.class
+DIFFER test/files/run/t720.scala: Test$.class
+DIFFER test/files/run/t7200.scala: Test$.class Test$NelFoo$.class
+DIFFER test/files/run/t7214.scala: Crash$Extractor$.class Crash.class Test$.class
+DIFFER test/files/run/t7215.scala: Test$.class
+DIFFER test/files/run/t7231.scala: Test$.class
+DIFFER test/files/run/t7235.scala: Test$.class
+DIFFER test/files/run/t7242.scala: CrashTest.class CrashTest1.class CrashTest2$Obj$.class CrashTest2.class CrashTest3$Obj$1$.class CrashTest3.class Test$.class
+DIFFER test/files/run/t7249.scala: Test$.class
+DIFFER test/files/run/t7269.scala: Test$.class
+DIFFER test/files/run/t7288.scala: MyClass.class Test$.class TestTrait.class
+DIFFER test/files/run/t7290.scala: Test$.class
+DIFFER test/files/run/t7300.scala: Test$.class
+DIFFER test/files/run/t7325.scala: Test$.class
+DIFFER test/files/run/t7328.scala: Bar$.class Foo$.class Test$.class
+DIFFER test/files/run/t7331a.scala: Test$.class
+DIFFER test/files/run/t7331b.scala: Test$.class
+DIFFER test/files/run/t7331c.scala: Test$.class
+DIFFER test/files/run/t7336.scala: Test$.class
+DIFFER test/files/run/t7341.scala: Obj$.class Test$.class
+DIFFER test/files/run/t7396.scala: O$.class
+DIFFER test/files/run/t7406.scala: Arne.class Test$.class
+DIFFER test/files/run/t7448.scala: Test$.class
+DIFFER test/files/run/t7459a.scala: LM$CC$.class LM.class Test$.class
+DIFFER test/files/run/t7459b-optimize.scala: CC$.class LM.class Test$.class
+DIFFER test/files/run/t7459b.scala: CC$.class LM.class Test$.class
+DIFFER test/files/run/t7459c.scala: CC$.class LM.class Test$.class
+DIFFER test/files/run/t7459d.scala: LM$CC$.class LM.class Test$.class
+DIFFER test/files/run/t7459f.scala: Test$.class Test$FooSeq$.class
+DIFFER test/files/run/t7507.scala: Test$.class
+DIFFER test/files/run/t7521b.scala: Test$.class Wrapper.class
+DIFFER test/files/run/t7533.scala: Test$.class
+DIFFER test/files/run/t7570a.scala: Test$.class
+DIFFER test/files/run/t7570b.scala: Test$.class
+DIFFER test/files/run/t7570c.scala: Test$.class
+DIFFER test/files/run/t7584.scala: Test$.class
+DIFFER test/files/run/t7584b.scala: Test$.class
+DIFFER test/files/run/t7700.scala: Test$.class Test$CInt$1$.class
+DIFFER test/files/run/t7715.scala: Test$.class Test$I$.class
+DIFFER test/files/run/t7763.scala: Test$.class
+DIFFER test/files/run/t7775.scala: Test$.class
+DIFFER test/files/run/t7779.scala: Test$.class
+DIFFER test/files/run/t7817.scala: Test$.class test/C1$O$.class test/C1.class test/O1$.class test/T$O$.class
+DIFFER test/files/run/t7868.scala: Test$.class
+DIFFER test/files/run/t7868b.scala: Test$.class
+DIFFER test/files/run/t7899.scala: Test$.class
+DIFFER test/files/run/t7912.scala: A$.class Test$.class
+DIFFER test/files/run/t7917.scala: PBImpl.class WBImpl.class
+DIFFER test/files/run/t7932.scala: Test$.class
+DIFFER test/files/run/t7965.scala: Test$.class
+DIFFER test/files/run/t7985.scala: Test$.class
+DIFFER test/files/run/t7985b.scala: Test$.class
+DIFFER test/files/run/t7992.scala: D$C$1.class D.class
+DIFFER test/files/run/t7992b.scala: E$C$1.class E.class
+DIFFER test/files/run/t8010.scala: Test$.class
+DIFFER test/files/run/t8015-ffc.scala: Test$.class
+DIFFER test/files/run/t8047.scala: Test$.class
+DIFFER test/files/run/t8087.scala: Test$.class
+DIFFER test/files/run/t8091.scala: Test$.class
+DIFFER test/files/run/t8100.scala: Test$.class
+DIFFER test/files/run/t8177f.scala: Test$.class
+DIFFER test/files/run/t8188.scala: Test$.class
+DIFFER test/files/run/t8197.scala: Test$.class
+DIFFER test/files/run/t8197b.scala: Test$.class
+DIFFER test/files/run/t8199.scala: Test$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$21b4d25d61e61612714f6c4c0c82468$$$$ylongnamereallylongnamereallylongnamereallylongname$obj012$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$44b223394cf03a3f9c9eff60c9488e48$$$$amereallylongnamereallylongnamereallylongname$obj012345678$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$4983e25c585a29ee8b5c2f38ecd37671$$$$namereallylongnamereallylongnamereallylongname$obj01234567$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$4fe56a22423d719d8a06d98ea3b9e1$$$$llylongnamereallylongnamereallylongnamereallylongname$obj0$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$55cea98c515cefce8a64eff458ab2a74$$$$lylongnamereallylongnamereallylongnamereallylongname$obj01$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$741e712a8476be7a5a47ba6162fe2a1$$$$mereallylongnamereallylongnamereallylongname$obj0123456789$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$b7f445b8d20dd1b2310758e8373566c$$$$gnamereallylongnamereallylongnamereallylongname$obj0123456$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$cba95de8d842456c6b25ae5d8eea5$$$$ongnamereallylongnamereallylongnamereallylongname$obj01234$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$f4e3f4bab29e631753e10aea658f19$$$$ereallylongnamereallylongnamereallylongname$obj01234567890$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$f92be9ff78aef9f7aba68dfefe9fe83e$$$$longnamereallylongnamereallylongnamereallylongname$obj0123$.class reallylongnamereallylongnamereallylongnamereallylongnamere$$$$fe226f5636f82511c1bed1f859aed4$$$$ngnamereallylongnamereallylongnamereallylongname$obj012345$.class reallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongname.class
+DIFFER test/files/run/t8245.scala: Test$.class
+DIFFER test/files/run/t8280.scala: Moop1$ob1$f1$.class Moop1$ob1$f2$.class Moop1$ob2$f1$.class Moop1$ob3$.class Moop1$ob3$f1$.class Moop2$ob1$f2$.class Moop2$ob3$.class Moop3$ob1$.class Moop3$ob1$f2$.class Moop3$ob2$.class Moop3$ob3$.class
+DIFFER test/files/run/t8428.scala: Test$.class
+DIFFER test/files/run/t8445.scala: Test$.class X$$anon$1$Z.class X$$anon$1.class X$.class y$$anon$Z.class y$$anon.class
+DIFFER test/files/run/t8465.scala: Test$.class
+DIFFER test/files/run/t8549b.scala: Test$.class
+DIFFER test/files/run/t8574.scala: Test$.class
+DIFFER test/files/run/t8575.scala: Test$.class
+DIFFER test/files/run/t8601.scala: Test$.class
+DIFFER test/files/run/t8601b.scala: Test$.class
+DIFFER test/files/run/t8601c.scala: Test$.class
+DIFFER test/files/run/t8601d.scala: Test$.class
+DIFFER test/files/run/t8610.scala: Test$.class X$.class
+DIFFER test/files/run/t8611a.scala: Test$.class
+DIFFER test/files/run/t8611b.scala: NotWorkingEnum$$anon$1.class NotWorkingTab.class Test$.class WorkingEnum$$anon$2.class WorkingTab.class
+DIFFER test/files/run/t8611c.scala: Test$.class
+DIFFER test/files/run/t8637.scala: Test$.class
+DIFFER test/files/run/t8710.scala: Test$.class
+DIFFER test/files/run/t8733.scala: Child.class Test$.class
+DIFFER test/files/run/t8738.scala: Test$.class
+DIFFER test/files/run/t874.scala: Test$Mix$U$.class Test$Mix$U.class Test$Mix.class
+DIFFER test/files/run/t8756.scala: Test$.class
+DIFFER test/files/run/t8803.scala: C$$anon$1.class C$$anon$2.class C$$anon$3.class C$$anon$4.class C$$anon$5.class C$$anon$6.class C$$anon$7.class C$$anon$8.class C.class Test$.class
+DIFFER test/files/run/t8823.scala: Test$.class Tuple2Int.class
+DIFFER test/files/run/t8831.scala: Right$.class Right5$.class VeryRight$.class VeryWrong$.class VeryWrongDollar$.class VeryWrongHyphenated$.class VeryWrongPlus$.class Wrong$.class WrongDollar$.class WrongHyphenated$.class WrongPlus$.class WrongQuotedDollar$.class
+DIFFER test/files/run/t8845.scala: Test$.class
+DIFFER test/files/run/t8859.scala: Test$.class
+DIFFER test/files/run/t8888.scala: C.class Test$.class
+DIFFER test/files/run/t889.scala: Test$.class
+DIFFER test/files/run/t8893.scala: Test$.class
+DIFFER test/files/run/t8925.scala: Test$.class
+DIFFER test/files/run/t8931.scala: Test$.class
+DIFFER test/files/run/t8933c.scala: Test$.class
+DIFFER test/files/run/t8944b.scala: A$.class A.class
+DIFFER test/files/run/t8944c.scala: Test$.class
+DIFFER test/files/run/t8960.scala: Test$$anonfun$1.class Test$$anonfun$3.class Test$$anonfun$4.class Test$$anonfun$5.class Test$$anonfun$6.class Test$.class
+DIFFER test/files/run/t9003.scala: Test$.class Test$CaseSequence$2$.class
+DIFFER test/files/run/t9030.scala: Test$.class
+DIFFER test/files/run/t9102.scala: Test$.class Test$E.class
+DIFFER test/files/run/t9110.scala: Domain$Created$.class DomainC$.class Test$.class Test$DomainA$1$.class Test$DomainB$1$.class
+DIFFER test/files/run/t9146.scala: C$.class
+DIFFER test/files/run/t9178a.scala: Test$.class
+DIFFER test/files/run/t9182.scala: Test$.class
+DIFFER test/files/run/t920.scala: Test$B$baz$1.class
+DIFFER test/files/run/t9219.scala: Test$.class
+DIFFER test/files/run/t9223.scala: Test$.class
+DIFFER test/files/run/t9252.scala: Test$.class
+DIFFER test/files/run/t9365.scala: Test$.class
+DIFFER test/files/run/t9375.scala: A$$anon$1$O$.class A$$anon$1$Op$.class A$$anon$1.class A$A$O$.class A$A$Op$.class A$A.class A$C.class A$N$.class A$N$O$.class A$N$Op$.class A$O$.class A$O$1$.class A$O$3$.class A$O$5$.class A$Op$.class A$T$O$.class A$T$Op$.class A.class C.class DeserializeModuleNoConstructor$.class M$.class T$$anon$2$O$.class T$$anon$2$Op$.class T$$anon$2.class T$A$O$.class T$A$Op$.class T$A.class T$C.class T$N$.class T$N$O$.class T$N$Op$.class T$O$.class T$O$11$.class T$O$7$.class T$O$9$.class T$Op$.class T$T$O$.class T$T$Op$.class T.class Test$.class
+DIFFER test/files/run/t9387.scala: T$.class
+DIFFER test/files/run/t9387b.scala: T$.class U$.class
+DIFFER test/files/run/t9390.scala: C.class
+DIFFER test/files/run/t9390b.scala: C.class
+DIFFER test/files/run/t9390c.scala: C$$anon$1.class C.class
+DIFFER test/files/run/t9390d.scala: C$UseOuterInConstructor$1.class C.class
+DIFFER test/files/run/t9395.scala: Test$.class
+DIFFER test/files/run/t9400.scala: Test$.class
+DIFFER test/files/run/t9408.scala: Outer$C$1.class Outer$Child$1.class Outer$D$1.class Outer$E$1.class Outer$FinalMember.class Outer$LocalOuter$1$FinalMember.class Outer$LocalOuter$1$Member.class Outer$LocalOuter$1.class Outer.class test$LocalOuter$FinalMember.class test$LocalOuter$Member.class test$LocalOuter.class
+DIFFER test/files/run/t9425.scala: C$Foo$.class C.class
+DIFFER test/files/run/t9437a.scala: C.class Test$.class
+DIFFER test/files/run/t949.scala: Test$.class
+DIFFER test/files/run/t9535.scala: Test$.class
+DIFFER test/files/run/t9546e.scala: A$.class B.class
+DIFFER test/files/run/t9567.scala: Test$.class
+DIFFER test/files/run/t9567b.scala: Test$.class
+DIFFER test/files/run/t9567c.scala: CaseSequenceTopLevel$.class Test$.class Test$CaseSequence$2$.class Test$CaseSequenceWithVar$2$.class
+DIFFER test/files/run/t9644.scala: Test$.class
+DIFFER test/files/run/t9656.scala: Test$$anon$1.class Test$.class
+DIFFER test/files/run/t978.scala: Test$.class
+DIFFER test/files/run/t9814.scala: Bar.class Foo.class
+DIFFER test/files/run/t9841.scala: Container$Inner$.class Container.class Test$.class
+DIFFER test/files/run/t9920d.scala: C$O$.class C.class T$D$1.class
+DIFFER test/files/run/t9946a.scala: p1/O$N$.class
+DIFFER test/files/run/t9946b.scala: Test$.class
+DIFFER test/files/run/t9946c.scala: Test$.class
+DIFFER test/files/run/t9971.scala: Test$.class
+DIFFER test/files/run/takeAndDrop.scala: Test$.class
+DIFFER test/files/run/tcpoly_overriding.scala: B.class Test$.class
+DIFFER test/files/run/toolbox_console_reporter.scala: Test$.class
+DIFFER test/files/run/toolbox_current_run_compiles.scala: Test$.class
+DIFFER test/files/run/toolbox_default_reporter_is_silent.scala: Test$.class
+DIFFER test/files/run/toolbox_expand_macro.scala: Test$.class
+DIFFER test/files/run/toolbox_parse_package.scala: Test$.class
+DIFFER test/files/run/toolbox_silent_reporter.scala: Test$.class
+DIFFER test/files/run/toolbox_typecheck_implicitsdisabled.scala: Test$.class
+DIFFER test/files/run/toolbox_typecheck_inferimplicitvalue.scala: Test$.class
+DIFFER test/files/run/toolbox_typecheck_macrosdisabled.scala: Test$.class
+DIFFER test/files/run/toolbox_typecheck_macrosdisabled2.scala: Test$.class
+DIFFER test/files/run/trait_fields_bytecode.scala: Test$.class
+DIFFER test/files/run/trait_fields_final.scala: Test$.class
+DIFFER test/files/run/trait_fields_init.scala: C.class T$NO$.class
+DIFFER test/files/run/trait_fields_three_layer_overrides.scala: Test$.class
+DIFFER test/files/run/trait_fields_volatile.scala: Test$.class
+DIFFER test/files/run/trait-default-specialize.scala: Test$.class Test$TInt$1.class
+DIFFER test/files/run/trait-defaults-modules.scala: C1$a$.class C1$b$.class C1.class C3.class C4.class T2$a$.class T2$b$.class T2$c$.class
+DIFFER test/files/run/trait-defaults-modules3.scala: Test$.class
+DIFFER test/files/run/trait-fields-override-lazy.scala: Test$.class
+DIFFER test/files/run/trait-super-calls.scala: Test$.class
+DIFFER test/files/run/transform.scala: Test$.class
+DIFFER test/files/run/transient-object.scala: Demo$A$.class Demo$B$.class Demo.class Test$.class
+DIFFER test/files/run/transpose.scala: Test$.class
+DIFFER test/files/run/treePrint.scala: Test$.class
+DIFFER test/files/run/triemap-hash.scala: Test$.class
+DIFFER test/files/run/triple-quoted-expr.scala: Test$.class
+DIFFER test/files/run/try-2.scala: Test$.class
+DIFFER test/files/run/try-catch-unify.scala: Test$.class
+DIFFER test/files/run/tuples.scala: Test$.class
+DIFFER test/files/run/type-currying.scala: A$Bar$.class A$Foo$.class A.class Partial$$anon$1$$anon$2.class Partial$$anon$1$$anon$3.class Test$.class
+DIFFER test/files/run/type-tag-leak.scala: Test$$typecreator1$1.class Test$.class
+DIFFER test/files/run/typealias_overriding.scala: Test$.class Test$AddRemove$removing$.class Test$Linked.class
+DIFFER test/files/run/typetags_core.scala: Test$.class
+DIFFER test/files/run/typetags_multi.scala: Test$.class
+DIFFER test/files/run/typetags_serialize.scala: Test$.class
+DIFFER test/files/run/typetags_symbolof_x.scala: Test$.class
+DIFFER test/files/run/unapply.scala: Test1256$Buffer$$anonfun$1.class
+DIFFER test/files/run/unboxingBug.scala: Test$.class
+DIFFER test/files/run/uncheckedStable.scala: U.class
+DIFFER test/files/run/unreachable.scala: Test$.class
+DIFFER test/files/run/UnrolledBuffer.scala: Test$.class
+DIFFER test/files/run/value-class-extractor-2.scala: Test$.class
+DIFFER test/files/run/value-class-extractor-seq.scala: Bip$.class
+DIFFER test/files/run/value-class-extractor.scala: SomeProduct.class Test$.class
+DIFFER test/files/run/value-class-partial-func-depmet.scala: VC$$anonfun$1.class
+DIFFER test/files/run/valueclasses-classmanifest-basic.scala: Test$.class
+DIFFER test/files/run/valueclasses-classmanifest-existential.scala: Test$.class
+DIFFER test/files/run/valueclasses-classmanifest-generic.scala: Test$.class
+DIFFER test/files/run/valueclasses-classtag-basic.scala: Test$.class
+DIFFER test/files/run/valueclasses-classtag-existential.scala: Test$.class
+DIFFER test/files/run/valueclasses-classtag-generic.scala: Test$.class
+DIFFER test/files/run/valueclasses-constr.scala: Test$.class
+DIFFER test/files/run/valueclasses-manifest-basic.scala: Test$.class
+DIFFER test/files/run/valueclasses-manifest-existential.scala: Test$.class
+DIFFER test/files/run/valueclasses-manifest-generic.scala: Test$.class
+DIFFER test/files/run/valueclasses-pavlov.scala: C.class
+DIFFER test/files/run/valueclasses-typetag-basic.scala: Test$.class
+DIFFER test/files/run/valueclasses-typetag-existential.scala: Test$.class
+DIFFER test/files/run/valueclasses-typetag-generic.scala: Test$.class
+DIFFER test/files/run/valueClassSelfType.scala: Test$.class
+DIFFER test/files/run/var-arity-class-symbol.scala: Test$.class
+DIFFER test/files/run/various-flat-classpath-types.scala: Test$.class Test$DirRep$.class Test$JFileOps.class
+DIFFER test/files/run/vector1.scala: Test$.class
+DIFFER test/files/run/view-headoption.scala: Test$.class
+DIFFER test/files/run/view-iterator-stream.scala: Test$.class Test$Perturber.class
+DIFFER test/files/run/viewtest.scala: Test$.class
+DIFFER test/files/run/virtpatmat_alts.scala: Test$.class
+DIFFER test/files/run/virtpatmat_apply.scala: Test$.class
+DIFFER test/files/run/virtpatmat_casting.scala: Test$.class
+DIFFER test/files/run/virtpatmat_extends_product.scala: Test$.class Test$AnnotationInfo$.class Test$AnnotationInfo.class Test$NestedAnnotArg$.class
+DIFFER test/files/run/virtpatmat_literal.scala: Test$.class
+DIFFER test/files/run/virtpatmat_nested_lists.scala: Test$.class
+DIFFER test/files/run/virtpatmat_opt_sharing.scala: Test$.class
+DIFFER test/files/run/virtpatmat_partial.scala: Test$$anonfun$1.class Test$.class Test$constChar$$anonfun$5.class Test$constCharEta$$anonfun$4.class Test$constInt$$anonfun$7.class Test$constIntEta$$anonfun$6.class Test$nonConstChar$$anonfun$3.class Test$nonConstCharEta$$anonfun$2.class
+DIFFER test/files/run/virtpatmat_stringinterp.scala: Test$.class Test$Node$.class Test$XMLContext$xml$.class Test$XMLContext.class
+DIFFER test/files/run/virtpatmat_switch.scala: Test$.class
+DIFFER test/files/run/virtpatmat_tailcalls_verifyerror.scala: Test$.class
+DIFFER test/files/run/virtpatmat_try.scala: Test$.class Test$A$.class
+DIFFER test/files/run/virtpatmat_typed.scala: Test$.class
+DIFFER test/files/run/virtpatmat_unapply.scala: Test$.class
+DIFFER test/files/run/virtpatmat_unapplyprod.scala: Test$.class Test$Foo$.class Test$FooSeq$.class
+DIFFER test/files/run/virtpatmat_unapplyseq.scala: Test$.class
+DIFFER test/files/run/virtpatmat_valdef.scala: Test$.class
+DIFFER test/files/run/wacky-value-classes.scala: AnyValUnit.class Test$.class
+DIFFER test/files/run/weakconform.scala: Test$.class
+DIFFER test/files/run/WeakHashSetTest.scala: scala/reflect/internal/util/Collider$.class scala/reflect/internal/util/Collider.class scala/reflect/internal/util/WeakHashSetTest$.class
+
+## one-sided
+ONE-SIDED test/files/run/absoverride.scala normal=true eager=false
+ONE-SIDED test/files/run/bugs.scala normal=true eager=false
+ONE-SIDED test/files/run/byname-implicits-17.scala normal=true eager=false
+ONE-SIDED test/files/run/byname-implicits-28.scala normal=true eager=false
+ONE-SIDED test/files/run/byname-implicits-4.scala normal=true eager=false
+ONE-SIDED test/files/run/byname-implicits-6.scala normal=true eager=false
+ONE-SIDED test/files/run/caseclasses.scala normal=true eager=false
+ONE-SIDED test/files/run/delambdafy-dependent-on-param-subst-2.scala normal=true eager=false
+ONE-SIDED test/files/run/delambdafy-dependent-on-param-subst.scala normal=true eager=false
+ONE-SIDED test/files/run/f-interpolator-unit.scala normal=true eager=false
+ONE-SIDED test/files/run/future-flatmap-exec-count.scala normal=true eager=false
+ONE-SIDED test/files/run/hk-typevar-unification.scala normal=true eager=false
+ONE-SIDED test/files/run/inner-obj-auto.scala normal=true eager=false
+ONE-SIDED test/files/run/interop_manifests_are_abstypetags.scala normal=true eager=false
+ONE-SIDED test/files/run/interop_manifests_are_typetags.scala normal=true eager=false
+ONE-SIDED test/files/run/lambda-serialization-gc.scala normal=true eager=false
+ONE-SIDED test/files/run/lazy-concurrent.scala normal=true eager=false
+ONE-SIDED test/files/run/lisp.scala normal=true eager=false
+ONE-SIDED test/files/run/manifests-new.scala normal=true eager=false
+ONE-SIDED test/files/run/patmat-exprs.scala normal=true eager=false
+ONE-SIDED test/files/run/reflection-sync-potpourri.scala normal=true eager=false
+ONE-SIDED test/files/run/reflection-sync-subtypes.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure2a.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure3a.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure4a.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure5a.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure6.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_closure7.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_nested_inner_refers_to_global.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_nested_outer_refers_to_global.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_nested_outer_refers_to_local.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_01.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_02.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_36.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_37.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_38.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_39.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_40.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_41.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_42.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_43.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_44.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_47.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_48.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_49.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_50.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_51.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_newimpl_52.scala normal=true eager=false
+ONE-SIDED test/files/run/reify_renamed_type_spliceable.scala normal=true eager=false
+ONE-SIDED test/files/run/repl-serialization.scala normal=true eager=false
+ONE-SIDED test/files/run/sammy_after_implicit_view.scala normal=true eager=false
+ONE-SIDED test/files/run/SD-235.scala normal=true eager=false
+ONE-SIDED test/files/run/sd336.scala normal=true eager=false
+ONE-SIDED test/files/run/sd409.scala normal=true eager=false
+ONE-SIDED test/files/run/shortClass.scala normal=true eager=false
+ONE-SIDED test/files/run/sip23-implicit-resolution.scala normal=true eager=false
+ONE-SIDED test/files/run/t0936.scala normal=true eager=false
+ONE-SIDED test/files/run/t10233.scala normal=true eager=false
+ONE-SIDED test/files/run/t10240.scala normal=true eager=false
+ONE-SIDED test/files/run/t10291.scala normal=true eager=false
+ONE-SIDED test/files/run/t10788b.scala normal=true eager=false
+ONE-SIDED test/files/run/t10856.scala normal=true eager=false
+ONE-SIDED test/files/run/t1500.scala normal=true eager=false
+ONE-SIDED test/files/run/t1501.scala normal=true eager=false
+ONE-SIDED test/files/run/t2236-new.scala normal=true eager=false
+ONE-SIDED test/files/run/t2236-old.scala normal=true eager=false
+ONE-SIDED test/files/run/t2318.scala normal=true eager=false
+ONE-SIDED test/files/run/t2417.scala normal=true eager=false
+ONE-SIDED test/files/run/t2509-1.scala normal=true eager=false
+ONE-SIDED test/files/run/t2514.scala normal=true eager=false
+ONE-SIDED test/files/run/t2636.scala normal=true eager=false
+ONE-SIDED test/files/run/t3346j.scala normal=true eager=false
+ONE-SIDED test/files/run/t4300.scala normal=true eager=false
+ONE-SIDED test/files/run/t4426.scala normal=true eager=false
+ONE-SIDED test/files/run/t5080.scala normal=true eager=false
+ONE-SIDED test/files/run/t5565.scala normal=true eager=false
+ONE-SIDED test/files/run/t5629b.scala normal=true eager=false
+ONE-SIDED test/files/run/t5704.scala normal=true eager=false
+ONE-SIDED test/files/run/t6154.scala normal=true eager=false
+ONE-SIDED test/files/run/t6309.scala normal=true eager=false
+ONE-SIDED test/files/run/t6591_7.scala normal=true eager=false
+ONE-SIDED test/files/run/t7223.scala normal=true eager=false
+ONE-SIDED test/files/run/t7558.scala normal=true eager=false
+ONE-SIDED test/files/run/t7571.scala normal=true eager=false
+ONE-SIDED test/files/run/t7970.scala normal=true eager=false
+ONE-SIDED test/files/run/t8002.scala normal=true eager=false
+ONE-SIDED test/files/run/t8190.scala normal=true eager=false
+ONE-SIDED test/files/run/t8196.scala normal=true eager=false
+ONE-SIDED test/files/run/t8334.scala normal=true eager=false
+ONE-SIDED test/files/run/t8564.scala normal=true eager=false
+ONE-SIDED test/files/run/t9546d.scala normal=true eager=false
+ONE-SIDED test/files/run/t9697.scala normal=true eager=false
+ONE-SIDED test/files/run/t9920.scala normal=true eager=false
+ONE-SIDED test/files/run/t9920b.scala normal=true eager=false
+ONE-SIDED test/files/run/t9920c.scala normal=true eager=false
+ONE-SIDED test/files/run/tasty-lambdatype-strawman.scala normal=true eager=false
+ONE-SIDED test/files/run/tcpoly_monads.scala normal=true eager=false
+ONE-SIDED test/files/run/tcpoly_parseridioms.scala normal=true eager=false
+ONE-SIDED test/files/run/try.scala normal=true eager=false
+ONE-SIDED test/files/run/typetags_caching.scala normal=true eager=false
+ONE-SIDED test/files/run/virtpatmat_partial_backquoted.scala normal=true eager=false
+ONE-SIDED test/files/run/virtpatmat_typetag.scala normal=true eager=false
