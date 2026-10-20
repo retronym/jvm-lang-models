@@ -17,6 +17,7 @@ The executables that enumerate program spaces, write the dumps the conformance h
 | [`Harness/JConformance.lean`](Harness/JConformance.lean) | `lake exe jconformance names\|sealed …`: the Java spaces, for the harness |
 | [`Harness/JvmCases.lean`](Harness/JvmCases.lean) | `lake exe jvmcases [space\|verdicts]`: the JVM catalogue, for [`packages/jvm/probes`](../jvm/probes) |
 | [`Harness/ScalaProbe.lean`](Harness/ScalaProbe.lean) | `lake exe scalaprobe OUT`: Scala sources and the model's classfiles, for [`packages/scala/probes`](../scala/probes); `scalaprobe OUT flat`: `FlatRules`' programs as Scala with `Members`' verdicts, for `members.py --space flat` |
+| [`Harness/NamesProbe.lean`](Harness/NamesProbe.lean) | `lake exe namesprobe OUT`: `Scala.Names`' programs and their binary names per dialect, for [`packages/scala/probes/names.py`](../scala/probes/names.py) |
 | [`Harness/JavaProbe.lean`](Harness/JavaProbe.lean) | `lake exe javaprobe OUT`: Java sources and the model's classfiles, for [`packages/java/probes`](../java/probes) |
 | [`Harness/MimaMain.lean`](Harness/MimaMain.lean) | `lake exe bincompat edits\|mima\|gaps\|scala\|verdicts`: the edit space and MiMa verdicts, for [`packages/mima/probes`](../mima/probes) |
 | [`server/`](server) | The compile server ([design](docs/compile-server.md)): `Server.java` reads JSON-lines requests (compile, run) and keeps one compiler warm, over pipes only; `JavacBackend.java` is javac through `javax.tools`, `ScalacBackend.scala` scalac 2 with a cached `Global`, `DotcBackend.java` dotc with a cached `ContextBase` |

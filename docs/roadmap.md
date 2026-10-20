@@ -21,7 +21,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 | Track | Layer | Results |
 |---|---|---|
 | Tracks J1–J8 | JVM linkage, overriding along library chains, method bodies and nestmates, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
-| Tracks S1–S6 | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership; calibrated on scalac | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
+| Tracks S1–S6, N (first step) | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership, binary names of classes and objects; calibrated on scalac and dotc | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, six gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1, MiMa-S1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
 
@@ -63,6 +63,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Done looks like.** Implicit definitions in `ScalaTypes` and a companion-based implicit-scope search over the shared walk, calibrated against scalac and dotc; `ImplicitScope`'s search and its trace lemma restated over it, with [`is_obligations`](../packages/zinc/Zinc/Features/ImplicitScope.lean#L675) kept. Single-writer work on `Zinc/`. Design: [`packages/zinc/docs/29-shared-scala.md`](../packages/zinc/docs/29-shared-scala.md).
 
+### Track N: binary names, the rest
+
+**Why.** Every consumer trusts a classfile's names differently: the JVM links by them, MiMa decides privacy by them, Zinc records and hashes by them (the Merkle PoC's mirror bug of 20 October was a binary name, `p.Q$A`, against a stored source name, `p.Q.A`). The class-and-object step is done ([`Scala.Names`](../packages/scala/Scala/Names.lean), [`track-s.md`](../packages/scala/docs/track-s.md)).
+
+**Done looks like.** The remaining steps of [`track-n-design.md`](../packages/scala/docs/track-n-design.md): `Lower` and Zinc's naming models (`ZincNames`, [`Naming.lean`](../packages/zinc/Zinc/Bridges/Naming.lean)) restated over `Names`; local, anonymous and lambda classes and their numbering; expanded and synthetic member names; Java's names.
+
 ### Scala and Java layer remainders
 
 **Why.** Each widens what Track B3's source spaces can express.
@@ -81,7 +87,7 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Pace.** The fixes in forks (retronym/zinc, retronym/scala, retronym/scala3) stay as drafts for now, so as not to overwhelm the maintainers; they move upstream a few at a time.
 
-**Done looks like.** Four MiMa issues are filed ([scala-garden/mima#993](https://github.com/scala-garden/mima/issues/993)–#996; MiMa-D1 is out of MiMa's scope, see [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md)). The scalac 2 trait-setter `AbstractMethodError` is filed as [scala/bug#13199](https://github.com/scala/bug/issues/13199), with the draft fix [retronym/scala#136](https://github.com/retronym/scala/issues/136) to open as a PR once the direction is agreed.
+**Done looks like.** Four MiMa issues are filed ([scala-garden/mima#993](https://github.com/scala-garden/mima/issues/993)–#996; MiMa-D1 is out of MiMa's scope, see [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md)). dotc's shortening of unencoded class names is filed as [scala/scala3#27351](https://github.com/scala/scala3/issues/27351). The scalac 2 trait-setter `AbstractMethodError` is filed as [scala/bug#13199](https://github.com/scala/bug/issues/13199), with the draft fix [retronym/scala#136](https://github.com/retronym/scala/issues/136) to open as a PR once the direction is agreed.
 
 ### Contributors
 
