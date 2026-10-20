@@ -1,0 +1,56 @@
+# Fusion3 over the first 1400 of scala/scala3 tests/pos/*.scala (single files, alphabetical), dotc 3.9.0, tests from d168df2a76; the run stopped at a file whose fused compile did not leave typer in several minutes (typer is before any fused group)
+... 1400/3561: same 1300, differ 45, one-sided 0, both fail 55
+
+## classified (fusion_classify.py)
+28 lazy holder boxed (unfused)   e.g. blockescapes.scala companions.scala contrib467.scala conversion-function-prototype.scala
+9 outer accessor kept (fused)+outer field differs   e.g. coverage-constructor-underlying-leak.scala explicitOuter.scala flatten.scala i1131.scala
+5 lazy holder boxed (unfused)+outer accessor kept (fused)+outer field differs   e.g. existentials.scala i10253.scala i12508.scala i17135.scala
+2 constant pool order+lazy holder boxed (unfused)   e.g. i10295.scala i13044.scala
+1 other   e.g. abstract-tracked.scala
+
+## differing
+DIFFER tests/pos/abstract-tracked.scala: Test$$anon$3.class Test$$anon$5.class
+DIFFER tests/pos/blockescapes.scala: blockescapes$.class
+DIFFER tests/pos/companions.scala: companions$.class companions$C$1.class companions$C$3$.class companions2$.class companions2$C$4.class
+DIFFER tests/pos/contrib467.scala: Test$.class Test$SB$2$.class
+DIFFER tests/pos/conversion-function-prototype.scala: scala/Test$.class
+DIFFER tests/pos/coverage-constructor-underlying-leak.scala: scala/collection/SeqView$Sorted$ReverseSorted.class
+DIFFER tests/pos/existentials.scala: A$Bob$1.class A$Bob$3$.class A.class
+DIFFER tests/pos/explicitOuter.scala: Outer$C$1.class Outer$D$1.class Outer$E$1.class Outer$InnerClass$1.class
+DIFFER tests/pos/fewer-braces.scala: fewer$minusbraces$package$.class fewer$minusbraces$package$Path$2$.class
+DIFFER tests/pos/flatten.scala: A2$C.class
+DIFFER tests/pos/i10253.scala: test$.class test$treeMap$2$.class
+DIFFER tests/pos/i10295.scala: i10295$package$$anon$2.class i10295$package$.class
+DIFFER tests/pos/i10542.scala: test_9655/i10542$package$.class
+DIFFER tests/pos/i1131.scala: MustBeATrait$C$1.class
+DIFFER tests/pos/i12508.scala: Test2$Pair$1.class Test2$Pair$3$.class Test2.class
+DIFFER tests/pos/i12508b.scala: i12508b$package$Bar$1.class i12508b$package$Baz$1.class
+DIFFER tests/pos/i12508c.scala: i12508c$package$$anon$1.class i12508c$package$.class i12508c$package$Option$3$.class
+DIFFER tests/pos/i12997.scala: i12997$package$.class
+DIFFER tests/pos/i13044.scala: TestApp$$anon$1.class TestApp$$anon$2.class TestApp$$anon$3.class TestApp$$anon$4.class TestApp$$anon$5.class TestApp$$anon$6.class TestApp$$anon$7.class TestApp$.class
+DIFFER tests/pos/i13349.scala: Stream$.class
+DIFFER tests/pos/i13974a.scala: Test2$.class
+DIFFER tests/pos/i14152.scala: i14152$package$.class
+DIFFER tests/pos/i14726-upper.scala: i14726$minusupper$package$.class
+DIFFER tests/pos/i14726.scala: i14726$package$.class
+DIFFER tests/pos/i14999.scala: i14999$package$.class
+DIFFER tests/pos/i15827.scala: i15827$package$.class i15827$package$CallSite$2$$anon$2.class i15827$package$CallSite$2$.class
+DIFFER tests/pos/i16035.scala: i16035$package$.class
+DIFFER tests/pos/i16104.scala: i16104$package$.class
+DIFFER tests/pos/i16451.CanForward.scala: Namer$CanForward.class
+DIFFER tests/pos/i1664.scala: test$A$1$B$1.class
+DIFFER tests/pos/i17135.scala: doobie/i17135$package$.class doobie/i17135$package$Bar$7$Baz$1.class doobie/i17135$package$Bar$8$Baz$2.class doobie/i17135$package$Foo$1.class doobie/i17135$package$Foo$3$.class doobie/i17135$package$Foo$3$CaseC$.class doobie/i17135$package$GADT2$3$.class
+DIFFER tests/pos/i17222.4.scala: i17222$u002E4$package$.class
+DIFFER tests/pos/i17465.scala: i17465$package$B$1.class
+DIFFER tests/pos/i18260.scala: i18260$package$.class
+DIFFER tests/pos/i18927.scala: B$Inner$1.class
+DIFFER tests/pos/i19001.case2.scala: i19001$u002Ecase2$package$.class
+DIFFER tests/pos/i19202.scala: Test$XXX$1.class Test$XXX$10.class Test$XXX$12$.class Test$XXX$3$.class Test$XXX$4.class Test$XXX$6$.class Test$XXX$7.class Test$XXX$9$.class Test.class
+DIFFER tests/pos/i19623.scala: i19623$package$.class
+DIFFER tests/pos/i20184.scala: Outer$.class
+DIFFER tests/pos/i21749.scala: Test$.class
+DIFFER tests/pos/i22713.scala: i22713$package$.class
+DIFFER tests/pos/i22922.scala: StreamImpl.class
+DIFFER tests/pos/i2300.scala: hlists$.class
+DIFFER tests/pos/i23022.scala: ExtractorWithImplicit.class
+DIFFER tests/pos/i23119.scala: i23119$package$.class

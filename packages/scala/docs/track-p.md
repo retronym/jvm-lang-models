@@ -64,7 +64,7 @@ dotc groups miniphases and runs each group in one traversal (`MegaPhase`). At ea
 * **A pre-pass sees the group's input.** `CapturedVars.prepareForUnit` collects the mutable locals that closures capture by traversing the unit before the group runs. Fused, `LazyVals` (same group) has not yet made a local lazy val's holder, which is `Synthetic | Mutable | Lazy`. Unfused it has, and `CapturedVars` boxes the holder in an `ObjectRef`, which is correct but pointless (57 of the 83 files).
 * **Every miniphase runs at the group's end.** `MegaPhase.run` is `atPhase(miniPhases.last.next)`, since [scala/scala3#3350](https://github.com/scala/scala3/pull/3350) (6–7% faster). So a miniphase sees the infos that later miniphases in its group produce. That is the DropOuterAccessors bug below.
 
-The probe is [`Fusion3.scala`](../probes/phases/Fusion3.scala), with [`fusion_classify.py`](../probes/phases/fusion_classify.py). Over `tests/run/*.scala` ([`fusion-3.9.0-run.txt`](../probes/phases/fusion-3.9.0-run.txt)), 1465 files are byte-identical and 83 differ. The differences: lazy-holder boxing in 57+11; outer accessors or fields kept fused and dropped unfused in 13; line numbers in 2; the order of lazy-val fields and of their `VarHandle`s; a `getfield` of `Tuple2$mcII$sp._1$mcI$sp` unfused where fused calls the accessor; and the two below. One file crashes unfused.
+The probe is [`Fusion3.scala`](../probes/phases/Fusion3.scala), with [`fusion_classify.py`](../probes/phases/fusion_classify.py). Over `tests/run/*.scala` ([`fusion-3.9.0-run.txt`](../probes/phases/fusion-3.9.0-run.txt)), 1465 files are byte-identical and 83 differ. The differences: lazy-holder boxing in 57+11; outer accessors or fields kept fused and dropped unfused in 13; line numbers in 2; the order of lazy-val fields and of their `VarHandle`s; a `getfield` of `Tuple2$mcII$sp._1$mcI$sp` unfused where fused calls the accessor; and the two below. One file crashes unfused. The first 1400 files of `tests/pos` ([`fusion-3.9.0-pos.txt`](../probes/phases/fusion-3.9.0-pos.txt)) show the same three mechanisms and nothing else: 45 differ, none crashes.
 
 **A program whose output depends on fusion.** `tests/run/final-fields.scala`, minimized in [`fusion/`](../probes/phases/fusion):
 
@@ -121,7 +121,7 @@ python3 fusion_classify.py fusion-output.txt
 
 ## Future work
 
-* Run `Fusion3` over `tests/pos` and with `-Ycheck:all`, and split one group at a time to attribute each difference to a pair of miniphases.
+* Run `Fusion3` over the rest of `tests/pos` and with `-Ycheck:all`, and split one group at a time to attribute each difference to a pair of miniphases.
 * List scalac's own forward phase travels during each phase (specialization, refchecks' erasure checks, the backend) and run `Eager2` with each one's target phase, to see which are safe by luck.
 * Lean: `start`-based visibility for removals (`MoveStatics`) as a theorem, not only a witness; the pre-pass and group-end hazards in [`Fusion.lean`](../../scala-types/ScalaTypes/Fusion.lean).
-* Measure whether lazy-val field names (`z1$lzy2` vs `z2$lzy1`) depend on member order within a class too, not only on fusion. They are serialized field names.
+* Lazy-val field names are numbered per name (`b$lzy1`; adding other lazy vals, in the class or a trait, does not shift them), so only a repeated name, as with an overriding lazy val, depends on traversal order (`z1$lzy2` vs `z2$lzy1` in `tests/run/lazy-traits.scala`). They are serialized field names; check whether a repeated name can arise in a `Serializable` class.
