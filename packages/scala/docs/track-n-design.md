@@ -32,7 +32,7 @@ Specialisation beyond the suffix (its own semantics), macro-generated names, Sca
 
 ## Steps
 
-Progress: the class-and-object part of steps 1 and 3 is [`Scala.Names`](../Scala/Names.lean), calibrated on its own space ([track-s.md](track-s.md), "Binary names of classes and objects"); `Lower` is not yet restated over it.
+Progress: the class-and-object part of steps 1 and 3, local and anonymous classes included, is [`Scala.Names`](../Scala/Names.lean), calibrated on its own space ([track-s.md](track-s.md), "Binary names of classes and objects"); `Lower` is not yet restated over it.
 
 
 1. The structured `Name` and `mangle` for Scala 2.12, 2.13 and 3 over what the lowering already emits, restated so the existing 1,348-program calibration is unchanged. One commit; the probe is the check.

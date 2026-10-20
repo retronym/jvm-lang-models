@@ -65,9 +65,9 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 ### Track N: binary names, the rest
 
-**Why.** Every consumer trusts a classfile's names differently: the JVM links by them, MiMa decides privacy by them, Zinc records and hashes by them (the Merkle PoC's mirror bug of 20 October was a binary name, `p.Q$A`, against a stored source name, `p.Q.A`). The class-and-object step is done ([`Scala.Names`](../packages/scala/Scala/Names.lean), [`track-s.md`](../packages/scala/docs/track-s.md)).
+**Why.** Every consumer trusts a classfile's names differently: the JVM links by them, MiMa decides privacy by them, Zinc records and hashes by them (the Merkle PoC's mirror bug of 20 October was a binary name, `p.Q$A`, against a stored source name, `p.Q.A`). Classes and objects, member, local and anonymous, are done ([`Scala.Names`](../packages/scala/Scala/Names.lean), [`track-s.md`](../packages/scala/docs/track-s.md)).
 
-**Done looks like.** The remaining steps of [`track-n-design.md`](../packages/scala/docs/track-n-design.md): `Lower` and Zinc's naming models (`ZincNames`, [`Naming.lean`](../packages/zinc/Zinc/Bridges/Naming.lean)) restated over `Names`; local, anonymous and lambda classes and their numbering; expanded and synthetic member names; Java's names.
+**Done looks like.** The remaining steps of [`track-n-design.md`](../packages/scala/docs/track-n-design.md): `Lower` and Zinc's naming models (`ZincNames`, [`Naming.lean`](../packages/zinc/Zinc/Bridges/Naming.lean)) restated over `Names`; lambda bodies and `EnclosingMethod`; expanded and synthetic member names; Java's names.
 
 ### Scala and Java layer remainders
 

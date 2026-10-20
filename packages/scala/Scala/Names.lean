@@ -3,9 +3,10 @@ import Scala.Md5
 /-!
 # Binary names of classes and objects (Track N)
 
-What a class, trait, case class or object that is not local or anonymous is called on the JVM, in
-scalac 2.12 and 2.13 and dotc 3: the classfile's name, and the class's own `InnerClasses` entry
-(outer class and simple name), which is what `javac` and reflection read back.
+What a class, trait, case class or object is called on the JVM, in scalac 2.12 and 2.13 and dotc 3,
+members and local and anonymous classes alike (lambdas are methods, not classes, in both): the
+classfile's name, and the class's own `InnerClasses` entry (outer class and simple name), which is
+what `javac` and reflection read back.
 
 Neither specification says. JLS §13.1 fixes `Outer$Inner` for a Java member class; the SLS has no
 binary names. The compilers agree on a scheme read from their sources (scalac's
@@ -24,12 +25,17 @@ binary names. The compilers agree on a scheme read from their sources (scalac's
 * an object's module class adds `$`; a top-level object without a companion class also gets a
   mirror class without it; a case class has a module class even when no companion is written;
 * Scala 3 wraps the top-level definitions that cannot stand alone (a `def`, an `implicit class`) in
-  an object `<file>$package`, named after the source file.
+  an object `<file>$package`, named after the source file;
+* a local or anonymous class is numbered from a counter per prefix (`L`, `$anon`) that the whole
+  source file shares, in source order: `A$L$1`, `B$L$2`. A local object takes two numbers and a
+  local case class three. scalac names it after the enclosing class and keeps the number in the
+  `InnerClasses` simple name (`L$1`); dotc lifts it to the enclosing class only if that is static,
+  else to the top-level class, and keeps the source name (`L`).
 
 `namesSpace` enumerates programs; `packages/scala/probes/names.py` compiles them and compares the
 classfiles with `entries`.
 
-Out of scope: local, anonymous and lambda classes and their numbering, members, specialisation.
+Out of scope: members, lambda bodies (methods), `EnclosingMethod`, specialisation.
 -/
 
 namespace Scala.Names
@@ -58,8 +64,8 @@ private def hex4 (n : Nat) : String :=
 /-- `NameTransformer.encode`.
 
 Spec: unspecified SLS §1.1: how an identifier that is not a Java identifier is spelled on the JVM;
-calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/names.py` (314
-programs for Scala 2, 332 for Scala 3). -/
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/names.py` (453
+programs for Scala 2, 471 for Scala 3). -/
 def encode (s : String) : String :=
   String.join (s.toList.map fun c =>
     match opCode c with
@@ -80,8 +86,8 @@ def maxLen : Dialect → Nat
 `$$$$` markers.
 
 Spec: unspecified JLS §13.1: a length limit on binary names, and how a longer one is shortened;
-calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/names.py` (314
-programs for Scala 2, 332 for Scala 3). -/
+calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0 by `packages/scala/probes/names.py` (453
+programs for Scala 2, 471 for Scala 3). -/
 def compact (dl : Dialect) (s : String) : String :=
   if s.length ≤ maxLen dl then s
   else
@@ -95,14 +101,22 @@ def compact (dl : Dialect) (s : String) : String :=
 inductive K | cls | trt | obj | ccls
   deriving DecidableEq, Repr
 
-/-- A class-like definition with its source name (not encoded) and members. -/
+/-- A class-like definition with its source name (not encoded) and body: a member (`mk`), a class
+local to a method body (`loc`), or an anonymous class (`anon`, `new T0 { … }`). A body lists
+members and, for the methods it has, the local and anonymous classes in them, in source order. -/
 inductive Node
   | mk (name : String) (kind : K) (body : List Node)
+  | loc (name : String) (kind : K) (body : List Node)
+  | anon (body : List Node)
   deriving Repr
 
-def Node.name : Node → String | .mk n _ _ => n
-def Node.kind : Node → K | .mk _ k _ => k
-def Node.body : Node → List Node | .mk _ _ b => b
+def Node.name : Node → String | .mk n _ _ | .loc n _ _ => n | .anon _ => ""
+def Node.kind : Node → K | .mk _ k _ | .loc _ k _ => k | .anon _ => .cls
+def Node.body : Node → List Node | .mk _ _ b | .loc _ _ b | .anon b => b
+def Node.isMember : Node → Bool | .mk .. => true | _ => false
+partial def Node.hasAnon : Node → Bool
+  | .anon _ => true
+  | .mk _ _ b | .loc _ _ b => b.any Node.hasAnon
 
 /-- A source file: its package, its file name (without `.scala`) and its definitions. -/
 structure Prog where
@@ -119,6 +133,9 @@ structure Prog where
   only3 : Bool := false
   deriving Repr
 
+/-- The trait anonymous classes extend, added to a program that has one. -/
+def anonBase : String := "T0"
+
 /-- A classfile: its binary name (with `/`), and its own `InnerClasses` entry, outer class and
 simple name, if it is a member class. -/
 structure Entry where
@@ -128,16 +145,16 @@ structure Entry where
 
 /-- The top level of a program, with the package object and Scala 3's wrapper as objects. -/
 def Prog.topNodes (p : Prog) : List Node :=
-  p.tops ++ (p.pkgObj.toList.map fun b => .mk "package" .obj b) ++
+  (if p.tops.any Node.hasAnon then [.mk anonBase .trt []] else []) ++ p.tops ++ (p.pkgObj.toList.map fun b => .mk "package" .obj b) ++
     (if p.topDef || !p.implicits.isEmpty then
       [.mk (p.file ++ "$package") .obj (p.implicits.map fun n => .mk n .cls [])]
      else [])
 
 def pkgPrefix (pkg : List String) : String := String.join (pkg.map (encode · ++ "/"))
 
-/-- Is `n` a companion of a class-like `.mk name _` among `sibs` of the kinds `ks`? -/
+/-- Is there a member `.mk name _` among `sibs` of the kinds `ks`? -/
 def hasSibling (sibs : List Node) (name : String) (ks : List K) : Bool :=
-  sibs.any fun s => s.name == name && ks.contains s.kind
+  sibs.any fun s => s.isMember && s.name == name && ks.contains s.kind
 
 /-- How a file system measures a file name's length against its limit of 255: APFS (macOS, where the
 probe runs) in UTF-16 units, ext4 (Linux) in UTF-8 bytes. The compilers' limits count characters, so
@@ -157,38 +174,118 @@ name (its MD5 and its ends) and then encodes the result, which can be longer tha
 def memberFlat (dl : Dialect) (of n : String) : String :=
   if dl == .s3 then compact dl (of ++ "$" ++ n) else compact dl (of ++ "$" ++ encode n)
 
-/-- The classfiles of a node and its members. `owner`: the enclosing flat name (without the module
-suffix, decoded for Scala 3) and the class its members' `InnerClasses` entries name as outer: its
-binary name, but for a top-level object its companion class or mirror class (scalac's
-`buildNestedInfo`, "Java compatibility"). -/
-partial def nodeEntries (dl : Dialect) (pre : String) (owner : Option (String × String))
-    (sibs : List Node) (n : Node) : List Entry :=
-  let flat := match owner with
-    | none => if dl == .s3 then n.name else encode n.name
-    | some (of, _) => memberFlat dl of n.name
-  let clsBin := pre ++ (if dl == .s3 then encode flat else flat)
-  let modBin := clsBin ++ "$"
-  let inner (mod : Bool) : Option (String × String) :=
-    owner.map fun (_, ob) => (ob, encode n.name ++ (if mod then "$" else ""))
-  let own : List Entry := match n.kind with
-    | .cls | .trt => [{ bin := clsBin, inner := inner false }]
-    | .ccls => [{ bin := clsBin, inner := inner false }] ++
-        (if hasSibling sibs n.name [.obj] then [] else [{ bin := modBin, inner := inner true }])
-    | .obj => [{ bin := modBin, inner := inner true }] ++
-        -- a top-level object without a companion class has a mirror class
-        (if owner.isNone && !hasSibling sibs n.name [.cls, .trt, .ccls] then [{ bin := clsBin }] else [])
-  let outerOfMembers := if n.kind == .obj && owner.isSome then modBin else clsBin
-  own ++ n.body.flatMap (nodeEntries dl pre (some (flat, outerOfMembers)) n.body)
+/-- The counters of fresh names in a compilation unit, by prefix: one per source file, shared by
+every class in it (scalac's `FreshNameCreator` of the unit, dotc's `CompilationUnit.freshNames`). -/
+abbrev Ctr := List (String × Nat)
+
+def fresh (k : String) : StateM Ctr Nat := modifyGet fun c =>
+  let n := (c.lookup k).getD 0 + 1
+  (n, (k, n) :: c.filter (·.1 != k))
+
+/-- Where a node is. `owner`: for a member, the enclosing flat name (without the module suffix,
+decoded for Scala 3) and the class its `InnerClasses` entry names as outer: the enclosing binary
+name, but for a top-level object its companion class or mirror class (scalac's `buildNestedInfo`,
+"Java compatibility"). `enc`: the flat name of the class whose body the node is in, where scalac
+lifts a local class. `lift`: where dotc lifts it (`Dependencies.setLogicOwner`): the enclosing class
+if that is static (top-level, or a member of a static object), else the package, which puts it in
+the top-level class `top`. Capturing an enclosing `this` does not keep it there either: the instance
+becomes a field (probed: `class A { class I { def x = 1; def m = { class L { def y = x } } } }` gives
+`A$L$1`). `static`, `inObj`: whether the class whose body
+the node is in is static, and an object. -/
+structure Ctx where
+  pre : String
+  owner : Option (String × String) := none
+  enc : String := ""
+  lift : String := ""
+  top : String := ""
+  static : Bool := true
+  inObj : Bool := false
+
+/-- The prefix a local or anonymous class is numbered under, and how many numbers it takes:
+a class one; an object two, its module class and the module's term (scalac numbers the class
+first, dotc the term); a case class three, with its companion. Returns the class's number and,
+for an object or a case class, the module class's. -/
+def number (dl : Dialect) (n : String) (k : K) : StateM Ctr (Nat × Nat) := do
+  let key := if dl == .s3 then n else encode n ++ "$"
+  match k, dl with
+  | .cls, _ | .trt, _ => let c ← fresh key; pure (c, 0)
+  | .obj, .s3 => let _ ← fresh key; let m ← fresh key; pure (0, m)
+  | .obj, _ => let m ← fresh key; let _ ← fresh key; pure (0, m)
+  | .ccls, .s3 => let c ← fresh key; let _ ← fresh key; let m ← fresh key; pure (c, m)
+  | .ccls, _ => let c ← fresh key; let m ← fresh key; let _ ← fresh key; pure (c, m)
+
+/-- The classfiles of a node and its body, numbering local and anonymous classes as it goes. -/
+partial def nodeEntries (dl : Dialect) (cx : Ctx) (sibs : List Node) (n : Node) :
+    StateM Ctr (List Entry) := do
+  let binOf (flat : String) := cx.pre ++ (if dl == .s3 then encode flat else flat)
+  let join (of m : String) := compact dl (of ++ "$" ++ m)
+  -- a member is static if it is top-level or in a static object; a local or anonymous class is not
+  let static := match n with
+    | .mk .. => cx.owner.isNone || (cx.inObj && cx.static)
+    | _ => false
+  let body (flat outer : String) (_isLocal : Bool) : StateM Ctr (List Entry) := do
+    let top := if cx.owner.isNone then flat else cx.top
+    let cx' : Ctx := { pre := cx.pre, owner := some (flat, outer), enc := flat,
+                       lift := if static then flat else top, top, static,
+                       inObj := n.kind == .obj && !(match n with | .anon _ => true | _ => false) }
+    let mut out := []
+    for c in n.body do out := out ++ (← nodeEntries dl cx' n.body c)
+    pure out
+  match n with
+  | .mk name k _ =>
+    let flat := match cx.owner with
+      | none => if dl == .s3 then name else encode name
+      | some (of, _) => memberFlat dl of name
+    let clsBin := binOf flat
+    let modBin := clsBin ++ "$"
+    let inner (mod : Bool) : Option (String × String) :=
+      cx.owner.map fun (_, ob) => (ob, encode name ++ (if mod then "$" else ""))
+    let own : List Entry := match k with
+      | .cls | .trt => [{ bin := clsBin, inner := inner false }]
+      | .ccls => [{ bin := clsBin, inner := inner false }] ++
+          (if hasSibling sibs name [.obj] then [] else [{ bin := modBin, inner := inner true }])
+      | .obj => [{ bin := modBin, inner := inner true }] ++
+          -- a top-level object without a companion class has a mirror class
+          (if cx.owner.isNone && !hasSibling sibs name [.cls, .trt, .ccls] then [{ bin := clsBin }] else [])
+    let outerOfMembers := if k == .obj && cx.owner.isSome then modBin else clsBin
+    pure (own ++ (← body flat outerOfMembers false))
+  | .loc name k _ =>
+    -- scalac lifts it to the enclosing class and renames it `name$i`, which is also its
+    -- `InnerClasses` simple name; dotc lifts it to the innermost enclosing class that is not local
+    -- and keeps the source name there
+    let (c, m) ← number dl name k
+    let base := if dl == .s3 then cx.lift else cx.enc
+    let simple (i : Nat) := if dl == .s3 then encode name else encode name ++ s!"${i}"
+    let rename (i : Nat) := if dl == .s3 then name ++ s!"${i}" else encode name ++ s!"${i}"
+    let clsFlat := join base (rename c)
+    let modFlat := join base (rename m)
+    let own : List Entry := match k with
+      | .cls | .trt => [{ bin := binOf clsFlat, inner := some ("-", simple c) }]
+      | .obj => [{ bin := binOf modFlat ++ "$", inner := some ("-", simple m ++ "$") }]
+      | .ccls => [{ bin := binOf clsFlat, inner := some ("-", simple c) },
+                  { bin := binOf modFlat ++ "$", inner := some ("-", simple m ++ "$") }]
+    let selfFlat := if k == .obj then modFlat else clsFlat
+    let selfBin := binOf selfFlat ++ (if k == .obj then "$" else "")
+    pure (own ++ (← body selfFlat selfBin true))
+  | .anon _ =>
+    let i ← fresh (if dl == .s3 then "$anon" else "$anon$")
+    let base := if dl == .s3 then cx.lift else cx.enc
+    let flat := join base s!"$anon${i}"
+    pure ([{ bin := binOf flat, inner := some ("-", "-") }] ++ (← body flat (binOf flat) true))
 
 /-- The classfiles a program compiles to.
 
 Spec: unspecified SLS §9.2: the binary names of classes, traits and objects, members and package
 objects; JLS §13.1 fixes `Outer$Inner` for Java member classes and nothing for Scala's module
 classes, mirror classes or `<file>$package`; calibrated against scalac 2.12.21, 2.13.18 and dotc 3.9.0
-by `packages/scala/probes/names.py` (314 programs for Scala 2, 332 for Scala 3). -/
+by `packages/scala/probes/names.py` (453 programs for Scala 2, 471 for Scala 3). -/
 def entries (dl : Dialect) (p : Prog) : List Entry :=
   let tops := p.topNodes
-  tops.flatMap (nodeEntries dl (pkgPrefix p.pkg) none tops)
+  let go : StateM Ctr (List Entry) := do
+    let mut out := []
+    for t in tops do out := out ++ (← nodeEntries dl { pre := pkgPrefix p.pkg } tops t)
+    pure out
+  (go.run []).1
 
 /-! ## Printing -/
 
@@ -198,13 +295,26 @@ def K.kw : K → String | .cls => "class" | .trt => "trait" | .obj => "object" |
 partial def Node.show (ind : String) : Node → String
   | .mk n k b =>
     let ps := if k == .ccls then "(x: Int)" else ""
-    let body := String.join (b.map (Node.show (ind ++ "  ")))
-    s!"{ind}{k.kw} `{n}`{ps} \{\n{body}{ind}}\n"
+    s!"{ind}{k.kw} `{n}`{ps} \{\n{bodyShow (ind ++ "  ") b}{ind}}\n"
+  | .loc n k b =>
+    let ps := if k == .ccls then "(x: Int)" else ""
+    s!"{ind}{k.kw} `{n}`{ps} \{\n{bodyShow (ind ++ "  ") b}{ind}}\n"
+  | .anon b => s!"{ind}new {anonBase} \{\n{bodyShow (ind ++ "  ") b}{ind}}\n"
+where
+  /-- Members as they are; each local or anonymous class in a method of its own, in order. -/
+  bodyShow (ind : String) (b : List Node) : String :=
+    String.join (b.zipIdx.map fun (c, i) =>
+      if c.isMember then Node.show ind c
+      else match c with
+        -- the anonymous class is the method's value: dotc drops one whose value is discarded
+        | .anon _ => s!"{ind}def local{i}: AnyRef =\n{Node.show (ind ++ "  ") c}"
+        | _ => s!"{ind}def local{i}: Unit = \{\n{Node.show (ind ++ "  ") c}{ind}  ()\n{ind}}\n")
 
 def Prog.show (p : Prog) : String :=
   let wrapIn (pkg : List String) (s : String) : String :=
     pkg.foldr (fun q acc => s!"package `{q}` \{\n{acc}}\n") s
-  let tops := String.join (p.tops.map (Node.show "  ")) ++
+  let tops := (if p.tops.any Node.hasAnon then s!"  trait {anonBase}\n" else "") ++
+    String.join (p.tops.map (Node.show "  ")) ++
     (if p.topDef then "  def topDef: Int = 1\n" else "") ++
     String.join (p.implicits.map fun n => s!"  implicit class `{n}`(val x: Int)\n")
   let po := match p.pkgObj, p.pkg.getLast? with
@@ -303,12 +413,42 @@ def s3TopSpace : List Prog :=
      { pkg, file, implicits := ["I"], only3 := true },
      ({ pkg, file, topDef := true, implicits := ["I"], tops := [.mk "C" .cls []], only3 := true } : Prog)]
 
+/-- Local and anonymous classes. Every sequence of three of a local class, object, case class or
+trait named `L` and an anonymous class, two in a class `A` and one in an object `B` of the same
+file (the counters are the file's); and nestings: locals in locals, in anonymous classes, in members
+of locals, member classes of locals, operator names, a companion pair's two halves. -/
+def localSpace : List Prog :=
+  let items : List Node := [.loc "L" .cls [], .loc "L" .obj [], .loc "L" .ccls [], .loc "L" .trt [], .anon []]
+  let seqs := items.flatMap fun a => items.flatMap fun b => items.map fun c =>
+    ({ pkg := ["p"], tops := [.mk "A" .cls [a, b], .mk "B" .obj [c]] } : Prog)
+  let nested : List (List Node) :=
+    [ [.mk "A" .cls [.loc "L" .cls [.loc "L" .cls []]]],
+      [.mk "A" .cls [.loc "L" .cls [.mk "I" .cls [.loc "Q" .cls []]]]],
+      [.mk "A" .cls [.anon [.loc "Q" .cls []]]],
+      [.mk "A" .cls [.anon [.mk "I" .cls []]]],
+      [.mk "A" .cls [.mk "I" .cls [.loc "L" .cls []], .loc "L" .cls []]],
+      [.mk "A" .cls [.loc "O" .obj [.mk "I" .cls []]]],
+      [.mk "A" .cls [.loc "L" .ccls [], .loc "L" .cls []]],
+      [.mk "O" .obj [.loc "L" .cls [.loc "M" .obj []]]],
+      [.mk "T" .trt [.anon [.anon []]]],
+      [.mk "A" .cls [.loc "L" .cls [.anon [.loc "L" .cls []]]]],
+      [.mk "A" .cls [.loc "+" .cls [], .loc "a b" .obj []]],
+      [.mk "A" .cls [.loc "L" .cls []], .mk "A" .obj [.loc "L" .cls []]],
+      [.mk "A" .cls [.mk "I" .obj [.anon []]]],
+      [.mk "O" .obj [.mk "I" .cls [.loc "L" .trt [.loc "L" .cls []]]]] ]
+  seqs ++ nested.map fun tops => { pkg := ["p"], tops }
+
 /-- Every program, with its family. -/
 def namesSpace : List (String × Prog) :=
   (nestSpace.map ("nest", ·)) ++ (pkgObjSpace.map ("pkgobj", ·)) ++ (encodeSpace.map ("encode", ·)) ++
-    (longSpace.map ("long", ·)) ++ (s3TopSpace.map ("s3top", ·))
+    (longSpace.map ("long", ·)) ++ (s3TopSpace.map ("s3top", ·)) ++ (localSpace.map ("local", ·))
 
 #guard encode "a b" == "a$u0020b"
+-- the probe's first program: a file's counters run across its classes; a local object takes two
+#guard (entries .s213 { pkg := ["p"], tops := [.mk "A" .cls [.loc "L" .cls [], .loc "O" .obj []],
+    .mk "B" .cls [.loc "L" .cls []]] }).map (·.bin) == ["p/A", "p/A$L$1", "p/A$O$1$", "p/B", "p/B$L$2"]
+#guard (entries .s3 { pkg := ["p"], tops := [.mk "A" .cls [.loc "L" .cls [], .loc "O" .obj []],
+    .mk "B" .cls [.loc "L" .cls []]] }).map (·.bin) == ["p/A", "p/A$L$1", "p/A$O$2$", "p/B", "p/B$L$2"]
 #guard (longSpace.getLast?.map fun p => (entries .s212 p).any (unwritable .ext4 ·.bin)) == some true
 #guard (longSpace.getLast?.map fun p => (entries .s212 p).any (unwritable .apfs ·.bin)) == some false
 #guard encode "::" == "$colon$colon"
