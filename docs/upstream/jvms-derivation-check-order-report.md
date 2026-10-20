@@ -1,6 +1,6 @@
 # JBS submission: JVMS §5.3.5 loading-check order
 
-The text for [bugreport.java.com](https://bugreport.java.com/bugreport/), as entered on 13 October 2026. The submission failed with the site's "Unexpected outage" page (reference error `0.4ca82d17.1791844236.33a0747`); resubmit when the form works, then replace this file with a link to the JBS issue. Background: [`jvms-derivation-check-order.md`](jvms-derivation-check-order.md).
+The text for [bugreport.java.com](https://bugreport.java.com/bugreport/), as entered on 13 October 2026. The submission failed with the site's "Unexpected outage" page (reference error `0.4ca82d17.1791844236.33a0747`); resubmit when the form works, then replace this file with a link to the JBS issue. Background: [`jvms-derivation-check-order.md`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/docs/upstream/jvms-derivation-check-order.md).
 
 **Synopsis.** When a class has a inaccessible super class and names a class as an interface, the latter error is reported, JVMS §5.3.5 say accessibility error is checked first
 
@@ -16,7 +16,7 @@ Note these changes require separate compilation, javac rejects the program if jo
 
 Is the step order of §5.3.5 normative? If it is, HotSpot does not conform; if not, the JVMS could say that the order of these checks is unspecified, as it does for when resolution happens (§5.4).
 
-**Steps to reproduce.** The script in [`jvms-derivation-check-order.md`](jvms-derivation-check-order.md#steps-to-reproduce), run as `./repro.sh $JDK_HOME`.
+**Steps to reproduce.** The script in [`jvms-derivation-check-order.md`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/docs/upstream/jvms-derivation-check-order.md#steps-to-reproduce), run as `./repro.sh $JDK_HOME`.
 
 **Expected result.**
 

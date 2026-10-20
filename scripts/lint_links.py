@@ -21,16 +21,36 @@ Checks every `.md` file outside `.lake/` and fails on:
   written and linked to the file without a line.
 
 With `--fix` it rewrites those mentions into links in place, relative to the file, and reports
-what it could not fix. Fenced code blocks, inline code that is not a path, and existing links are
+what it could not fix. The drafts in `docs/upstream/` (not its index) are pasted into issue
+trackers, so there links are absolute, to this repository on GitHub at the commit checked out when
+`--fix` ran (`REPO_URL`); a declaration's absolute link is accepted at any commit, its line being
+that commit's. Fenced code blocks, inline code that is not a path, and existing links are
 left alone. A name that matches several files (`Lower.lean`) is not linked.
 
 Usage: python3 -I scripts/lint_links.py [--fix]
 """
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_URL = 'https://github.com/retronym/jvm-lang-models/blob/'
+_rev = None
+
+
+def standalone(md):
+    """Is `md` a draft read outside the repository, whose links must be absolute?"""
+    return md.startswith('docs/upstream/') and os.path.basename(md) != 'README.md'
+
+
+def rev():
+    """The commit absolute links point at: the one checked out."""
+    global _rev
+    if _rev is None:
+        _rev = subprocess.run(['git', 'rev-parse', '--short=10', 'HEAD'], cwd=ROOT,
+                              capture_output=True, text=True).stdout.strip() or 'main'
+    return _rev
 
 SHORT = {
     'talks': 'retronym/talks',
@@ -96,8 +116,17 @@ def resolve(md, target):
 
 
 def rel(md, path):
+    if standalone(md):
+        return REPO_URL + rev() + '/' + path
     r = os.path.relpath(path, os.path.dirname(md) or '.')
     return r
+
+
+def repo_path(href):
+    """The repository path of an absolute link to this repository, or None."""
+    if not href.startswith(REPO_URL):
+        return None
+    return href[len(REPO_URL):].split('/', 1)[1].split('#')[0]
 
 
 DECL = re.compile(
@@ -225,6 +254,9 @@ def process(md, text, fix):
             if t is None or not href.split('#')[0].endswith('.lean'):
                 return m.group(0)
             want = f'{rel(md, t[0])}#L{t[1]}'
+            # an absolute link pins a commit: its line is that commit's, so only the file is checked
+            if standalone(md) and repo_path(href) == t[0]:
+                return m.group(0)
             if href != want:
                 problems.append(f'{md}:{n}: stale link to {name} ({href}, now {want})')
                 return f'[`{name}`]({want})'

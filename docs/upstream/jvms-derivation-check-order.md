@@ -4,10 +4,10 @@ Draft, not posted. Venue: OpenJDK JBS, component hotspot/runtime (or specificati
 
 **JVMS 25 §5.3.5.** Deriving a class `C` resolves its direct superclass by §5.4.3.1 (step 3), whose last step is access control (§5.4.4); only then does it check that the superclass is not an interface, not final and permits `C`; and only then (step 4) does it resolve and check the direct superinterfaces. So when a class breaks two of these, the specification says which exception is thrown.
 
-**HotSpot 21, 25 and 27** check in another order: the superinterfaces first, and the superclass's finality before its accessibility. Two classfiles, rendered with the Classfile API by [`packages/jvm/probes`](../../packages/jvm/probes):
+**HotSpot 21, 25 and 27** check in another order: the superinterfaces first, and the superclass's finality before its accessibility. Two classfiles, rendered with the Classfile API by [`packages/jvm/probes`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/packages/jvm/probes):
 
-- `X extends p1.A`, where `p1.A` is final and package-private, `X` in another package: §5.3.5 gives `IllegalAccessError` (the superclass's resolution fails its access check); HotSpot throws `IncompatibleClassChangeError: class X cannot inherit from final class p1.A` ([`Catalogue.finalSuperInaccessible`](../../packages/jvm/Jvm/Catalogue.lean#L677)).
-- `X extends p1.A implements B`, where `p1.A` is package-private and `B` is a class: §5.3.5 gives `IllegalAccessError`; HotSpot throws `IncompatibleClassChangeError: class X can not implement B, because it is not an interface` ([`Catalogue.ifaceNotIfaceSuperInaccessible`](../../packages/jvm/Jvm/Catalogue.lean#L689)).
+- `X extends p1.A`, where `p1.A` is final and package-private, `X` in another package: §5.3.5 gives `IllegalAccessError` (the superclass's resolution fails its access check); HotSpot throws `IncompatibleClassChangeError: class X cannot inherit from final class p1.A` ([`Catalogue.finalSuperInaccessible`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/packages/jvm/Jvm/Catalogue.lean#L677)).
+- `X extends p1.A implements B`, where `p1.A` is package-private and `B` is a class: §5.3.5 gives `IllegalAccessError`; HotSpot throws `IncompatibleClassChangeError: class X can not implement B, because it is not an interface` ([`Catalogue.ifaceNotIfaceSuperInaccessible`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/packages/jvm/Jvm/Catalogue.lean#L689)).
 
 Both are reached with javac alone, by recompiling the library after the client: `X1 extends p1.A` and `X2 extends p1.A implements B` are compiled against a public `p1.A` and an interface `B`; then `p1.A` becomes package-private and final, and `B` a class. `X3 extends p1.C`, where `p1.C` only becomes package-private, is the control: the access check exists and throws `IllegalAccessError` when it is the only failure.
 
@@ -77,4 +77,4 @@ X3: java.lang.IllegalAccessError: class X3 cannot access its superclass p1.C (X3
 
 By the step order of §5.3.5, `X1` and `X2` would throw `IllegalAccessError`, as `X3` does. The question for the report: is the step order of §5.3.5 normative? If it is, HotSpot does not conform; if not, the JVMS could say that the order of these checks is unspecified, as it does for when resolution happens (§5.4).
 
-The model follows HotSpot ([`Jvm.loadK`](../../packages/jvm/Jvm/Link.lean#L339)), and the [specification ledger](../specification-ledger.md) records the disagreement.
+The model follows HotSpot ([`Jvm.loadK`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/packages/jvm/Jvm/Link.lean#L339)), and the [specification ledger](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/docs/specification-ledger.md) records the disagreement.

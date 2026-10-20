@@ -28,4 +28,4 @@ Without the F-bound (`class D[A]`) scalac reports the two errors and exits norma
 
 No crash. Scala 3.9.0 compiles the program, so the cyclic reference itself is spurious ([scala/bug#8649](https://github.com/scala/bug/issues/8649) is the open report for that family, labelled "fixed in Scala 3"). Only the F-bound makes the difference between an error and a crash, which points at the check of the bound `C { def x: Int } <: D[C { def x: Int }]`, made while `C`'s parents are being typed, as where the `TypeError` escapes; not traced further.
 
-Found by the cycle battery of the jvm-lang-models Track L ([`battery.py`](../../packages/scala/probes/forcing/battery.py), `fb-parent-refines-self`).
+Found by the cycle battery of the jvm-lang-models Track L ([`battery.py`](https://github.com/retronym/jvm-lang-models/blob/a24eb574fc/packages/scala/probes/forcing/battery.py), `fb-parent-refines-self`).
