@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  * directories), {@code out} (default WORK/id). For run: {@code classpath}, {@code main} (default Main),
  * {@code args}, {@code timeout} (ms, default 10000).
  *
- * <p>Response: {@code id}, {@code ok}, {@code ms}; for compile {@code diagnostics}, {@code out}, {@code classes}
+ * <p>Response: {@code id}, {@code ok}, {@code ms}; for compile {@code diagnostics}, {@code out}, {@code classes}, {@code stdout} (what the compiler printed, if anything)
  * (class name to digest), {@code fresh}; for run {@code stdout}, {@code stderr}, {@code exception};
  * {@code crash} when the server itself threw. A run that times out answers {@code timeout: true} and the server
  * exits, since its thread cannot be stopped; the client restarts it.
@@ -161,7 +161,17 @@ public final class Server {
       sinceFresh = 0;
     }
     List<Map<String, Object>> diags = new ArrayList<>();
-    boolean fresh = backend.compile(sources, Json.strings(req.get("options")), cp, dest, diags);
+    // what the compiler prints itself (scalac's -Vprint, -Vtyper), as the response's stdout
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    System.out.flush(); System.err.flush();
+    out.target = bout; err.target = bout;
+    boolean fresh;
+    try {
+      fresh = backend.compile(sources, Json.strings(req.get("options")), cp, dest, diags);
+    } finally {
+      System.out.flush(); System.err.flush();
+      out.target = null; err.target = null;
+    }
     if (cp.isEmpty()) {
       if (fresh) { seen.clear(); sinceFresh = 0; }
       seen.addAll(tops);
@@ -174,6 +184,7 @@ public final class Server {
     resp.put("diagnostics", diags);
     resp.put("out", dest.toString());
     resp.put("classes", digests(dest));
+    if (bout.size() > 0) resp.put("stdout", bout.toString("UTF-8"));
   }
 
   private List<Path> classpath(Map<String, Object> req) {

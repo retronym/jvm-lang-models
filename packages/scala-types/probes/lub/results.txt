@@ -1,0 +1,825 @@
+== traits: two traits mixed in opposite orders (the scala/scala#11291 example); names sort against declaration order
+   trait Zed
+   trait Abe
+   class S extends Zed with Abe
+   class T extends Abe with Zed
+   class V extends Zed with Abe
+   object H { def s: S = new S; def t: T = new T; def v: V = new V }
+   values: s = H.s, t = H.t, v = H.v
+   if_s_t                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   if_s_v                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   if_t_s                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Abe & Zed
+   if_t_v                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Abe & Zed
+   if_v_s                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   if_v_t                 2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   assoc_s_t_v            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   assoc_s_v_t            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   assoc_t_s_v            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Abe & Zed
+   assoc_t_v_s            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Abe & Zed
+   assoc_v_s_t            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   assoc_v_t_s            2.12: Zed with Abe  [separate: Abe with Zed]   2.13: =   3: Zed & Abe
+   erasure 2.12 absorb_s_t: joint ()LZed;, separate ()LAbe;
+   erasure 2.12 absorb_s_v: joint ()LZed;, separate ()LAbe;
+   erasure 2.12 absorb_t_s: joint ()LZed;, separate ()LAbe;
+   erasure 2.12: 36 of 36 vals erase differently, joint against separate
+   erasure 2.13 absorb_s_t: joint ()LZed;, separate ()LAbe;
+   erasure 2.13 absorb_s_v: joint ()LZed;, separate ()LAbe;
+   erasure 2.13 absorb_t_s: joint ()LZed;, separate ()LAbe;
+   erasure 2.13: 36 of 36 vals erase differently, joint against separate
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm order 4, same 2; perm order 3; assoc same 6; absorb same 6
+      comm if(s,t): order: Zed & Abe  |  Abe & Zed
+      comm list2(s,t): order: List[Zed & Abe]  |  List[Abe & Zed]
+      comm if(t,v): order: Abe & Zed  |  Zed & Abe
+      perm list3(s,t,v): order: List[Abe & Zed]  |  List[Zed & Abe]
+      perm match(s,t,v): order: Abe & Zed  |  Zed & Abe
+      perm assoc(s,t,v): order: Abe & Zed  |  Zed & Abe
+   3 separate: comm order 4, same 2; perm order 3; assoc same 6; absorb same 6
+      comm if(s,t): order: Zed & Abe  |  Abe & Zed
+      comm list2(s,t): order: List[Zed & Abe]  |  List[Abe & Zed]
+      comm if(t,v): order: Abe & Zed  |  Zed & Abe
+      perm list3(s,t,v): order: List[Abe & Zed]  |  List[Zed & Abe]
+      perm match(s,t,v): order: Abe & Zed  |  Zed & Abe
+      perm assoc(s,t,v): order: Abe & Zed  |  Zed & Abe
+
+== three: three traits of equal depth, linearized in three different orders
+   trait P1
+   trait P2
+   trait P3
+   class X extends P1 with P2 with P3
+   class Y extends P3 with P2 with P1
+   class W extends P2 with P3 with P1
+   object H { def x: X = new X; def y: Y = new Y; def w: W = new W }
+   values: x = H.x, y = H.y, w = H.w
+   if_x_y                 2.12: P1 with P2 with P3   2.13: =   3: P1 & P2 & P3
+   if_x_w                 2.12: P1 with P2 with P3   2.13: =   3: P1 & P2 & P3
+   if_y_x                 2.12: P1 with P2 with P3   2.13: =   3: P3 & P2 & P1
+   if_y_w                 2.12: P1 with P2 with P3   2.13: =   3: P3 & P2 & P1
+   if_w_x                 2.12: P1 with P2 with P3   2.13: =   3: P2 & P3 & P1
+   if_w_y                 2.12: P1 with P2 with P3   2.13: =   3: P2 & P3 & P1
+   assoc_x_y_w            2.12: P1 with P2 with P3   2.13: =   3: P1 & P2 & P3
+   assoc_x_w_y            2.12: P1 with P2 with P3   2.13: =   3: P1 & P2 & P3
+   assoc_y_x_w            2.12: P1 with P2 with P3   2.13: =   3: P3 & P2 & P1
+   assoc_y_w_x            2.12: P1 with P2 with P3   2.13: =   3: P3 & P2 & P1
+   assoc_w_x_y            2.12: P1 with P2 with P3   2.13: =   3: P2 & P3 & P1
+   assoc_w_y_x            2.12: P1 with P2 with P3   2.13: =   3: P2 & P3 & P1
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm order 6; perm order 3; assoc same 6; absorb same 6
+      comm if(x,y): order: P1 & P2 & P3  |  P3 & P2 & P1
+      comm list2(x,y): order: List[P1 & P2 & P3]  |  List[P3 & P2 & P1]
+      comm if(x,w): order: P1 & P2 & P3  |  P2 & P3 & P1
+      perm list3(x,y,w): order: List[P1 & P2 & P3]  |  List[P2 & P3 & P1]  |  List[P3 & P2 & P1]
+      perm match(x,y,w): order: P1 & P2 & P3  |  P2 & P3 & P1  |  P3 & P2 & P1
+      perm assoc(x,y,w): order: P1 & P2 & P3  |  P2 & P3 & P1  |  P3 & P2 & P1
+   3 separate: comm order 6; perm order 3; assoc same 6; absorb same 6
+      comm if(x,y): order: P1 & P2 & P3  |  P3 & P2 & P1
+      comm list2(x,y): order: List[P1 & P2 & P3]  |  List[P3 & P2 & P1]
+      comm if(x,w): order: P1 & P2 & P3  |  P2 & P3 & P1
+      perm list3(x,y,w): order: List[P1 & P2 & P3]  |  List[P2 & P3 & P1]  |  List[P3 & P2 & P1]
+      perm match(x,y,w): order: P1 & P2 & P3  |  P2 & P3 & P1  |  P3 & P2 & P1
+      perm assoc(x,y,w): order: P1 & P2 & P3  |  P2 & P3 & P1  |  P3 & P2 & P1
+
+== cases: case classes and a case object: Product with Serializable joins a sealed parent
+   sealed trait Shape
+   case class Circle(r: Int) extends Shape
+   case class Square(s: Int) extends Shape
+   case object Point extends Shape
+   case class Other(x: Int)
+   object H { def ci: Circle = Circle(1); def sq: Square = Square(1); def ot: Other = Other(1) }
+   values: ci = H.ci, sq = H.sq, pt = Point, ot = H.ot
+   if_ci_sq               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_ci_pt               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_ci_ot               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Circle | Other
+   if_sq_ci               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_sq_pt               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_sq_ot               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Square | Other
+   if_pt_ci               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_pt_sq               2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   if_pt_ot               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Point | Other
+   if_ot_ci               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Circle
+   if_ot_sq               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Square
+   if_ot_pt               2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Point
+   assoc_ci_sq_pt         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_ci_pt_sq         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_sq_ci_pt         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_sq_pt_ci         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_pt_ci_sq         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_pt_sq_ci         2.12: Product with Serializable with Shape   2.13: Product with Shape with java.io.Serializable   3: Shape
+   assoc_ci_sq_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_ci_ot_sq         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Circle | Other | Square
+   assoc_sq_ci_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_sq_ot_ci         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Square | Other | Circle
+   assoc_ot_ci_sq         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Circle | Square
+   assoc_ot_sq_ci         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Square | Circle
+   assoc_ci_pt_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_ci_ot_pt         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Circle | Other | Point
+   assoc_pt_ci_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_pt_ot_ci         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Point | Other | Circle
+   assoc_ot_ci_pt         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Circle | Point
+   assoc_ot_pt_ci         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Point | Circle
+   assoc_sq_pt_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_sq_ot_pt         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Square | Other | Point
+   assoc_pt_sq_ot         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Shape | Other
+   assoc_pt_ot_sq         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Point | Other | Square
+   assoc_ot_sq_pt         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Square | Point
+   assoc_ot_pt_sq         2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Other | Point | Square
+   2.12 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.12 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   3 joint: comm order 6, same 6; perm differs 3, order 6, same 3; assoc differs 6, same 18; absorb same 12
+      comm if(ci,ot): order: Circle | Other  |  Other | Circle
+      comm list2(ci,ot): order: List[Circle | Other]  |  List[Other | Circle]
+      comm if(sq,ot): order: Square | Other  |  Other | Square
+      perm list3(ci,sq,ot): order: List[Circle | Other | Square]  |  List[Circle | Square | Other]  |  List[Other | Circle | Square]  |  List[Other | Square | Circle]  |  List[Square | Circle | Other]  |  List[Square | Other | Circle]
+      perm match(ci,sq,ot): order: Circle | Other | Square  |  Circle | Square | Other  |  Other | Circle | Square  |  Other | Square | Circle  |  Square | Circle | Other  |  Square | Other | Circle
+      perm assoc(ci,sq,ot): differs: Circle | Other | Square  |  Other | Circle | Square  |  Other | Square | Circle  |  Shape | Other  |  Square | Other | Circle
+      assoc (ci⊔sq)⊔ot vs List: differs: Shape | Other  |  Circle | Square | Other
+      assoc (sq⊔ci)⊔ot vs List: differs: Shape | Other  |  Square | Circle | Other
+      assoc (ci⊔pt)⊔ot vs List: differs: Shape | Other  |  Circle | Point | Other
+   3 separate: comm order 6, same 6; perm differs 3, order 6, same 3; assoc differs 6, same 18; absorb same 12
+      comm if(ci,ot): order: Circle | Other  |  Other | Circle
+      comm list2(ci,ot): order: List[Circle | Other]  |  List[Other | Circle]
+      comm if(sq,ot): order: Square | Other  |  Other | Square
+      perm list3(ci,sq,ot): order: List[Circle | Other | Square]  |  List[Circle | Square | Other]  |  List[Other | Circle | Square]  |  List[Other | Square | Circle]  |  List[Square | Circle | Other]  |  List[Square | Other | Circle]
+      perm match(ci,sq,ot): order: Circle | Other | Square  |  Circle | Square | Other  |  Other | Circle | Square  |  Other | Square | Circle  |  Square | Circle | Other  |  Square | Other | Circle
+      perm assoc(ci,sq,ot): differs: Circle | Other | Square  |  Other | Circle | Square  |  Other | Square | Circle  |  Shape | Other  |  Square | Other | Circle
+      assoc (ci⊔sq)⊔ot vs List: differs: Shape | Other  |  Circle | Square | Other
+      assoc (sq⊔ci)⊔ot vs List: differs: Shape | Other  |  Square | Circle | Other
+      assoc (ci⊔pt)⊔ot vs List: differs: Shape | Other  |  Circle | Point | Other
+
+== fbound: F-bounded: the join of Fa and Fc is an infinite type, truncated by depth
+   trait Fb[T <: Fb[T]]
+   class Fa extends Fb[Fa]
+   class Fc extends Fb[Fc]
+   class Fd extends Fb[Fd]
+   object H { def a: Fa = new Fa; def c: Fc = new Fc; def d: Fd = new Fd }
+   values: a = H.a, c = H.c, d = H.d
+   if_a_c                 2.12: Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]   2.13: =   3: ?
+   if_a_d                 2.12: Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]   2.13: =   3: ?
+   if_c_a                 2.12: Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]   2.13: =   3: ?
+   if_c_d                 2.12: Fb[_ >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object]]   2.13: =   3: ?
+   if_d_a                 2.12: Fb[_ >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object]]   2.13: =   3: ?
+   if_d_c                 2.12: Fb[_ >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object]]   2.13: =   3: ?
+   assoc_a_c_d            2.12: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }   2.13: =   3: ?
+   assoc_a_d_c            2.12: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }   2.13: =   3: ?
+   assoc_c_a_d            2.12: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }   2.13: =   3: ?
+   assoc_c_d_a            2.12: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]; type _1 >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object] }   2.13: =   3: ?
+   assoc_d_a_c            2.12: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]; type _1 >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object] }   2.13: =   3: ?
+   assoc_d_c_a            2.12: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]; type _1 >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object] }   2.13: =   3: ?
+   2.12 joint: comm order 6; perm differs 1, order 2; assoc differs 6; absorb differs 6
+      comm if(a,c): order: Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFc;>;>;]
+      comm list2(a,c): order: List[Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]]  |  List[Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]]  [erasure ()Lscala/collection/immutable/List<LFb<+LFb<-LFc;>;>;>; vs ()Lscala/collection/immutable/List<LFb<+LFb<-LFa;>;>;>;]
+      comm if(a,d): order: Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]  |  Fb[_ >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFd;>;>;]
+      perm list3(a,c,d): order: List[Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]]  |  List[Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]]  |  List[Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]]  |  List[Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]]  |  List[Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]]  |  List[…
+      perm match(a,c,d): order: Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]  |  Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]  |  Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ …
+      perm assoc(a,c,d): differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]; type _1 >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]; type _1 >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa…
+      assoc (a⊔c)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]]
+      assoc (a⊔d)⊔c vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]
+      assoc (c⊔a)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]
+      absorb (a⊔c)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fc <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]
+      absorb (a⊔d)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fd <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]
+      absorb (c⊔a)⊔c: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fc with Fa <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]
+   2.12 separate: comm order 6; perm differs 1, order 2; assoc differs 6; absorb differs 6
+      comm if(a,c): order: Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFc;>;>;]
+      comm list2(a,c): order: List[Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]]  |  List[Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]]  [erasure ()Lscala/collection/immutable/List<LFb<+LFb<-LFc;>;>;>; vs ()Lscala/collection/immutable/List<LFb<+LFb<-LFa;>;>;>;]
+      comm if(a,d): order: Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]  |  Fb[_ >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFd;>;>;]
+      perm list3(a,c,d): order: List[Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]]  |  List[Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]]  |  List[Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]]  |  List[Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]]  |  List[Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]]  |  List[…
+      perm match(a,c,d): order: Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]  |  Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]  |  Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ …
+      perm assoc(a,c,d): differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]; type _1 >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]; type _1 >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa…
+      assoc (a⊔c)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]]
+      assoc (a⊔d)⊔c vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]
+      assoc (c⊔a)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]
+      absorb (a⊔c)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fc <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]
+      absorb (a⊔d)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fd <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]
+      absorb (c⊔a)⊔c: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fc with Fa <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]
+   2.13 joint: comm order 6; perm differs 1, order 2; assoc differs 6; absorb differs 6
+      comm if(a,c): order: Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFc;>;>;]
+      comm list2(a,c): order: List[Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]]  |  List[Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]]  [erasure ()Lscala/collection/immutable/List<LFb<+LFb<-LFc;>;>;>; vs ()Lscala/collection/immutable/List<LFb<+LFb<-LFa;>;>;>;]
+      comm if(a,d): order: Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]  |  Fb[_ >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFd;>;>;]
+      perm list3(a,c,d): order: List[Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]]  |  List[Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]]  |  List[Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]]  |  List[Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]]  |  List[Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]]  |  List[…
+      perm match(a,c,d): order: Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]  |  Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]  |  Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ …
+      perm assoc(a,c,d): differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]; type _1 >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]; type _1 >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa…
+      assoc (a⊔c)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]]
+      assoc (a⊔d)⊔c vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]
+      assoc (c⊔a)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]
+      absorb (a⊔c)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fc <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]
+      absorb (a⊔d)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fd <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]
+      absorb (c⊔a)⊔c: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fc with Fa <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]
+   2.13 separate: comm order 6; perm differs 1, order 2; assoc differs 6; absorb differs 6
+      comm if(a,c): order: Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFc;>;>;]
+      comm list2(a,c): order: List[Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]]  |  List[Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]]  [erasure ()Lscala/collection/immutable/List<LFb<+LFb<-LFc;>;>;>; vs ()Lscala/collection/immutable/List<LFb<+LFb<-LFa;>;>;>;]
+      comm if(a,d): order: Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]  |  Fb[_ >: Fd with Fa <: Fb[_ >: Fd with Fa <: Object]]  [erasure ()LFb<+LFb<-LFa;>;>; vs ()LFb<+LFb<-LFd;>;>;]
+      perm list3(a,c,d): order: List[Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]]  |  List[Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]]  |  List[Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]]  |  List[Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]]  |  List[Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]]  |  List[…
+      perm match(a,c,d): order: Fb[_ >: Fa with Fc with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]]  |  Fb[_ >: Fa with Fd with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]]  |  Fb[_ >: Fc with Fa with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]]  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ …
+      perm assoc(a,c,d): differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]; type _1 >: Fc with Fd <: Fb[_ >: Fc with Fd <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]; type _1 >: Fd with Fc <: Fb[_ >: Fd with Fc <: Object] }  |  Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa…
+      assoc (a⊔c)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fa with Fc with Fd <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fd with Fc with Fa <: Fb[_ >: Fd with Fc with Fa <: Object]]
+      assoc (a⊔d)⊔c vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fa with Fd with Fc <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fc with Fd with Fa <: Fb[_ >: Fc with Fd with Fa <: Object]]
+      assoc (c⊔a)⊔d vs List: differs: Fb[_1] forSome { type _1 >: _1 with Fd <: Fb[_ >: Fc with Fa with Fd <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fd with Fa with Fc <: Fb[_ >: Fd with Fa with Fc <: Object]]
+      absorb (a⊔c)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fc <: Object]; type _1 >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object] }  |  Fb[_ >: Fa with Fc <: Fb[_ >: Fa with Fc <: Object]]
+      absorb (a⊔d)⊔a: differs: Fb[_1] forSome { type _1 >: _1 with Fa <: Fb[_ >: Fa with Fd <: Object]; type _1 >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object] }  |  Fb[_ >: Fa with Fd <: Fb[_ >: Fa with Fd <: Object]]
+      absorb (c⊔a)⊔c: differs: Fb[_1] forSome { type _1 >: _1 with Fc <: Fb[_ >: Fc with Fa <: Object]; type _1 >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object] }  |  Fb[_ >: Fc with Fa <: Fb[_ >: Fc with Fa <: Object]]
+   3 joint: ERROR ['Type argument  >: lub_fbound_joint.Fa & lub_fbound_joint.Fc <: lub_fbound_joint.Fa | lub_fbound_joint.Fc does not overlap with upper bound lub_fbound_joint.Fb[lub_fbound_joint.Fb[? >: lub_fbound_joint.Fa & lub_fbound_joint.Fc <: lub_fbound_joint.Fa | lub_fbound_joint.Fc]#T] in inferred type lub_fbound_joint.Fb[? >: lub_fbound_joint.Fa & lub_fbound_joint.Fc <: lub_fbound_joint.Fa | lub_fbound_joint.Fc]']
+   3 separate: ERROR ['Type argument  >: lub_fbound_separate.Fa & lub_fbound_separate.Fc <: lub_fbound_separate.Fa | lub_fbound_separate.Fc does not overlap with upper bound lub_fbound_separate.Fb[lub_fbound_separate.Fb[? >: lub_fbound_separate.Fa & lub_fbound_separate.Fc <: lub_fbound_separate.Fa | lub_fbound_separate.Fc]#T] in inferred type lub_fbound_separate.Fb[? >: lub_fbound_separate.Fa & lub_fbound_separate.Fc <: lub_fbound_separate.Fa | lub_fbound_separate.Fc]']
+
+== fboundco: F-bounded with a covariant parameter: the join is Fb[Fb[...]], truncated by depth
+   trait Fb[+T <: Fb[T]]
+   class Fa extends Fb[Fa]
+   class Fc extends Fb[Fc]
+   class Fd extends Fb[Fd]
+   object H { def a: Fa = new Fa; def c: Fc = new Fc; def d: Fd = new Fd }
+   values: a = H.a, c = H.c, d = H.d
+   if_a_c                 2.12: ?   2.13: =   3: Fb[Fa | Fc]
+   if_a_d                 2.12: ?   2.13: =   3: Fb[Fa | Fd]
+   if_c_a                 2.12: ?   2.13: =   3: Fb[Fc | Fa]
+   if_c_d                 2.12: ?   2.13: =   3: Fb[Fc | Fd]
+   if_d_a                 2.12: ?   2.13: =   3: Fb[Fd | Fa]
+   if_d_c                 2.12: ?   2.13: =   3: Fb[Fd | Fc]
+   assoc_a_c_d            2.12: ?   2.13: =   3: Fb[Fa | Fc | Fd]
+   assoc_a_d_c            2.12: ?   2.13: =   3: Fb[Fa | Fd | Fc]
+   assoc_c_a_d            2.12: ?   2.13: =   3: Fb[Fc | Fa | Fd]
+   assoc_c_d_a            2.12: ?   2.13: =   3: Fb[Fc | Fd | Fa]
+   assoc_d_a_c            2.12: ?   2.13: =   3: Fb[Fd | Fa | Fc]
+   assoc_d_c_a            2.12: ?   2.13: =   3: Fb[Fd | Fc | Fa]
+   2.12 joint: ERROR ["type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]", "type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]", "type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]"]
+   2.12 separate: ERROR ["type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]", "type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]", "type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]"]
+   2.13 joint: ERROR ["type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]", "type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]", "type arguments [lub_fboundco_joint.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_joint.Fb[T]]"]
+   2.13 separate: ERROR ["type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]", "type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]", "type arguments [lub_fboundco_separate.Fb[Object]] do not conform to trait Fb's type parameter bounds [+T <: lub_fboundco_separate.Fb[T]]"]
+   3 joint: comm order 6; perm order 3; assoc same 6; absorb same 6
+      comm if(a,c): order: Fb[Fa | Fc]  |  Fb[Fc | Fa]
+      comm list2(a,c): order: List[Fb[Fa | Fc]]  |  List[Fb[Fc | Fa]]
+      comm if(a,d): order: Fb[Fa | Fd]  |  Fb[Fd | Fa]
+      perm list3(a,c,d): order: List[Fb[Fa | Fc | Fd]]  |  List[Fb[Fa | Fd | Fc]]  |  List[Fb[Fc | Fa | Fd]]  |  List[Fb[Fc | Fd | Fa]]  |  List[Fb[Fd | Fa | Fc]]  |  List[Fb[Fd | Fc | Fa]]
+      perm match(a,c,d): order: Fb[Fa | Fc | Fd]  |  Fb[Fa | Fd | Fc]  |  Fb[Fc | Fa | Fd]  |  Fb[Fc | Fd | Fa]  |  Fb[Fd | Fa | Fc]  |  Fb[Fd | Fc | Fa]
+      perm assoc(a,c,d): order: Fb[Fa | Fc | Fd]  |  Fb[Fa | Fd | Fc]  |  Fb[Fc | Fa | Fd]  |  Fb[Fc | Fd | Fa]  |  Fb[Fd | Fa | Fc]  |  Fb[Fd | Fc | Fa]
+   3 separate: comm order 6; perm order 3; assoc same 6; absorb same 6
+      comm if(a,c): order: Fb[Fa | Fc]  |  Fb[Fc | Fa]
+      comm list2(a,c): order: List[Fb[Fa | Fc]]  |  List[Fb[Fc | Fa]]
+      comm if(a,d): order: Fb[Fa | Fd]  |  Fb[Fd | Fa]
+      perm list3(a,c,d): order: List[Fb[Fa | Fc | Fd]]  |  List[Fb[Fa | Fd | Fc]]  |  List[Fb[Fc | Fa | Fd]]  |  List[Fb[Fc | Fd | Fa]]  |  List[Fb[Fd | Fa | Fc]]  |  List[Fb[Fd | Fc | Fa]]
+      perm match(a,c,d): order: Fb[Fa | Fc | Fd]  |  Fb[Fa | Fd | Fc]  |  Fb[Fc | Fa | Fd]  |  Fb[Fc | Fd | Fa]  |  Fb[Fd | Fa | Fc]  |  Fb[Fd | Fc | Fa]
+      perm assoc(a,c,d): order: Fb[Fa | Fc | Fd]  |  Fb[Fa | Fd | Fc]  |  Fb[Fc | Fa | Fd]  |  Fb[Fc | Fd | Fa]  |  Fb[Fd | Fa | Fc]  |  Fb[Fd | Fc | Fa]
+
+== jbox: the library F-bounds: String, Integer and Long join to Serializable with Comparable[...]
+   object H { def s: String = "s"; def i: java.lang.Integer = java.lang.Integer.valueOf(1); def l: java.lang.Long = java.lang.Long.valueOf(1L) }
+   values: s = H.s, i = H.i, l = H.l
+   if_s_i                 2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.consta…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   if_s_l                 2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   if_i_s                 2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.consta…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   if_i_l                 2.12: Number with java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long <: Number with java.lang.constant.Constable…   2.13: =   3: Number & java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   if_l_s                 2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Long with String <: java.lang.constant.Constable with java.lang.constant.…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   if_l_i                 2.12: Number with java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Long with Integer <: Number with java.lang.constant.Constable…   2.13: =   3: Number & java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_s_i_l            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_s_l_i            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_i_s_l            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_i_l_s            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_l_s_i            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Long with String with Integer <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   assoc_l_i_s            2.12: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Long with Integer with String <: java.lang.constant.Constable with java.l…   2.13: =   3: java.lang.constant.Constable & java.lang.constant.ConstantDesc
+   2.12 joint: comm differs 6; perm differs 3; assoc differs 6; absorb same 6
+      comm if(s,i): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.L…
+      comm list2(s,i): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHand…
+      comm if(s,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.Lookup)…
+      perm list3(s,i,l): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.la…
+      perm match(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      perm assoc(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔i)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔l)⊔i vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (i⊔s)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+   2.12 separate: comm differs 6; perm differs 3; assoc differs 6; absorb same 6
+      comm if(s,i): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.L…
+      comm list2(s,i): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHand…
+      comm if(s,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.Lookup)…
+      perm list3(s,i,l): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.la…
+      perm match(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      perm assoc(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔i)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔l)⊔i vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (i⊔s)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+   2.13 joint: comm differs 6; perm differs 3; assoc differs 6; absorb same 6
+      comm if(s,i): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.L…
+      comm list2(s,i): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHand…
+      comm if(s,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.Lookup)…
+      perm list3(s,i,l): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.la…
+      perm match(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      perm assoc(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔i)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔l)⊔i vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (i⊔s)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+   2.13 separate: comm differs 6; perm differs 3; assoc differs 6; absorb same 6
+      comm if(s,i): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.L…
+      comm list2(s,i): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHand…
+      comm if(s,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.invoke.MethodHandles.Lookup)…
+      perm list3(s,i,l): differs: List[java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.la…
+      perm match(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      perm assoc(s,i,l): differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with Long with String <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔i)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Integer with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (s⊔l)⊔i vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: String with Long with Integer <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+      assoc (i⊔s)⊔l vs List: differs: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with Comparable[_ >: Integer with String with Long <: java.lang.constant.Constable with java.lang.constant.ConstantDesc with java.io.Serializable] with java.io.Serializable{def resolveConstantDesc(x$1: java.lang.in…
+   3 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+
+== variance: a covariant, an invariant and a contravariant constructor applied to Int and String
+   class Co[+X]
+   class Inv[X]
+   class Contra[-X]
+   object H { def co1: Co[Int] = new Co; def co2: Co[String] = new Co; def inv1: Inv[Int] = new Inv; def inv2: Inv[String] = new Inv; def ct1: Contra[Int] = new Contra; def ct2: Contra[String] = new Contra }
+   values: co1 = H.co1, co2 = H.co2, inv1 = H.inv1, inv2 = H.inv2, ct1 = H.ct1, ct2 = H.ct2
+   if_co1_co2             2.12: Co[Any]   2.13: =   3: Co[Int | String]
+   if_co1_inv1            2.12: Object   2.13: =   3: Co[Int] | Inv[Int]
+   if_co1_inv2            2.12: Object   2.13: =   3: Co[Int] | Inv[String]
+   if_co1_ct1             2.12: Object   2.13: =   3: Co[Int] | Contra[Int]
+   if_co1_ct2             2.12: Object   2.13: =   3: Co[Int] | Contra[String]
+   if_co2_co1             2.12: Co[Any]   2.13: =   3: Co[String | Int]
+   if_co2_inv1            2.12: Object   2.13: =   3: Co[String] | Inv[Int]
+   if_co2_inv2            2.12: Object   2.13: =   3: Co[String] | Inv[String]
+   if_co2_ct1             2.12: Object   2.13: =   3: Co[String] | Contra[Int]
+   if_co2_ct2             2.12: Object   2.13: =   3: Co[String] | Contra[String]
+   if_inv1_co1            2.12: Object   2.13: =   3: Inv[Int] | Co[Int]
+   if_inv1_co2            2.12: Object   2.13: =   3: Inv[Int] | Co[String]
+   if_inv1_inv2           2.12: Inv[_ >: Int with String]   2.13: =   3: Inv[? >: Int & String <: Int | String]
+   if_inv1_ct1            2.12: Object   2.13: =   3: Inv[Int] | Contra[Int]
+   if_inv1_ct2            2.12: Object   2.13: =   3: Inv[Int] | Contra[String]
+   if_inv2_co1            2.12: Object   2.13: =   3: Inv[String] | Co[Int]
+   if_inv2_co2            2.12: Object   2.13: =   3: Inv[String] | Co[String]
+   if_inv2_inv1           2.12: Inv[_ >: String with Int]   2.13: =   3: Inv[? >: String & Int <: String | Int]
+   if_inv2_ct1            2.12: Object   2.13: =   3: Inv[String] | Contra[Int]
+   if_inv2_ct2            2.12: Object   2.13: =   3: Inv[String] | Contra[String]
+   if_ct1_co1             2.12: Object   2.13: =   3: Contra[Int] | Co[Int]
+   if_ct1_co2             2.12: Object   2.13: =   3: Contra[Int] | Co[String]
+   if_ct1_inv1            2.12: Object   2.13: =   3: Contra[Int] | Inv[Int]
+   if_ct1_inv2            2.12: Object   2.13: =   3: Contra[Int] | Inv[String]
+   if_ct1_ct2             2.12: Contra[Int with String]   2.13: =   3: Contra[Int & String]
+   if_ct2_co1             2.12: Object   2.13: =   3: Contra[String] | Co[Int]
+   if_ct2_co2             2.12: Object   2.13: =   3: Contra[String] | Co[String]
+   if_ct2_inv1            2.12: Object   2.13: =   3: Contra[String] | Inv[Int]
+   if_ct2_inv2            2.12: Object   2.13: =   3: Contra[String] | Inv[String]
+   if_ct2_ct1             2.12: Contra[String with Int]   2.13: =   3: Contra[String & Int]
+   assoc_co1_co2_inv1     2.12: Object   2.13: =   3: Co[Int | String] | Inv[Int]
+   assoc_co1_inv1_co2     2.12: Object   2.13: =   3: Co[Int] | Inv[Int] | Co[String]
+   assoc_co2_co1_inv1     2.12: Object   2.13: =   3: Co[String | Int] | Inv[Int]
+   assoc_co2_inv1_co1     2.12: Object   2.13: =   3: Co[String] | Inv[Int] | Co[Int]
+   assoc_inv1_co1_co2     2.12: Object   2.13: =   3: Inv[Int] | Co[Int] | Co[String]
+   assoc_inv1_co2_co1     2.12: Object   2.13: =   3: Inv[Int] | Co[String] | Co[Int]
+   2.12 joint: comm order 4, same 26; perm same 3; assoc same 6; absorb differs 2, same 28
+      comm if(inv1,inv2): order: Inv[_ >: Int with String]  |  Inv[_ >: String with Int]  [erasure ()LInv<-Ljava/lang/Object;>; vs ()LInv<-Ljava/lang/String;>;]
+      comm list2(inv1,inv2): order: List[Inv[_ >: String with Int]]  |  List[Inv[_ >: Int with String]]  [erasure ()Lscala/collection/immutable/List<LInv<-Ljava/lang/String;>;>; vs ()Lscala/collection/immutable/List<LInv<-Ljava/lang/Object;>;>;]
+      comm if(ct1,ct2): order: Contra[Int with String]  |  Contra[String with Int]  [erasure ()LContra<Ljava/lang/Object;>; vs ()LContra<Ljava/lang/String;>;]
+      absorb (inv1⊔inv2)⊔inv1: differs: Inv[_1] forSome { type _1 >: _1 with Int; type _1 >: Int with String }  |  Inv[_ >: Int with String]
+      absorb (inv2⊔inv1)⊔inv2: differs: Inv[_1] forSome { type _1 >: _1 with String; type _1 >: String with Int }  |  Inv[_ >: String with Int]
+   2.12 separate: comm order 4, same 26; perm same 3; assoc same 6; absorb differs 2, same 28
+      comm if(inv1,inv2): order: Inv[_ >: Int with String]  |  Inv[_ >: String with Int]  [erasure ()LInv<-Ljava/lang/Object;>; vs ()LInv<-Ljava/lang/String;>;]
+      comm list2(inv1,inv2): order: List[Inv[_ >: String with Int]]  |  List[Inv[_ >: Int with String]]  [erasure ()Lscala/collection/immutable/List<LInv<-Ljava/lang/String;>;>; vs ()Lscala/collection/immutable/List<LInv<-Ljava/lang/Object;>;>;]
+      comm if(ct1,ct2): order: Contra[Int with String]  |  Contra[String with Int]  [erasure ()LContra<Ljava/lang/Object;>; vs ()LContra<Ljava/lang/String;>;]
+      absorb (inv1⊔inv2)⊔inv1: differs: Inv[_1] forSome { type _1 >: _1 with Int; type _1 >: Int with String }  |  Inv[_ >: Int with String]
+      absorb (inv2⊔inv1)⊔inv2: differs: Inv[_1] forSome { type _1 >: _1 with String; type _1 >: String with Int }  |  Inv[_ >: String with Int]
+   2.13 joint: comm order 4, same 26; perm same 3; assoc same 6; absorb differs 2, same 28
+      comm if(inv1,inv2): order: Inv[_ >: Int with String]  |  Inv[_ >: String with Int]  [erasure ()LInv<-Ljava/lang/Object;>; vs ()LInv<-Ljava/lang/String;>;]
+      comm list2(inv1,inv2): order: List[Inv[_ >: String with Int]]  |  List[Inv[_ >: Int with String]]  [erasure ()Lscala/collection/immutable/List<LInv<-Ljava/lang/String;>;>; vs ()Lscala/collection/immutable/List<LInv<-Ljava/lang/Object;>;>;]
+      comm if(ct1,ct2): order: Contra[Int with String]  |  Contra[String with Int]  [erasure ()LContra<Ljava/lang/Object;>; vs ()LContra<Ljava/lang/String;>;]
+      absorb (inv1⊔inv2)⊔inv1: differs: Inv[_1] forSome { type _1 >: _1 with Int; type _1 >: Int with String }  |  Inv[_ >: Int with String]
+      absorb (inv2⊔inv1)⊔inv2: differs: Inv[_1] forSome { type _1 >: _1 with String; type _1 >: String with Int }  |  Inv[_ >: String with Int]
+   2.13 separate: comm order 4, same 26; perm same 3; assoc same 6; absorb differs 2, same 28
+      comm if(inv1,inv2): order: Inv[_ >: Int with String]  |  Inv[_ >: String with Int]  [erasure ()LInv<-Ljava/lang/Object;>; vs ()LInv<-Ljava/lang/String;>;]
+      comm list2(inv1,inv2): order: List[Inv[_ >: String with Int]]  |  List[Inv[_ >: Int with String]]  [erasure ()Lscala/collection/immutable/List<LInv<-Ljava/lang/String;>;>; vs ()Lscala/collection/immutable/List<LInv<-Ljava/lang/Object;>;>;]
+      comm if(ct1,ct2): order: Contra[Int with String]  |  Contra[String with Int]  [erasure ()LContra<Ljava/lang/Object;>; vs ()LContra<Ljava/lang/String;>;]
+      absorb (inv1⊔inv2)⊔inv1: differs: Inv[_1] forSome { type _1 >: _1 with Int; type _1 >: Int with String }  |  Inv[_ >: Int with String]
+      absorb (inv2⊔inv1)⊔inv2: differs: Inv[_1] forSome { type _1 >: _1 with String; type _1 >: String with Int }  |  Inv[_ >: String with Int]
+   3 joint: comm order 30; perm differs 1, order 2; assoc differs 2, same 4; absorb same 30
+      comm if(co1,co2): order: Co[Int | String]  |  Co[String | Int]
+      comm list2(co1,co2): order: List[Co[Int | String]]  |  List[Co[String | Int]]
+      comm if(co1,inv1): order: Co[Int] | Inv[Int]  |  Inv[Int] | Co[Int]
+      perm list3(co1,co2,inv1): order: List[Co[Int] | Co[String] | Inv[Int]]  |  List[Co[Int] | Inv[Int] | Co[String]]  |  List[Co[String] | Co[Int] | Inv[Int]]  |  List[Co[String] | Inv[Int] | Co[Int]]  |  List[Inv[Int] | Co[Int] | Co[String]]  |  List[Inv[Int] | Co[String] | Co[Int]]
+      perm match(co1,co2,inv1): order: Co[Int] | Co[String] | Inv[Int]  |  Co[Int] | Inv[Int] | Co[String]  |  Co[String] | Co[Int] | Inv[Int]  |  Co[String] | Inv[Int] | Co[Int]  |  Inv[Int] | Co[Int] | Co[String]  |  Inv[Int] | Co[String] | Co[Int]
+      perm assoc(co1,co2,inv1): differs: Co[Int | String] | Inv[Int]  |  Co[Int] | Inv[Int] | Co[String]  |  Co[String | Int] | Inv[Int]  |  Co[String] | Inv[Int] | Co[Int]  |  Inv[Int] | Co[Int] | Co[String]  |  Inv[Int] | Co[String] | Co[Int]
+      assoc (co1⊔co2)⊔inv1 vs List: differs: Co[Int | String] | Inv[Int]  |  Co[Int] | Co[String] | Inv[Int]
+      assoc (co2⊔co1)⊔inv1 vs List: differs: Co[String | Int] | Inv[Int]  |  Co[String] | Co[Int] | Inv[Int]
+   3 separate: comm order 30; perm differs 1, order 2; assoc differs 2, same 4; absorb same 30
+      comm if(co1,co2): order: Co[Int | String]  |  Co[String | Int]
+      comm list2(co1,co2): order: List[Co[Int | String]]  |  List[Co[String | Int]]
+      comm if(co1,inv1): order: Co[Int] | Inv[Int]  |  Inv[Int] | Co[Int]
+      perm list3(co1,co2,inv1): order: List[Co[Int] | Co[String] | Inv[Int]]  |  List[Co[Int] | Inv[Int] | Co[String]]  |  List[Co[String] | Co[Int] | Inv[Int]]  |  List[Co[String] | Inv[Int] | Co[Int]]  |  List[Inv[Int] | Co[Int] | Co[String]]  |  List[Inv[Int] | Co[String] | Co[Int]]
+      perm match(co1,co2,inv1): order: Co[Int] | Co[String] | Inv[Int]  |  Co[Int] | Inv[Int] | Co[String]  |  Co[String] | Co[Int] | Inv[Int]  |  Co[String] | Inv[Int] | Co[Int]  |  Inv[Int] | Co[Int] | Co[String]  |  Inv[Int] | Co[String] | Co[Int]
+      perm assoc(co1,co2,inv1): differs: Co[Int | String] | Inv[Int]  |  Co[Int] | Inv[Int] | Co[String]  |  Co[String | Int] | Inv[Int]  |  Co[String] | Inv[Int] | Co[Int]  |  Inv[Int] | Co[Int] | Co[String]  |  Inv[Int] | Co[String] | Co[Int]
+      assoc (co1⊔co2)⊔inv1 vs List: differs: Co[Int | String] | Inv[Int]  |  Co[Int] | Co[String] | Inv[Int]
+      assoc (co2⊔co1)⊔inv1 vs List: differs: Co[String | Int] | Inv[Int]  |  Co[String] | Co[Int] | Inv[Int]
+
+== refine: members refined in every subclass: scalac adds a refinement to the join, dotc does not
+   trait R { def m: Any; def k: Any }
+   class R1 extends R { def m: Int = 1; def k: Int = 1 }
+   class R2 extends R { def m: Int = 2; def k: String = "" }
+   class R3 extends R { def m: String = ""; def k: Int = 1 }
+   object H { def r1: R1 = new R1; def r2: R2 = new R2; def r3: R3 = new R3 }
+   values: r1 = H.r1, r2 = H.r2, r3 = H.r3
+   if_r1_r2               2.12: R{def m: Int}   2.13: =   3: R
+   if_r1_r3               2.12: R{def k: Int}   2.13: =   3: R
+   if_r2_r1               2.12: R{def m: Int}   2.13: =   3: R
+   if_r2_r3               2.12: R   2.13: =   3: =
+   if_r3_r1               2.12: R{def k: Int}   2.13: =   3: R
+   if_r3_r2               2.12: R   2.13: =   3: =
+   assoc_r1_r2_r3         2.12: R   2.13: =   3: =
+   assoc_r1_r3_r2         2.12: R   2.13: =   3: =
+   assoc_r2_r1_r3         2.12: R   2.13: =   3: =
+   assoc_r2_r3_r1         2.12: R   2.13: =   3: =
+   assoc_r3_r1_r2         2.12: R   2.13: =   3: =
+   assoc_r3_r2_r1         2.12: R   2.13: =   3: =
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+
+== anon: anonymous classes with structural members
+   trait Q { def m: Any }
+   object H { def u: Unit = () }
+   values: a1 = (new Q { def m: Int = 1; def x: Int = 1 }), a2 = (new Q { def m: Int = 2; def x: Int = 2 }), a3 = (new Q { def m: String = ""; def y: Int = 3 })
+   if_a1_a2               2.12: Q{def m: Int; def x: Int}   2.13: =   3: Q{def m: Int}
+   if_a1_a3               2.12: Q   2.13: =   3: =
+   if_a2_a1               2.12: Q{def m: Int; def x: Int}   2.13: =   3: Q{def m: Int}
+   if_a2_a3               2.12: Q   2.13: =   3: =
+   if_a3_a1               2.12: Q   2.13: =   3: =
+   if_a3_a2               2.12: Q   2.13: =   3: =
+   assoc_a1_a2_a3         2.12: Q   2.13: =   3: =
+   assoc_a1_a3_a2         2.12: Q   2.13: =   3: =
+   assoc_a2_a1_a3         2.12: Q   2.13: =   3: =
+   assoc_a2_a3_a1         2.12: Q   2.13: =   3: =
+   assoc_a3_a1_a2         2.12: Q   2.13: =   3: =
+   assoc_a3_a2_a1         2.12: Q   2.13: =   3: =
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+
+== numeric: weak conformance: numeric widening in scalac, literal harmonization in dotc
+   object H { val i: Int = 1; val l: Long = 1L; val ch: Char = 'c'; val f: Float = 1.0f; val sh: Short = 1 }
+   values: i = H.i, l = H.l, ch = H.ch, sh = H.sh, f = H.f
+   if_i_l                 2.12: Long   2.13: =   3: Int | Long
+   if_i_ch                2.12: Int   2.13: =   3: Int | Char
+   if_i_sh                2.12: Int   2.13: =   3: Int | Short
+   if_i_f                 2.12: Float   2.13: =   3: Int | Float
+   if_l_i                 2.12: Long   2.13: =   3: Long | Int
+   if_l_ch                2.12: Long   2.13: =   3: Long | Char
+   if_l_sh                2.12: Long   2.13: =   3: Long | Short
+   if_l_f                 2.12: Float   2.13: =   3: Long | Float
+   if_ch_i                2.12: Int   2.13: =   3: Char | Int
+   if_ch_l                2.12: Long   2.13: =   3: Char | Long
+   if_ch_sh               2.12: Int   2.13: =   3: Char | Short
+   if_ch_f                2.12: Float   2.13: =   3: Char | Float
+   if_sh_i                2.12: Int   2.13: =   3: Short | Int
+   if_sh_l                2.12: Long   2.13: =   3: Short | Long
+   if_sh_ch               2.12: Int   2.13: =   3: Short | Char
+   if_sh_f                2.12: Float   2.13: =   3: Short | Float
+   if_f_i                 2.12: Float   2.13: =   3: Float | Int
+   if_f_l                 2.12: Float   2.13: =   3: Float | Long
+   if_f_ch                2.12: Float   2.13: =   3: Float | Char
+   if_f_sh                2.12: Float   2.13: =   3: Float | Short
+   assoc_i_l_ch           2.12: Long   2.13: =   3: Int | Long | Char
+   assoc_i_ch_l           2.12: Long   2.13: =   3: Int | Char | Long
+   assoc_l_i_ch           2.12: Long   2.13: =   3: Long | Int | Char
+   assoc_l_ch_i           2.12: Long   2.13: =   3: Long | Char | Int
+   assoc_ch_i_l           2.12: Long   2.13: =   3: Char | Int | Long
+   assoc_ch_l_i           2.12: Long   2.13: =   3: Char | Long | Int
+   assoc_i_l_sh           2.12: Long   2.13: =   3: Int | Long | Short
+   assoc_i_sh_l           2.12: Long   2.13: =   3: Int | Short | Long
+   assoc_l_i_sh           2.12: Long   2.13: =   3: Long | Int | Short
+   assoc_l_sh_i           2.12: Long   2.13: =   3: Long | Short | Int
+   assoc_sh_i_l           2.12: Long   2.13: =   3: Short | Int | Long
+   assoc_sh_l_i           2.12: Long   2.13: =   3: Short | Long | Int
+   assoc_i_ch_sh          2.12: Int   2.13: =   3: Int | Char | Short
+   assoc_i_sh_ch          2.12: Int   2.13: =   3: Int | Short | Char
+   assoc_ch_i_sh          2.12: Int   2.13: =   3: Char | Int | Short
+   assoc_ch_sh_i          2.12: Int   2.13: =   3: Char | Short | Int
+   assoc_sh_i_ch          2.12: Int   2.13: =   3: Short | Int | Char
+   assoc_sh_ch_i          2.12: Int   2.13: =   3: Short | Char | Int
+   assoc_l_ch_sh          2.12: Long   2.13: =   3: Long | Char | Short
+   assoc_l_sh_ch          2.12: Long   2.13: =   3: Long | Short | Char
+   assoc_ch_l_sh          2.12: Long   2.13: =   3: Char | Long | Short
+   assoc_ch_sh_l          2.12: Long   2.13: =   3: Char | Short | Long
+   assoc_sh_l_ch          2.12: Long   2.13: =   3: Short | Long | Char
+   assoc_sh_ch_l          2.12: Long   2.13: =   3: Short | Char | Long
+   2.12 joint: comm same 20; perm same 12; assoc same 24; absorb same 20
+   2.12 separate: comm same 20; perm same 12; assoc same 24; absorb same 20
+   2.13 joint: comm same 20; perm same 12; assoc same 24; absorb same 20
+   2.13 separate: comm same 20; perm same 12; assoc same 24; absorb same 20
+   3 joint: comm order 20; perm order 12; assoc same 24; absorb same 20
+      comm if(i,l): order: Int | Long  |  Long | Int
+      comm list2(i,l): order: List[Int | Long]  |  List[Long | Int]
+      comm if(i,ch): order: Int | Char  |  Char | Int
+      perm list3(i,l,ch): order: List[Char | Int | Long]  |  List[Char | Long | Int]  |  List[Int | Char | Long]  |  List[Int | Long | Char]  |  List[Long | Char | Int]  |  List[Long | Int | Char]
+      perm match(i,l,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+      perm assoc(i,l,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+   3 separate: comm order 20; perm order 12; assoc same 24; absorb same 20
+      comm if(i,l): order: Int | Long  |  Long | Int
+      comm list2(i,l): order: List[Int | Long]  |  List[Long | Int]
+      comm if(i,ch): order: Int | Char  |  Char | Int
+      perm list3(i,l,ch): order: List[Char | Int | Long]  |  List[Char | Long | Int]  |  List[Int | Char | Long]  |  List[Int | Long | Char]  |  List[Long | Char | Int]  |  List[Long | Int | Char]
+      perm match(i,l,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+      perm assoc(i,l,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+
+== literals: constants: literal types are widened in a val, and numeric literals harmonized
+   object H { def u: Unit = () }
+   values: one = 1, oneL = 1L, ch = 'c', str = "a"
+   if_one_oneL            2.12: Long   2.13: =   3: =
+   if_one_ch              2.12: Int   2.13: =   3: Char
+   if_one_str             2.12: Any   2.13: =   3: Int | String
+   if_oneL_one            2.12: Long   2.13: =   3: =
+   if_oneL_ch             2.12: Long   2.13: =   3: Long | Char
+   if_oneL_str            2.12: Any   2.13: =   3: Long | String
+   if_ch_one              2.12: Int   2.13: =   3: Char
+   if_ch_oneL             2.12: Long   2.13: =   3: Char | Long
+   if_ch_str              2.12: Any   2.13: =   3: Char | String
+   if_str_one             2.12: Any   2.13: =   3: String | Int
+   if_str_oneL            2.12: Any   2.13: =   3: String | Long
+   if_str_ch              2.12: Any   2.13: =   3: String | Char
+   assoc_one_oneL_ch      2.12: Long   2.13: =   3: Long | Char
+   assoc_one_ch_oneL      2.12: Long   2.13: =   3: Char | Long
+   assoc_oneL_one_ch      2.12: Long   2.13: =   3: Long | Char
+   assoc_oneL_ch_one      2.12: Long   2.13: =   3: Long | Char | Int
+   assoc_ch_one_oneL      2.12: Long   2.13: =   3: Char | Long
+   assoc_ch_oneL_one      2.12: Long   2.13: =   3: Char | Long | Int
+   assoc_one_oneL_str     2.12: Any   2.13: =   3: Long | String
+   assoc_one_str_oneL     2.12: Any   2.13: =   3: Int | String | Long
+   assoc_oneL_one_str     2.12: Any   2.13: =   3: Long | String
+   assoc_oneL_str_one     2.12: Any   2.13: =   3: Long | String | Int
+   assoc_str_one_oneL     2.12: Any   2.13: =   3: String | Int | Long
+   assoc_str_oneL_one     2.12: Any   2.13: =   3: String | Long | Int
+   assoc_one_ch_str       2.12: Any   2.13: =   3: Char | String
+   assoc_one_str_ch       2.12: Any   2.13: =   3: Int | String | Char
+   assoc_ch_one_str       2.12: Any   2.13: =   3: Char | String
+   assoc_ch_str_one       2.12: Any   2.13: =   3: Char | String | Int
+   assoc_str_one_ch       2.12: Any   2.13: =   3: String | Int | Char
+   assoc_str_ch_one       2.12: Any   2.13: =   3: String | Char | Int
+   assoc_oneL_ch_str      2.12: Any   2.13: =   3: Long | Char | String
+   assoc_oneL_str_ch      2.12: Any   2.13: =   3: Long | String | Char
+   assoc_ch_oneL_str      2.12: Any   2.13: =   3: Char | Long | String
+   assoc_ch_str_oneL      2.12: Any   2.13: =   3: Char | String | Long
+   assoc_str_oneL_ch      2.12: Any   2.13: =   3: String | Long | Char
+   assoc_str_ch_oneL      2.12: Any   2.13: =   3: String | Char | Long
+   2.12 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.12 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   3 joint: comm order 8, same 4; perm differs 3, order 9; assoc differs 8, same 16; absorb same 12
+      comm if(one,str): order: Int | String  |  String | Int
+      comm list2(one,str): order: List[Int | String]  |  List[String | Int]
+      comm if(oneL,ch): order: Long | Char  |  Char | Long
+      perm list3(one,oneL,ch): order: List[Char | Int | Long]  |  List[Char | Long | Int]  |  List[Int | Char | Long]  |  List[Int | Long | Char]  |  List[Long | Char | Int]  |  List[Long | Int | Char]
+      perm match(one,oneL,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+      perm assoc(one,oneL,ch): differs: Char | Long  |  Char | Long | Int  |  Long | Char  |  Long | Char | Int
+      assoc (one⊔oneL)⊔ch vs List: differs: Long | Char  |  Int | Long | Char
+      assoc (one⊔ch)⊔oneL vs List: differs: Char | Long  |  Int | Char | Long
+      assoc (oneL⊔one)⊔ch vs List: differs: Long | Char  |  Long | Int | Char
+   3 separate: comm order 8, same 4; perm differs 3, order 9; assoc differs 8, same 16; absorb same 12
+      comm if(one,str): order: Int | String  |  String | Int
+      comm list2(one,str): order: List[Int | String]  |  List[String | Int]
+      comm if(oneL,ch): order: Long | Char  |  Char | Long
+      perm list3(one,oneL,ch): order: List[Char | Int | Long]  |  List[Char | Long | Int]  |  List[Int | Char | Long]  |  List[Int | Long | Char]  |  List[Long | Char | Int]  |  List[Long | Int | Char]
+      perm match(one,oneL,ch): order: Char | Int | Long  |  Char | Long | Int  |  Int | Char | Long  |  Int | Long | Char  |  Long | Char | Int  |  Long | Int | Char
+      perm assoc(one,oneL,ch): differs: Char | Long  |  Char | Long | Int  |  Long | Char  |  Long | Char | Int
+      assoc (one⊔oneL)⊔ch vs List: differs: Long | Char  |  Int | Long | Char
+      assoc (one⊔ch)⊔oneL vs List: differs: Char | Long  |  Int | Char | Long
+      assoc (oneL⊔one)⊔ch vs List: differs: Long | Char  |  Long | Int | Char
+
+== singletons: objects and stable paths: singleton types in a join
+   trait Tr
+   object O1 extends Tr
+   object O2 extends Tr
+   case object C1 extends Tr
+   object H { val t: Tr = O1 }
+   values: o1 = O1, o2 = O2, c1 = C1, ht = H.t
+   if_o1_o2               2.12: Tr   2.13: =   3: =
+   if_o1_c1               2.12: Tr   2.13: =   3: =
+   if_o1_ht               2.12: Tr   2.13: =   3: =
+   if_o2_o1               2.12: Tr   2.13: =   3: =
+   if_o2_c1               2.12: Tr   2.13: =   3: =
+   if_o2_ht               2.12: Tr   2.13: =   3: =
+   if_c1_o1               2.12: Tr   2.13: =   3: =
+   if_c1_o2               2.12: Tr   2.13: =   3: =
+   if_c1_ht               2.12: Tr   2.13: =   3: =
+   if_ht_o1               2.12: Tr   2.13: =   3: =
+   if_ht_o2               2.12: Tr   2.13: =   3: =
+   if_ht_c1               2.12: Tr   2.13: =   3: =
+   assoc_o1_o2_c1         2.12: Tr   2.13: =   3: =
+   assoc_o1_c1_o2         2.12: Tr   2.13: =   3: =
+   assoc_o2_o1_c1         2.12: Tr   2.13: =   3: =
+   assoc_o2_c1_o1         2.12: Tr   2.13: =   3: =
+   assoc_c1_o1_o2         2.12: Tr   2.13: =   3: =
+   assoc_c1_o2_o1         2.12: Tr   2.13: =   3: =
+   assoc_o1_o2_ht         2.12: Tr   2.13: =   3: =
+   assoc_o1_ht_o2         2.12: Tr   2.13: =   3: =
+   assoc_o2_o1_ht         2.12: Tr   2.13: =   3: =
+   assoc_o2_ht_o1         2.12: Tr   2.13: =   3: =
+   assoc_ht_o1_o2         2.12: Tr   2.13: =   3: =
+   assoc_ht_o2_o1         2.12: Tr   2.13: =   3: =
+   assoc_o1_c1_ht         2.12: Tr   2.13: =   3: =
+   assoc_o1_ht_c1         2.12: Tr   2.13: =   3: =
+   assoc_c1_o1_ht         2.12: Tr   2.13: =   3: =
+   assoc_c1_ht_o1         2.12: Tr   2.13: =   3: =
+   assoc_ht_o1_c1         2.12: Tr   2.13: =   3: =
+   assoc_ht_c1_o1         2.12: Tr   2.13: =   3: =
+   assoc_o2_c1_ht         2.12: Tr   2.13: =   3: =
+   assoc_o2_ht_c1         2.12: Tr   2.13: =   3: =
+   assoc_c1_o2_ht         2.12: Tr   2.13: =   3: =
+   assoc_c1_ht_o2         2.12: Tr   2.13: =   3: =
+   assoc_ht_o2_c1         2.12: Tr   2.13: =   3: =
+   assoc_ht_c1_o2         2.12: Tr   2.13: =   3: =
+   2.12 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.12 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   2.13 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+   3 joint: comm same 12; perm same 12; assoc same 24; absorb same 12
+   3 separate: comm same 12; perm same 12; assoc same 24; absorb same 12
+
+== alias: a type alias and its expansion are equivalent: which one the join keeps depends on order
+   trait K
+   class Kx extends K
+   object H { type KK = K; def k: K = new Kx; def kk: KK = new Kx; def kx: Kx = new Kx }
+   values: k = H.k, kk = H.kk, kx = H.kx
+   if_k_kk                2.12: K   2.13: =   3: =
+   if_k_kx                2.12: K   2.13: =   3: =
+   if_kk_k                2.12: H.KK   2.13: =   3: =
+   if_kk_kx               2.12: H.KK   2.13: =   3: =
+   if_kx_k                2.12: K   2.13: =   3: =
+   if_kx_kk               2.12: H.KK   2.13: =   3: =
+   assoc_k_kk_kx          2.12: K   2.13: =   3: =
+   assoc_k_kx_kk          2.12: K   2.13: =   3: H.KK
+   assoc_kk_k_kx          2.12: H.KK   2.13: =   3: =
+   assoc_kk_kx_k          2.12: H.KK   2.13: =   3: K
+   assoc_kx_k_kk          2.12: K   2.13: =   3: H.KK
+   assoc_kx_kk_k          2.12: H.KK   2.13: =   3: K
+   2.12 joint: comm differs 2, same 4; perm differs 3; assoc differs 6; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[H.KK]  |  List[K]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kk)⊔kx vs List: differs: K  |  H.KK
+      assoc (k⊔kx)⊔kk vs List: differs: K  |  H.KK
+      assoc (kk⊔k)⊔kx vs List: differs: H.KK  |  K
+   2.12 separate: comm differs 2, same 4; perm differs 3; assoc differs 6; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[H.KK]  |  List[K]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kk)⊔kx vs List: differs: K  |  H.KK
+      assoc (k⊔kx)⊔kk vs List: differs: K  |  H.KK
+      assoc (kk⊔k)⊔kx vs List: differs: H.KK  |  K
+   2.13 joint: comm differs 2, same 4; perm differs 3; assoc differs 6; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[H.KK]  |  List[K]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kk)⊔kx vs List: differs: K  |  H.KK
+      assoc (k⊔kx)⊔kk vs List: differs: K  |  H.KK
+      assoc (kk⊔k)⊔kx vs List: differs: H.KK  |  K
+   2.13 separate: comm differs 2, same 4; perm differs 3; assoc differs 6; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[H.KK]  |  List[K]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kk)⊔kx vs List: differs: K  |  H.KK
+      assoc (k⊔kx)⊔kk vs List: differs: K  |  H.KK
+      assoc (kk⊔k)⊔kx vs List: differs: H.KK  |  K
+   3 joint: comm differs 2, same 4; perm differs 3; assoc differs 4, same 2; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[K]  |  List[H.KK]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kx)⊔kk vs List: differs: H.KK  |  K
+      assoc (kk⊔kx)⊔k vs List: differs: K  |  H.KK
+      assoc (kx⊔k)⊔kk vs List: differs: H.KK  |  K
+   3 separate: comm differs 2, same 4; perm differs 3; assoc differs 4, same 2; absorb same 6
+      comm if(k,kk): differs: K  |  H.KK
+      comm list2(k,kk): differs: List[K]  |  List[H.KK]
+      perm list3(k,kk,kx): differs: List[H.KK]  |  List[K]
+      perm match(k,kk,kx): differs: H.KK  |  K
+      perm assoc(k,kk,kx): differs: H.KK  |  K
+      assoc (k⊔kx)⊔kk vs List: differs: H.KK  |  K
+      assoc (kk⊔kx)⊔k vs List: differs: K  |  H.KK
+      assoc (kx⊔k)⊔kk vs List: differs: H.KK  |  K
+
+== library: Option, Either and collections from the library
+   object H { def u: Unit = () }
+   values: some = Some(1), none = None, left = Left(1), right = Right("a"), nil = Nil, vec = Vector(1)
+   if_some_none           2.12: Option[Int]   2.13: =   3: =
+   if_some_left           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Left[Int, Nothing]
+   if_some_right          2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Right[Nothing, String]
+   if_some_nil            2.12: Product with Serializable   2.13: Product with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int]
+   if_some_vec            2.12: Serializable with Equals   2.13: Equals with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int] & Equals
+   if_none_some           2.12: Option[Int]   2.13: =   3: =
+   if_none_left           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Left[Int, Nothing]
+   if_none_right          2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Right[Nothing, String]
+   if_none_nil            2.12: Product with Serializable   2.13: Product with scala.collection.IterableOnce[Nothing] with java.io.Serializable   3: Object & IterableOnce[Nothing]
+   if_none_vec            2.12: Serializable with Equals   2.13: Equals with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int] & Equals
+   if_left_some           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | Some[Int]
+   if_left_none           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | None
+   if_left_right          2.12: scala.util.Either[Int,String]   2.13: =   3: Either[Int, String]
+   if_left_nil            2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | Nil
+   if_left_vec            2.12: Serializable with Equals   2.13: Equals with java.io.Serializable   3: Object & Equals
+   if_right_some          2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | Some[Int]
+   if_right_none          2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | None
+   if_right_left          2.12: scala.util.Either[Int,String]   2.13: =   3: Either[Int, String]
+   if_right_nil           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | Nil
+   if_right_vec           2.12: Serializable with Equals   2.13: Equals with java.io.Serializable   3: Object & Equals
+   if_nil_some            2.12: Product with Serializable   2.13: Product with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int]
+   if_nil_none            2.12: Product with Serializable   2.13: Product with scala.collection.IterableOnce[Nothing] with java.io.Serializable   3: Object & IterableOnce[Nothing]
+   if_nil_left            2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Nil | Left[Int, Nothing]
+   if_nil_right           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Nil | Right[Nothing, String]
+   if_nil_vec             2.12: Seq[Int] with scala.collection.AbstractSeq[Int] with Serializable   2.13: AbstractSeq[Int] with StrictOptimizedSeqOps[Int,[_]AbstractSeq[_] with StrictOptimizedSeqOps[_,[_]AbstractSeq[_] with StrictOptimizedSeqOps[_,[_]AbstractSeq[_] …   3: AbstractSeq[Int]
+   if_vec_some            2.12: Serializable with Equals   2.13: Equals with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int] & Equals
+   if_vec_none            2.12: Serializable with Equals   2.13: Equals with scala.collection.IterableOnce[Int] with java.io.Serializable   3: Object & IterableOnce[Int] & Equals
+   if_vec_left            2.12: Serializable with Equals   2.13: Equals with java.io.Serializable   3: Object & Equals
+   if_vec_right           2.12: Serializable with Equals   2.13: Equals with java.io.Serializable   3: Object & Equals
+   if_vec_nil             2.12: Seq[Int] with scala.collection.AbstractSeq[Int] with Serializable   2.13: AbstractSeq[Int] with StrictOptimizedSeqOps[Int,[_]AbstractSeq[_] with StrictOptimizedSeqOps[_,[_]AbstractSeq[_] with StrictOptimizedSeqOps[_,[_]AbstractSeq[_] …   3: AbstractSeq[Int]
+   assoc_some_none_left   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Option[Int] | Left[Int, Nothing]
+   assoc_some_left_none   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Left[Int, Nothing] | None
+   assoc_none_some_left   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Option[Int] | Left[Int, Nothing]
+   assoc_none_left_some   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Left[Int, Nothing] | Some[Int]
+   assoc_left_some_none   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | Some[Int] | None
+   assoc_left_none_some   2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | None | Some[Int]
+   assoc_some_none_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Option[Int] | Right[Nothing, String]
+   assoc_some_right_none  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Right[Nothing, String] | None
+   assoc_none_some_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Option[Int] | Right[Nothing, String]
+   assoc_none_right_some  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Right[Nothing, String] | Some[Int]
+   assoc_right_some_none  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | Some[Int] | None
+   assoc_right_none_some  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | None | Some[Int]
+   assoc_some_left_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Left[Int, Nothing] | Right[Nothing, String]
+   assoc_some_right_left  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Some[Int] | Right[Nothing, String] | Left[Int, Nothing]
+   assoc_left_some_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | Some[Int] | Right[Nothing, String]
+   assoc_left_right_some  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Either[Int, String] | Some[Int]
+   assoc_right_some_left  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | Some[Int] | Left[Int, Nothing]
+   assoc_right_left_some  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Either[Int, String] | Some[Int]
+   assoc_none_left_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Left[Int, Nothing] | Right[Nothing, String]
+   assoc_none_right_left  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: None | Right[Nothing, String] | Left[Int, Nothing]
+   assoc_left_none_right  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Left[Int, Nothing] | None | Right[Nothing, String]
+   assoc_left_right_none  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Either[Int, String] | None
+   assoc_right_none_left  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Right[Nothing, String] | None | Left[Int, Nothing]
+   assoc_right_left_none  2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: Either[Int, String] | None
+   2.12 joint: comm same 30; perm same 12; assoc same 24; absorb same 30
+   2.12 separate: comm same 30; perm same 12; assoc same 24; absorb same 30
+   2.13 joint: comm same 30; perm same 12; assoc same 24; absorb same 30
+   2.13 separate: comm same 30; perm same 12; assoc same 24; absorb same 30
+   3 joint: comm order 12, same 18; perm differs 4, order 8; assoc differs 8, same 16; absorb same 30
+      comm if(some,left): order: Some[Int] | Left[Int, Nothing]  |  Left[Int, Nothing] | Some[Int]
+      comm list2(some,left): order: List[Some[Int] | Left[Int, Nothing]]  |  List[Left[Int, Nothing] | Some[Int]]
+      comm if(some,right): order: Some[Int] | Right[Nothing, String]  |  Right[Nothing, String] | Some[Int]
+      perm list3(some,none,left): order: List[Left[Int, Nothing] | None | Some[Int]]  |  List[Left[Int, Nothing] | Some[Int] | None]  |  List[None | Left[Int, Nothing] | Some[Int]]  |  List[None | Some[Int] | Left[Int, Nothing]]  |  List[Some[Int] | Left[Int, Nothing] | None]  |  List[Some[Int] | None | Left[Int, Nothing]]
+      perm match(some,none,left): order: Left[Int, Nothing] | None | Some[Int]  |  Left[Int, Nothing] | Some[Int] | None  |  None | Left[Int, Nothing] | Some[Int]  |  None | Some[Int] | Left[Int, Nothing]  |  Some[Int] | Left[Int, Nothing] | None  |  Some[Int] | None | Left[Int, Nothing]
+      perm assoc(some,none,left): differs: Left[Int, Nothing] | None | Some[Int]  |  Left[Int, Nothing] | Some[Int] | None  |  None | Left[Int, Nothing] | Some[Int]  |  Option[Int] | Left[Int, Nothing]  |  Some[Int] | Left[Int, Nothing] | None
+      assoc (some⊔none)⊔left vs List: differs: Option[Int] | Left[Int, Nothing]  |  Some[Int] | None | Left[Int, Nothing]
+      assoc (none⊔some)⊔left vs List: differs: Option[Int] | Left[Int, Nothing]  |  None | Some[Int] | Left[Int, Nothing]
+      assoc (some⊔none)⊔right vs List: differs: Option[Int] | Right[Nothing, String]  |  Some[Int] | None | Right[Nothing, String]
+   3 separate: comm order 12, same 18; perm differs 4, order 8; assoc differs 8, same 16; absorb same 30
+      comm if(some,left): order: Some[Int] | Left[Int, Nothing]  |  Left[Int, Nothing] | Some[Int]
+      comm list2(some,left): order: List[Some[Int] | Left[Int, Nothing]]  |  List[Left[Int, Nothing] | Some[Int]]
+      comm if(some,right): order: Some[Int] | Right[Nothing, String]  |  Right[Nothing, String] | Some[Int]
+      perm list3(some,none,left): order: List[Left[Int, Nothing] | None | Some[Int]]  |  List[Left[Int, Nothing] | Some[Int] | None]  |  List[None | Left[Int, Nothing] | Some[Int]]  |  List[None | Some[Int] | Left[Int, Nothing]]  |  List[Some[Int] | Left[Int, Nothing] | None]  |  List[Some[Int] | None | Left[Int, Nothing]]
+      perm match(some,none,left): order: Left[Int, Nothing] | None | Some[Int]  |  Left[Int, Nothing] | Some[Int] | None  |  None | Left[Int, Nothing] | Some[Int]  |  None | Some[Int] | Left[Int, Nothing]  |  Some[Int] | Left[Int, Nothing] | None  |  Some[Int] | None | Left[Int, Nothing]
+      perm assoc(some,none,left): differs: Left[Int, Nothing] | None | Some[Int]  |  Left[Int, Nothing] | Some[Int] | None  |  None | Left[Int, Nothing] | Some[Int]  |  Option[Int] | Left[Int, Nothing]  |  Some[Int] | Left[Int, Nothing] | None
+      assoc (some⊔none)⊔left vs List: differs: Option[Int] | Left[Int, Nothing]  |  Some[Int] | None | Left[Int, Nothing]
+      assoc (none⊔some)⊔left vs List: differs: Option[Int] | Left[Int, Nothing]  |  None | Some[Int] | Left[Int, Nothing]
+      assoc (some⊔none)⊔right vs List: differs: Option[Int] | Right[Nothing, String]  |  Some[Int] | None | Right[Nothing, String]
+
+== depth: a deep base type: the join of classes with a common parent at depth 6
+   trait D0
+   trait D1 extends D0
+   trait D2 extends D1
+   trait D3 extends D2
+   trait D4 extends D3
+   trait D5 extends D4
+   class E1 extends D5 { def m: Int = 1 }
+   class E2 extends D5 { def m: Int = 2 }
+   class E3 extends D2 { def m: Int = 3 }
+   object H { def e1: E1 = new E1; def e2: E2 = new E2; def e3: E3 = new E3 }
+   values: e1 = H.e1, e2 = H.e2, e3 = H.e3
+   if_e1_e2               2.12: D5   2.13: =   3: =
+   if_e1_e3               2.12: D2   2.13: =   3: =
+   if_e2_e1               2.12: D5   2.13: =   3: =
+   if_e2_e3               2.12: D2   2.13: =   3: =
+   if_e3_e1               2.12: D2   2.13: =   3: =
+   if_e3_e2               2.12: D2   2.13: =   3: =
+   assoc_e1_e2_e3         2.12: D2   2.13: =   3: =
+   assoc_e1_e3_e2         2.12: D2   2.13: =   3: =
+   assoc_e2_e1_e3         2.12: D2   2.13: =   3: =
+   assoc_e2_e3_e1         2.12: D2   2.13: =   3: =
+   assoc_e3_e1_e2         2.12: D2   2.13: =   3: =
+   assoc_e3_e2_e1         2.12: D2   2.13: =   3: =
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+
