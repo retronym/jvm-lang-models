@@ -7,3 +7,4 @@ import ScalaTypes.Fine
 import ScalaTypes.Spec
 import ScalaTypes.Paths
 import ScalaTypes.PathsOracle
+import ScalaTypes.Laziness

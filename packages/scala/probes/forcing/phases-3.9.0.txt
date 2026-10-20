@@ -1,0 +1,48 @@
+== A.secret
+  typer, during the run      name=secret owner=A private=true method=true info==> Int
+  typer, after the run       name=secret owner=A private=true method=true info==> Int
+  erasure, after the run     name=secret owner=A private=true method=true info=(): Int
+  lambdaLift, after the run  name=secret owner=A private=true method=true info=(): Int
+  flatten, after the run     name=secret owner=A private=true method=true info=(): Int
+  expandPrivate, after the run name=p$A$$secret owner=A private=false method=true info=(): Int
+  genBCode, after the run    name=p$A$$secret owner=A private=false method=true info=(): Int
+== A.m
+  typer, during the run      name=m owner=A private=false method=true info=(x: Int)(y: Int): Int
+  typer, after the run       name=m owner=A private=false method=true info=(x: Int)(y: Int): Int
+  erasure, after the run     name=m owner=A private=false method=true info=(x: Int, y: Int): Int
+  lambdaLift, after the run  name=m owner=A private=false method=true info=(x: Int, y: Int): Int
+  flatten, after the run     name=m owner=A private=false method=true info=(x: Int, y: Int): Int
+  expandPrivate, after the run name=m owner=A private=false method=true info=(x: Int, y: Int): Int
+  genBCode, after the run    name=m owner=A private=false method=true info=(x: Int, y: Int): Int
+== m.L
+  typer, during the run      name=L owner=m private=false method=false info=Object {...}
+  typer, after the run       name=L owner=m private=false method=false info=Object {...}
+  erasure, after the run     name=L owner=m private=false method=false info=Object {...}
+  lambdaLift, after the run  name=L$1 owner=A private=true method=false info=Object {...}
+  flatten, after the run     name=A$L$1 owner=p private=true method=false info=Object {...}
+  expandPrivate, after the run name=A$L$1 owner=p private=true method=false info=Object {...}
+  genBCode, after the run    name=A$L$1 owner=p private=true method=false info=Object {...}
+== A.O
+  typer, during the run      name=O owner=A private=false method=false info=A.this.O
+  typer, after the run       name=O owner=A private=false method=false info=A.this.O
+  erasure, after the run     name=O owner=A private=false method=true info=(): A.this.O
+  lambdaLift, after the run  name=O owner=A private=false method=true info=(): A.this.O
+  flatten, after the run     name=O owner=A private=false method=true info=(): A.this.O
+  expandPrivate, after the run name=O owner=A private=false method=true info=(): A.this.O
+  genBCode, after the run    name=O owner=A private=false method=true info=(): A.this.O
+== A.O$
+  typer, during the run      name=O$ owner=A private=false method=false info=Object {...}
+  typer, after the run       name=O$ owner=A private=false method=false info=Object {...}
+  erasure, after the run     name=O$ owner=A private=false method=false info=Object {...}
+  lambdaLift, after the run  name=O$ owner=A private=false method=false info=Object {...}
+  flatten, after the run     name=A$O$ owner=p private=false method=false info=Object {...}
+  expandPrivate, after the run name=A$O$ owner=p private=false method=false info=Object {...}
+  genBCode, after the run    name=A$O$ owner=p private=false method=false info=Object {...}
+== A.g
+  typer, during the run      name=g owner=A private=false method=true info=[T](t: T): T
+  typer, after the run       name=g owner=A private=false method=true info=[T](t: T): T
+  erasure, after the run     name=g owner=A private=false method=true info=(t: Object): Object
+  lambdaLift, after the run  name=g owner=A private=false method=true info=(t: Object): Object
+  flatten, after the run     name=g owner=A private=false method=true info=(t: Object): Object
+  expandPrivate, after the run name=g owner=A private=false method=true info=(t: Object): Object
+  genBCode, after the run    name=g owner=A private=false method=true info=(t: Object): Object

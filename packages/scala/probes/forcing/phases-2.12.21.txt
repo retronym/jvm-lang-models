@@ -1,0 +1,74 @@
+== A.secret
+  typer, during the run      name=secret owner=A private=true method=true info==> Int
+  typer, after the run       name=p$A$$secret owner=A private=true method=true info==> Int   <-- changed since typer ran
+  uncurry, after the run     name=p$A$$secret owner=A private=false method=true info=()Int
+  explicitouter, after the run name=p$A$$secret owner=A private=false method=true info=()Int
+  erasure, after the run     name=p$A$$secret owner=A private=false method=true info=()Int
+  lambdalift, after the run  name=p$A$$secret owner=A private=false method=true info=()Int
+  flatten, after the run     name=p$A$$secret owner=A private=false method=true info=()Int
+  jvm, after the run         name=p$A$$secret owner=A private=false method=true info=()Int
+== A.m
+  typer, during the run      name=m owner=A private=false method=true info=(x: Int)(y: Int)Int
+  typer, after the run       name=m owner=A private=false method=true info=(x: Int)(y: Int)Int
+  uncurry, after the run     name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+  explicitouter, after the run name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+  erasure, after the run     name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+  lambdalift, after the run  name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+  flatten, after the run     name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+  jvm, after the run         name=m owner=A private=false method=true info=(x: Int, y: Int)Int
+== m.L
+  typer, during the run      name=L owner=m private=false method=false info=AnyRef {
+  def <init>(): L
+  def z: Int
+}
+  typer, after the run       name=L$1 owner=A private=false method=false info=AnyRef {
+  def <init>(): L$1
+  def z: Int
+}   <-- changed since typer ran
+  uncurry, after the run     name=L$1 owner=A private=false method=false info=Object {
+  def <init>(): L$1
+  def z(): Int
+}
+  explicitouter, after the run name=L$1 owner=A private=false method=false info=Object {
+  def <init>(arg$outer: A.this.type): L$1
+  def z(): Int
+  private[this] val $outer: A.this.type
+}
+  erasure, after the run     name=L$1 owner=A private=false method=false info=Object {
+  def <init>(arg$outer: p.A): L$1
+  def z(): Int
+  private[this] val $outer: p.A
+}
+  lambdalift, after the run  name=L$1 owner=A private=false method=false info=Object {
+  def <init>(arg$outer: p.A): p.A#L$1
+  def z(): Int
+  private[this] val $outer: p.A
+}
+  flatten, after the run     name=A$L$1 owner=p private=false method=false info=Object {
+  def <init>(arg$outer: p.A): p.A$L$1
+  def z(): Int
+  private[this] val $outer: p.A
+}
+  jvm, after the run         name=A$L$1 owner=p private=false method=false info=Object {
+  def <init>(arg$outer: p.A): p.A$L$1
+  def z(): Int
+  private[this] val $outer: p.A
+}
+== A.O
+  typer, during the run      name=O owner=A private=false method=false info=A.this.O.type
+  typer, after the run       name=O owner=A private=false method=true info=A.this.O.type   <-- changed since typer ran
+  uncurry, after the run     name=O owner=A private=false method=true info=()A.this.O.type
+  explicitouter, after the run name=O owner=A private=false method=true info=()A.this.O.type
+  erasure, after the run     name=O owner=A private=false method=true info=()p.A#O.type
+  lambdalift, after the run  name=O owner=A private=false method=true info=()p.A#O.type
+  flatten, after the run     name=O owner=A private=false method=true info=()p.A$O.type
+  jvm, after the run         name=O owner=A private=false method=true info=()p.A$O.type
+== A.g
+  typer, during the run      name=g owner=A private=false method=true info=[T](t: T)T
+  typer, after the run       name=g owner=A private=false method=true info=[T](t: T)T
+  uncurry, after the run     name=g owner=A private=false method=true info=[T](t: T)T
+  explicitouter, after the run name=g owner=A private=false method=true info=[T](t: T)T
+  erasure, after the run     name=g owner=A private=false method=true info=(t: Object)Object
+  lambdalift, after the run  name=g owner=A private=false method=true info=(t: Object)Object
+  flatten, after the run     name=g owner=A private=false method=true info=(t: Object)Object
+  jvm, after the run         name=g owner=A private=false method=true info=(t: Object)Object

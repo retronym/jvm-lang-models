@@ -1,0 +1,21 @@
+cold:              A.typeRef                      forced:          ok
+cold:              A.is(Trait) (AfterLoadFlags)   forced:          ok
+cold:              A.is(Stable) (not known)       forced: A        ok
+cold:              A.info                         forced: A        ok
+cold:              A.info.decl(m)                 forced: A        ok
+cold:              A.info.member(m)               forced: A, m     ok
+cold:              A.info.member(m).info          forced: A, m     ok
+cold:              A.info.decls                   forced: A        ok
+cold:              A.baseClasses                  forced: A        ok
+cold:              A.typeRef <:< AnyRef           forced: A        ok
+cold:              erasure(A.typeRef)             forced:          ok
+in n's completer:  A.info.member(m).info          forced: A, n, m  ok
+in n's completer:  A.info.member(n).info          forced: A, n     !! CyclicReference
+in n's completer:  A.info.decls.map(info)         forced: A, n, m  !! CyclicReference
+in n's completer:  A.baseClasses                  forced: A, n     ok
+in A's completer:  A.typeRef                      forced: A        ok
+in A's completer:  A.is(Trait) (AfterLoadFlags)   forced: A        ok
+in A's completer:  A.is(Stable) (not known)       forced: A        !! CyclicReference
+in A's completer:  A.typeParams                   forced: A        !! CyclicReference
+in A's completer:  A.info                         forced: A        !! CyclicReference
+in A's completer:  A.baseClasses                  forced: A        !! CyclicReference

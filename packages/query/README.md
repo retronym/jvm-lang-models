@@ -14,4 +14,6 @@ A computation that asks questions: a query tree (`Task`) that either returns or 
 |---|---|
 | [`Task.lean`](Query/Task.lean) | Free monad of query trees; `run`, `trace`; T1 [`run_eq_of_trace`](Query/Task.lean#L40), [`run_congr`](Query/Task.lean#L79) |
 | [`Interp.lean`](Query/Interp.lean) | A task over one query interface run over another (`interp`, `rename`): [`run_interp`](Query/Interp.lean#L34), [`trace_interp`](Query/Interp.lean#L42) |
+| [`Lazy.lean`](Query/Lazy.lean) | Lazy forcing of self-referential facts with black-holing (Track L): with a ranked fixed point it never cycles, in any order ([`force_ok`](Query/Lazy.lean#L111), [`forceAll_ok`](Query/Lazy.lean#L160)); a black hole means no ranking ([`cycle_unranked`](Query/Lazy.lean#L176)); phase-indexed facts rank lexicographically ([`phase_ranked`](Query/Lazy.lean#L199)) |
+| [`Freeze.lean`](Query/Freeze.lean) | Facts that grow (a sealed class's children): a read that freezes them makes the answer quasi-deterministic ([`guarded_quasi_det`](Query/Freeze.lean#L67)); without it, order-dependent ([`unguarded_diverges`](Query/Freeze.lean#L105)) |
 | [`Basic.lean`](Query/Basic.lean) | What the Mathlib-free layers took from Mathlib: decidable equality of `Except`, a low-priority `List` monad, `dedupLast` (Mathlib's `dedup`, structural) |

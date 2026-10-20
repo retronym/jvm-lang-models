@@ -1,5 +1,6 @@
 import ScalaTypes.AsSeenFrom
 import ScalaTypes.Fine
+import ScalaTypes.Laziness
 
 /-!
 # `ScalaTypes`: the specification at a glance
@@ -19,6 +20,15 @@ and membership and overriding (`Scala.Members`).
 
 Membership is calibrated against scalac 2.12, 2.13 and dotc 3.9 on 4,704 hierarchies, rejected
 programs included.
+
+Track L, true and spurious cycles (`ScalaTypes.Laziness`):
+
+* `ScalaTypes.Laziness.fine5_ranked`, `ScalaTypes.Laziness.scalac5_unranked`,
+  `ScalaTypes.Laziness.dotc5_ok`: `class C extends B[C#T] { type T = C }` is well-founded; scalac's
+  bundling of parents and members into one class info has no ranking; dotc's `TempClassInfo`
+  succeeds. A spurious cycle.
+* `ScalaTypes.Laziness.slsI_ranked`, `ScalaTypes.Laziness.implI_unranked`: an overriding method's
+  inferred type is well-founded under the SLS's rule and cyclic under the compilers'.
 -/
 
 /-- The results this page states, as checked names: the build fails if one is renamed or removed. -/
@@ -29,4 +39,9 @@ def ScalaTypes.spec : List Lean.Name :=
    ``Scala.lin_fine,
    ``Scala.firstHit_fine,
    ``Scala.Program.envIn_consistent,
-   ``Scala.asks_lookupH]
+   ``Scala.asks_lookupH,
+   ``ScalaTypes.Laziness.fine5_ranked,
+   ``ScalaTypes.Laziness.scalac5_unranked,
+   ``ScalaTypes.Laziness.dotc5_ok,
+   ``ScalaTypes.Laziness.slsI_ranked,
+   ``ScalaTypes.Laziness.implI_unranked]

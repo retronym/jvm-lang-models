@@ -3,6 +3,9 @@ import Scala
 import Links.ZincBridgeScala3
 import Links.ZincBridgeKeys
 import Links.ZincBridgeLibs
+import Query.Lazy
+import Query.Freeze
+import ScalaTypes.Laziness
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
@@ -113,3 +116,11 @@ import Links.ZincBridgeLibs
 #print axioms Scala.Paths.accepted_sound_except
 #print axioms Scala.Paths.nulls_no_cce
 #print axioms Scala.Paths.unsound_counts
+-- Track L: laziness
+#print axioms Query.Lazy.force_ok
+#print axioms Query.Lazy.forceAll_ok
+#print axioms Query.Lazy.cycle_unranked
+#print axioms Query.Lazy.phase_ranked
+#print axioms Query.Freeze.guarded_quasi_det
+#print axioms ScalaTypes.Laziness.scalac5_unranked
+#print axioms ScalaTypes.Laziness.implI_unranked

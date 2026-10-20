@@ -21,7 +21,7 @@ Each track's results, calibration numbers and PRs are in its own file:
 | Track | Layer | Results |
 |---|---|---|
 | Tracks J1–J8 | JVM linkage, overriding along library chains, method bodies and nestmates, default methods along superinterface chains, field resolution through superinterfaces, `Object`'s methods in interface resolution, calibrated on HotSpot 21/25/27 over its client spaces | [`packages/jvm/docs/track-j.md`](../packages/jvm/docs/track-j.md) |
-| Tracks S1–S6, N (first step) | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership, binary names of classes and objects; calibrated on scalac and dotc | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
+| Tracks S1–S6, N (first step), L | Scala lowering (2.12, 2.13, 3), shared `asSeenFrom`, membership, binary names of classes and objects; calibrated on scalac and dotc | [`packages/scala/docs/track-s.md`](../packages/scala/docs/track-s.md) |
 | Tracks V1–V3 | Java lowering, JLS chapter 13; calibrated on javac 17/21/25 | [`packages/java/docs/track-java.md`](../packages/java/docs/track-java.md) |
 | Tracks B1, B2, B4 | MiMa modelled, six gaps (MiMa-F1, MiMa-M1, MiMa-F2, MiMa-D1, MiMa-P1, MiMa-S1), corrected rules; Zinc-clean ⇒ binary-compatible | [`packages/mima/docs/track-b.md`](../packages/mima/docs/track-b.md) |
 
@@ -62,6 +62,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 **Why.** `ImplicitScope` reads its base classes from the shared walk, but the search itself (each base class's companion, the implicits declared or inherited there, the most derived applicable one) is its own. Implicit search is real Scala semantics that Zinc's name hashes must cover ([sbt/zinc#1845](https://github.com/sbt/zinc/issues/1845)), and the names and givens spaces (`ZincNames`) have their own search too.
 
 **Done looks like.** Implicit definitions in `ScalaTypes` and a companion-based implicit-scope search over the shared walk, calibrated against scalac and dotc; `ImplicitScope`'s search and its trace lemma restated over it, with [`is_obligations`](../packages/zinc/Zinc/Features/ImplicitScope.lean#L675) kept. Single-writer work on `Zinc/`. Design: [`packages/zinc/docs/29-shared-scala.md`](../packages/zinc/docs/29-shared-scala.md).
+
+### Track L: laziness, the rest
+
+**Why.** Cyclic reference errors, order-dependent answers and phase-dependent facts are where compilers lose determinism, and where incremental and separate compilation disagree with a clean build. The model and the calibration are in [`track-l.md`](../packages/scala/docs/track-l.md).
+
+**Done looks like.** The future work of [`track-l.md`](../packages/scala/docs/track-l.md): the order-sensitivity harness (file orders, joint versus separate), Namer's eager forcings as families, a caught cycle as a loss of order-independence, phase 15 over `Query.Lazy`, and the scalac crash reported.
 
 ### Track N: binary names, the rest
 
