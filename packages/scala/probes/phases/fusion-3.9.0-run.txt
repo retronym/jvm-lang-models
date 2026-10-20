@@ -1,0 +1,94 @@
+# Fusion3 over scala/scala3 tests/run/*.scala (single files), dotc 3.9.0, d168df2a76 checkout of the tests
+ONE-SIDED tests/run/llift.scala fused=true unfused=false: 
+1664 files: same 1465, differ 83, one-sided 1, both fail 115
+
+## classified (fusion_classify.py)
+78 other   e.g. anon-mirror-gen-local.scala array-charSeq.scala break-opt.scala case_class_equals_fields_sort.scala
+2 line numbers   e.g. 19384.scala vc-equals.scala
+2 constant pool order+other   e.g. i11050.scala i8073b.scala
+1 file set+other   e.g. i8530.scala
+
+## differing
+DIFFER tests/run/19384.scala: EitherOps.class
+DIFFER tests/run/anon-mirror-gen-local.scala: anon$minusmirror$minusgen$minuslocal$package$$anon$5.class anon$minusmirror$minusgen$minuslocal$package$.class anon$minusmirror$minusgen$minuslocal$package$Bar$2$.class anon$minusmirror$minusgen$minuslocal$package$Bar$2$A$.class anon$minusmirror$minusgen$minuslocal$package$Bar$3.class anon$minusmirror$minusgen$minuslocal$package$Foo$2$$anon$4.class anon$minusmirror$minusgen$minuslocal$package$Foo$2$.class
+DIFFER tests/run/array-charSeq.scala: Test$.class
+DIFFER tests/run/break-opt.scala: breakOpt$.class
+DIFFER tests/run/case_class_equals_fields_sort.scala: Test$.class
+DIFFER tests/run/context-functions.scala: context$minusfunctions$package$.class
+DIFFER tests/run/dynamicDynamicTests.scala: Test$.class
+DIFFER tests/run/enums-thunk.scala: Outer$E$1.class Outer$E$3$$anon$1.class Outer$E$3$.class Outer$E$4.class Outer$E$6$$anon$2.class Outer$E$6$.class Outer.class Outer2$.class Outer2$E$12$$anon$4.class Outer2$E$12$.class Outer2$E$9$$anon$3.class Outer2$E$9$.class Outer3$.class Outer3$E$15$$anon$5.class Outer3$E$15$.class Outer3$E$18$$anon$6.class Outer3$E$18$.class
+DIFFER tests/run/extension-specificity2.scala: extension$minusspecificity2$package$.class extension$minusspecificity2$package$bla1$1.class extension$minusspecificity2$package$bla2$2$.class
+DIFFER tests/run/final-fields.scala: Test$.class
+DIFFER tests/run/given-disambiguation.scala: given$minusdisambiguation$package$.class given$minusdisambiguation$package$CC$1.class
+DIFFER tests/run/given-eta.scala: given$minuseta$package$.class
+DIFFER tests/run/i10889.scala: Test$.class
+DIFFER tests/run/i11050.scala: Test$$anon$10.class Test$$anon$2.class Test$$anon$5.class Test$.class Test$InlinedShow$1.class Test$InlinedShow$12.class Test$InlinedShow$5.class
+DIFFER tests/run/i11052a.scala: Foo.class
+DIFFER tests/run/i11052b.scala: Test$.class
+DIFFER tests/run/i11174local.scala: MainClass$$anon$1.class MainClass$Shape$1.class MainClass.class
+DIFFER tests/run/i11583.scala: i11583$package$.class
+DIFFER tests/run/i12328.scala: i12328$package$.class i12328$package$Item$3$.class
+DIFFER tests/run/i12328a.scala: i12328a$package$$anon$1.class i12328a$package$$anon$2.class i12328a$package$.class
+DIFFER tests/run/i12328b.scala: i12328b$package$.class
+DIFFER tests/run/i13146.scala: Opt$.class
+DIFFER tests/run/i13146a.scala: Nat$.class Nat1$.class Opt$.class Rat$.class
+DIFFER tests/run/i13332a.scala: Scope.class SubBiggerKnot.class SubForkedExample.class SubModule.class SubUniverse.class Universe$BranchImpl$SubContainer.class
+DIFFER tests/run/i13332shapeless-b.scala: i13332shapeless$minusb$package$$anon$1.class i13332shapeless$minusb$package$$anon$2.class i13332shapeless$minusb$package$.class
+DIFFER tests/run/i13332shapeless.scala: GenericTestsAux2/i13332shapeless$package$.class MixedCCNonCCNested$$anon$16.class MixedCCNonCCNested$$anon$18.class MixedCCNonCCNested$$anon$31.class MixedCCNonCCNested$$anon$33.class MixedCCNonCCNested$.class MixedCCNonCCNested$Baz$4$.class i13332shapeless$package$$anon$57.class i13332shapeless$package$$anon$59.class i13332shapeless$package$$anon$60.class i13332shapeless$package$.class i13332shapeless$package$SubOuter$1.class i13332shapeless$package$T$3$.class
+DIFFER tests/run/i13691.scala: i13691$package$.class
+DIFFER tests/run/i14215.scala: i14215$package$.class
+DIFFER tests/run/i18183.given.scala: InMethod.class
+DIFFER tests/run/i18183.mixed.scala: OldInMethod.class
+DIFFER tests/run/i1856.scala: Test$.class
+DIFFER tests/run/i23279.scala: i23279$package$.class i23279$package$defn$2$.class i23279$package$defn$4$.class
+DIFFER tests/run/i23409b.scala: i23409b$package$.class
+DIFFER tests/run/i2738.scala: Test$.class
+DIFFER tests/run/i2964d.scala: Bar.class Baz.class Foo.class
+DIFFER tests/run/i4451.scala: Test$.class
+DIFFER tests/run/i5067b.scala: Test$.class
+DIFFER tests/run/i5340.scala: Test$.class
+DIFFER tests/run/i5350.scala: Test$.class
+DIFFER tests/run/i5350b.scala: Test$.class
+DIFFER tests/run/i689.scala: Test$.class Test$A$2.class Test$A$3$.class
+DIFFER tests/run/i8073b.scala: i8073b$package$$anon$1.class i8073b$package$$anon$2.class i8073b$package$$anon$3.class i8073b$package$.class
+DIFFER tests/run/i8530.scala: i8530$package$$anon$1.class i8530$package$$anon$2.class i8530$package$.class
+DIFFER tests/run/i8931.scala: test3$D$1.class
+DIFFER tests/run/i9473.scala: Tree$.class
+DIFFER tests/run/ift-return.scala: ift$minusreturn$package$.class
+DIFFER tests/run/implicit-alias.scala: Test$.class
+DIFFER tests/run/implicitFuns.scala: Test$.class
+DIFFER tests/run/implied-priority.scala: implied$minuspriority$package$.class
+DIFFER tests/run/implied-specifity-2.scala: Test$.class
+DIFFER tests/run/lazy-exprs.scala: TestExpressions$.class
+DIFFER tests/run/lazy-implicit-lists.scala: Test$.class
+DIFFER tests/run/lazy-traits.scala: Cls2.class ClsB.class LocalLazyVal.class OverflownLazyFields.class UnitLazy.class
+DIFFER tests/run/lazyVals.scala: Test$.class
+DIFFER tests/run/manifest-summoning.scala: manifest$minussummoning$package$B$2.class
+DIFFER tests/run/nonLocalReturns.scala: Test$.class
+DIFFER tests/run/patmat-spec.scala: Test$.class
+DIFFER tests/run/poly-kinded-derives.scala: Test$.class Test$Mono$12$.class Test$Mono$3$.class Test$Mono$6$.class Test$Mono$9$.class Test$Poly$3$.class Test$Poly$6$.class Test$Poly$9$.class Test$Poly11$3$.class Test$Poly2$3$.class Test$Poly2$6$.class Test$Poly2$9$.class Test$Poly3$3$.class Test$Poly3$6$.class Test$Poly3$9$.class
+DIFFER tests/run/Providers.scala: Injected.class Injected2.class
+DIFFER tests/run/sip23-valueof.scala: Test$.class
+DIFFER tests/run/structural-contextual.scala: structural$minuscontextual$package$.class
+DIFFER tests/run/summonAll.scala: summonAll$package$.class
+DIFFER tests/run/t0936.scala: Test$$anon$1.class Test$.class Test$Clicked$2$.class Test$MouseHandler$1.class
+DIFFER tests/run/t2333.scala: A.class
+DIFFER tests/run/t3670.scala: C.class M.class
+DIFFER tests/run/t3699.scala: Test$.class
+DIFFER tests/run/t3877.scala: Test$.class
+DIFFER tests/run/t3980.scala: A$.class
+DIFFER tests/run/t4565_1.scala: T.class
+DIFFER tests/run/t6272.scala: A$.class
+DIFFER tests/run/t6666a.scala: Test$.class
+DIFFER tests/run/t6957.scala: Test$Child$1.class
+DIFFER tests/run/t704.scala: E$yyyy$2$.class E.class
+DIFFER tests/run/t7242.scala: CrashTest3$Obj$2$.class CrashTest3.class
+DIFFER tests/run/t8002.scala: Test$.class Test$A$1.class Test$A$3$.class Test$A$5.class Test$A$6$.class
+DIFFER tests/run/t8245.scala: Test$.class
+DIFFER tests/run/t920_1.scala: Test$B$baz$1.class
+DIFFER tests/run/t920.scala: Test$B$baz$1.class
+DIFFER tests/run/tagless.scala: Test$CanThrow$.class
+DIFFER tests/run/traits-initialization.scala: D.class E.class
+DIFFER tests/run/typeclass-derivation2a.scala: TypeLevel$GenericClass.class
+DIFFER tests/run/valueclasses-nested-object.scala: M$.class
+DIFFER tests/run/vc-equals.scala: Test$C.class

@@ -75,6 +75,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Done looks like.** The future work of [`track-lub.md`](../packages/scala-types/docs/track-lub.md): type arguments and `lubDepth` in the model (LUB3), `glb` (LUB2), refinements, the probe rerun on builds of [scala/scala#11291](https://github.com/scala/scala/issues/11291) and #11313, and the LUB3 draft filed.
 
+### Track P: phases, the rest
+
+**Why.** Each phase of scalac and dotc relies on contracts about when scopes are mutated and which phases have touched a tree, kept in comments and checked nowhere; the fusion probe found a missed optimization in shipped dotc and a program whose output depends on the schedule ([`track-p.md`](../packages/scala/docs/track-p.md)).
+
+**Done looks like.** The future work of [`track-p.md`](../packages/scala/docs/track-p.md): `Fusion3` over `tests/pos` and with `-Ycheck:all`, each difference attributed to a pair of miniphases, scalac's forward phase travels listed, and the P3 draft filed.
+
 ### Track N: binary names, the rest
 
 **Why.** Every consumer trusts a classfile's names differently: the JVM links by them, MiMa decides privacy by them, Zinc records and hashes by them (the Merkle PoC's mirror bug of 20 October was a binary name, `p.Q$A`, against a stored source name, `p.Q.A`). Classes and objects, member, local and anonymous, are done ([`Scala.Names`](../packages/scala/Scala/Names.lean), [`track-s.md`](../packages/scala/docs/track-s.md)).

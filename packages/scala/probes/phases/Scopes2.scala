@@ -8,7 +8,7 @@ import scala.collection.mutable
  *  transformers copy a scope only when they change the declarations, and tree transformers enter
  *  members into the scope of the current info, which earlier phases' infos may share.
  *
- *  Usage: Scopes2 subject.scala */
+ *  Usage: Scopes2 [scalac options] subject.scala */
 object Scopes2 {
   class G(s: Settings) extends Global(s) {
     val classes = mutable.LinkedHashMap[String, Symbol]()
@@ -37,8 +37,8 @@ object Scopes2 {
     }
     // not right after a phase another phase is hard-linked to (scalac's `runsRightAfter`):
     // tailcalls (specialize), explicitouter (erasure), erasure (posterasure)
-    val observe = List("typer", "refchecks", "uncurry", "fields", "specialize", "posterasure", "lambdalift",
-      "constructors", "flatten", "mixin", "cleanup", "delambdafy")
+    val observe = sys.props.get("phases").map(_.split(',').toList).getOrElse(List("typer", "refchecks", "uncurry",
+      "fields", "specialize", "posterasure", "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy"))
     override protected def computeInternalPhases(): Unit = {
       super.computeInternalPhases()
       for (p <- observe) addToPhasesSet(new Snapshot(p), s"snapshot after $p")
@@ -47,12 +47,19 @@ object Scopes2 {
 
   def main(args: Array[String]): Unit = {
     val s = new Settings; s.usejavacp.value = true; s.outputDirs.setSingleOutput(sys.props("java.io.tmpdir"))
+    val (_, files) = s.processArguments(args.toList, processAll = true)
     val g = new G(s); import g._
     val run = new Run
-    run.compile(args.toList)
+    run.compile(files)
     var leaks = 0
     for ((name, sym) <- classes) {
-      println(s"== $name")
+      // phases whose (late) answers are one `Scope` object: an info transformer copied the scope between groups
+      val ids = g.observed.toList.map(ph => System.identityHashCode(exitingPhase(run.phaseNamed(ph))(sym.info.decls)))
+      val groups = g.observed.toList.zip(ids).foldRight(List.empty[List[String]]) {
+        case ((ph, id), (h :: t)) if ids(g.observed.indexOf(h.head)) == id => (ph :: h) :: t
+        case ((ph, _), acc) => List(ph) :: acc
+      }
+      println(s"== $name  scopes: ${groups.map(_.mkString(" ")).mkString(" | ")}")
       for (ph <- g.observed) {
         val during = g.snap.getOrElse((name, ph), Nil)
         val after = exitingPhase(run.phaseNamed(ph))(decls(sym))

@@ -6,6 +6,8 @@ import Links.ZincBridgeLibs
 import Query.Lazy
 import Query.Freeze
 import ScalaTypes.Laziness
+import ScalaTypes.Scopes
+import ScalaTypes.Fusion
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
@@ -126,3 +128,7 @@ import ScalaTypes.Laziness
 #print axioms ScalaTypes.Laziness.implI_unranked
 #print axioms ScalaTypes.Laziness.implicitSkip_separate
 #print axioms ScalaTypes.Laziness.exportOrder_reads_differ
+#print axioms ScalaTypes.Scopes.late_eq_truth_iff
+#print axioms ScalaTypes.Scopes.enteredAfter_sound
+#print axioms ScalaTypes.Scopes.lifted_unsound
+#print axioms ScalaTypes.Fusion.fused_eq_seq_of_relabel
