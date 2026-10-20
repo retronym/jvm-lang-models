@@ -134,6 +134,17 @@ object H { type KK = K; def k: K = new Kx; def kk: KK = new Kx; def kx: Kx = new
 ''',
         values={'k': 'H.k', 'kk': 'H.kk', 'kx': 'H.kx'}),
 
+    'transparent': dict(
+        doc='the join is Product & Serializable, which dotc treats as transparent, so the union is kept and erased by its first operand',
+        decls='''
+abstract class L extends Product with Serializable
+abstract class N extends Serializable with Product
+case class L1(i: Int) extends L
+case class N1(i: Int) extends N
+object H { def l: L = L1(1); def n: N = N1(1); def l1: L1 = L1(1) }
+''',
+        values={'l': 'H.l', 'n': 'H.n', 'l1': 'H.l1'}),
+
     'library': dict(
         doc='Option, Either and collections from the library',
         decls='''

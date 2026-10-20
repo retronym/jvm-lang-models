@@ -69,6 +69,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Done looks like.** The future work of [`track-l.md`](../packages/scala/docs/track-l.md): Scala 2 macro annotations as a family, phase 15 over `Query.Lazy`, and the two drafts filed (the scalac crash, dotc's export order).
 
+### Track LUB: joins, the rest
+
+**Why.** An inferred join is a public signature: its parent order and its erasure are what callers link against and what Zinc hashes, and both compilers let them depend on branch order or symbol creation order ([`track-lub.md`](../packages/scala-types/docs/track-lub.md)).
+
+**Done looks like.** The future work of [`track-lub.md`](../packages/scala-types/docs/track-lub.md): type arguments and `lubDepth` in the model (LUB3), `glb` (LUB2), refinements, the probe rerun on builds of [scala/scala#11291](https://github.com/scala/scala/issues/11291) and #11313, and the LUB3 draft filed.
+
 ### Track N: binary names, the rest
 
 **Why.** Every consumer trusts a classfile's names differently: the JVM links by them, MiMa decides privacy by them, Zinc records and hashes by them (the Merkle PoC's mirror bug of 20 October was a binary name, `p.Q$A`, against a stored source name, `p.Q.A`). Classes and objects, member, local and anonymous, are done ([`Scala.Names`](../packages/scala/Scala/Names.lean), [`track-s.md`](../packages/scala/docs/track-s.md)).

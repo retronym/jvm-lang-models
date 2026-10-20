@@ -8,3 +8,4 @@ import ScalaTypes.Spec
 import ScalaTypes.Paths
 import ScalaTypes.PathsOracle
 import ScalaTypes.Laziness
+import ScalaTypes.Lub

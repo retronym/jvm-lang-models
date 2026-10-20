@@ -710,6 +710,44 @@
       assoc (kk⊔kx)⊔k vs List: differs: K  |  H.KK
       assoc (kx⊔k)⊔kk vs List: differs: H.KK  |  K
 
+== transparent: the join is Product & Serializable, which dotc treats as transparent, so the union is kept and erased by its first operand
+   abstract class L extends Product with Serializable
+   abstract class N extends Serializable with Product
+   case class L1(i: Int) extends L
+   case class N1(i: Int) extends N
+   object H { def l: L = L1(1); def n: N = N1(1); def l1: L1 = L1(1) }
+   values: l = H.l, n = H.n, l1 = H.l1
+   if_l_n                 2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: L | N
+   if_l_l1                2.12: L   2.13: =   3: =
+   if_n_l                 2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: N | L
+   if_n_l1                2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: N | L1
+   if_l1_l                2.12: L   2.13: =   3: =
+   if_l1_n                2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: L1 | N
+   assoc_l_n_l1           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: L | N
+   assoc_l_l1_n           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: L | N
+   assoc_n_l_l1           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: N | L
+   assoc_n_l1_l           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: N | L
+   assoc_l1_l_n           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: L | N
+   assoc_l1_n_l           2.12: Product with Serializable   2.13: Product with java.io.Serializable   3: N | L
+   2.12 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.12 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 joint: comm same 6; perm same 3; assoc same 6; absorb same 6
+   2.13 separate: comm same 6; perm same 3; assoc same 6; absorb same 6
+   3 joint: comm order 4, same 2; perm order 3; assoc same 6; absorb same 6
+      comm if(l,n): order: L | N  |  N | L  [erasure ()Ljava/io/Serializable; vs ()Lscala/Product;]
+      comm list2(l,n): order: List[L | N]  |  List[N | L]  [erasure ()Lscala/collection/immutable/List<Ljava/io/Serializable;>; vs ()Lscala/collection/immutable/List<Lscala/Product;>;]
+      comm if(n,l1): order: N | L1  |  L1 | N  [erasure ()Lscala/Product; vs ()Ljava/io/Serializable;]
+      perm list3(l,n,l1): order: List[L | N]  |  List[N | L]
+      perm match(l,n,l1): order: L | N  |  N | L
+      perm assoc(l,n,l1): order: L | N  |  N | L
+   3 separate: comm order 4, same 2; perm order 3; assoc same 6; absorb same 6
+      comm if(l,n): order: L | N  |  N | L  [erasure ()Ljava/io/Serializable; vs ()Lscala/Product;]
+      comm list2(l,n): order: List[L | N]  |  List[N | L]  [erasure ()Lscala/collection/immutable/List<Ljava/io/Serializable;>; vs ()Lscala/collection/immutable/List<Lscala/Product;>;]
+      comm if(n,l1): order: N | L1  |  L1 | N  [erasure ()Lscala/Product; vs ()Ljava/io/Serializable;]
+      perm list3(l,n,l1): order: List[L | N]  |  List[N | L]
+      perm match(l,n,l1): order: L | N  |  N | L
+      perm assoc(l,n,l1): order: L | N  |  N | L
+
 == library: Option, Either and collections from the library
    object H { def u: Unit = () }
    values: some = Some(1), none = None, left = Left(1), right = Right("a"), nil = Nil, vec = Vector(1)
