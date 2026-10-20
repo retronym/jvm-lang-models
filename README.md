@@ -33,3 +33,4 @@ Each has a README with its question, where to start, its calibration and its gap
 - [`docs/README.md`](docs/README.md): where to start by goal, and every document by what it is for.
 - [`docs/theorems.md`](docs/theorems.md): the obligations and T1–T5, where their hypotheses bite, and the trust checks (no `sorry` or `axiom`; `native_decide` only in `example`s; core theorems on the standard axioms, checked in CI).
 - [`docs/status.md`](docs/status.md): what is proved, what is checked, and the bug map's counts.
+- [`docs/findings.md`](docs/findings.md): what the models found in scalac, dotc, Zinc, MiMa and HotSpot that needs triage, and what was decided.

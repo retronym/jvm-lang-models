@@ -1,6 +1,6 @@
 # Upstream drafts
 
-Drafts of reports to the Scala projects arising from the models. None has been posted; each says where it would go. Once one is posted, replace its draft with a link.
+Drafts of reports to the Scala projects arising from the models. None has been posted; each says where it would go. Once one is posted, replace its draft with a link. Every draft is also a row of the triage register, [`../findings.md`](../findings.md), which holds the findings not (yet) written up as well.
 
 | Draft | Venue | Finding |
 |---|---|---|

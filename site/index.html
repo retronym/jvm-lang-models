@@ -278,7 +278,7 @@ const REPO = "https://github.com/retronym/jvm-lang-models/blob/main/";
 const L = {
   query:   { x:380, y:420, q:"questions + trace",
     full:"Query", ask:"A compilation is a task that queries an oracle and leaves a trace. Why is the trace enough?",
-    proved:"T1 <code>Task.run_eq_of_trace</code>: oracles that agree on a run's trace give the same output and trace.",
+    proved:"T1 <code>Task.run_eq_of_trace</code>: oracles that agree on a run's trace give the same output and trace. Track L: a compiler's symbol table as a lazy evaluator; well-founded definitions never cycle, in any order (<code>Lazy.force_ok</code>, <code>forceAll_ok</code>); a fact read with a freeze is quasi-deterministic (<code>Freeze.guarded_quasi_det</code>).",
     calib:"Nothing to calibrate: the foundation every other layer instantiates.",
     gaps:"None.", start:"packages/query/Query/Task.lean" },
   jvm:     { x:150, y:320, q:"linkage, resolution", tools:["HotSpot 21 · 25 · 27"],
@@ -288,7 +288,7 @@ const L = {
     gaps:"Method bodies are their linkage behaviour only; class initialisation.", lit:["Linking", "Overriding", "Access-control", "Default-methods", "Binary-compatibility", "Constructors", "Sealed-classes"], start:"packages/jvm/Jvm/Link.lean" },
   "scala-types": { x:400, y:320, q:"asSeenFrom, members", tools:["scalac 2.12 · 2.13", "dotc 3.9"],
     full:"Scala types", ask:"How do scalac and dotc compute a member's type, resolution and overriding?",
-    proved:"<code>AsSeenFrom.compose</code>, <code>chain_is_single</code>: asSeenFrom once, for any type language.",
+    proved:"<code>AsSeenFrom.compose</code>, <code>chain_is_single</code>: asSeenFrom once, for any type language. True and spurious cyclic references in scalac's and dotc's shapes (<code>Laziness</code>).",
     calib:"Membership and overriding on 4,704 hierarchies, rejected programs included: 4,700 agree on scalac 2.12/2.13 (the 4 are a scalac bug), 4,704 on dotc 3.9.0.",
     gaps:"Type members, <code>var</code>, qualified access, <code>abstract override</code>.", lit:["Linearization", "Overriding-in-Scala"], start:"packages/scala-types/README.md" },
   "inc-comp": { x:650, y:320, q:"incremental = clean?",
@@ -309,8 +309,8 @@ const L = {
   scala:   { x:350, y:210, q:"scalac, dotc output", tools:["scalac 2.12 · 2.13", "dotc 3.9"],
     full:"Scala lowering", ask:"What classfiles do scalac and dotc emit, including forwarders and binary names?",
     proved:"<code>Scala.lower_congr</code>; F6 as a compositionality failure (<code>Scala.Facts</code>).",
-    calib:"Classfiles: 1,353 of 1,353 programs on scalac 2.12.21/2.13.18, 1,368 of 1,368 on dotc 3.9.0. Binary names: 314 of 314 and 332 of 332. Found scala/scala3#27351.",
-    gaps:"Local/anonymous class names, type-parametric case classes, overloading, and more (roadmap).", start:"packages/scala/Scala/Lower.lean" },
+    calib:"Classfiles: 1,353 of 1,353 programs on scalac 2.12.21/2.13.18, 1,368 of 1,368 on dotc 3.9.0. Binary names, local and anonymous classes included: 453 of 453 and 471 of 471. Laziness: forcing footprints, phase-indexed facts, a 24-program cycle battery and a 26-program order harness. Found scala/scala3#27351; more in docs/findings.md.",
+    gaps:"Lambda bodies and <code>EnclosingMethod</code>, type-parametric case classes, overloading, and more (roadmap).", start:"packages/scala/Scala/Lower.lean" },
   intellij:{ x:485, y:210, q:"substitutor chains", tools:["IntelliJ Scala TCK"],
     full:"IntelliJ Scala plugin", ask:"When do the plugin's substitutor chains agree with scalac's asSeenFrom?",
     proved:"<code>Chain.compose</code>, <code>chain_is_intended</code>, <code>once_is_scalac</code>, <code>selfRooted_twice_diverges</code>, <code>IntelliJ.agrees</code>.",
@@ -379,7 +379,7 @@ const E = [["harness","zinc"],["harness","mima"],["harness","links"],["harness",
 
 const P = [
  { id:"zinc", label:"Zinc / build-tool maintainer", cards:[
-   { h:"Is my change to invalidation sound?", t:"State your bridge as keys, hashes and what each key covers, then discharge four obligations. The loop theorems do the rest: if it returns, every unit is up to date (T3a); under acyclic dependencies, incremental equals clean (T3).", ev:[["p","T2 · T3a · T3 · T5"],["p","90 theorems axiom-checked in CI"]], l:["inc-comp","zinc"] },
+   { h:"Is my change to invalidation sound?", t:"State your bridge as keys, hashes and what each key covers, then discharge four obligations. The loop theorems do the rest: if it returns, every unit is up to date (T3a); under acyclic dependencies, incremental equals clean (T3).", ev:[["p","T2 · T3a · T3 · T5"],["p","99 theorems axiom-checked in CI"]], l:["inc-comp","zinc"] },
    { h:"Why did this bug undercompile?", t:"Look the bug up in the bug map: each row names the failed obligation and the Lean witness that has the bug's trace.", ev:[["c","56 covered · 38 partial · 50 gaps"],["c","52 with the exact trace"]], l:["zinc"], link:"docs/evidence/bug-map.md" },
    { h:"Give me test cases that fail today", t:"The conformance harness renders each program of a model space, applies each edit, and diffs incremental classfiles against a clean build. Witnesses become scripted tests.", ev:[["c","2,331 + 2,372 cases agree with Zinc"],["c","20 predicted failures failed on develop"]], l:["harness","zinc"], link:"packages/zinc/docs/10-names.md" },
    { h:"Will the loop terminate?", t:"With a policy that is monotone from some round, yes, within a stated bound. Without transitiveStep, three mutually inferred classes make Zinc's loop diverge for every fuel.", ev:[["p","XCompiler.zinc_some_of_monotoneFrom"],["p","PingPong.zinc_diverges"]], l:["inc-comp","zinc"] },
@@ -389,7 +389,8 @@ const P = [
    { h:"What exactly does my compiler emit here?", t:"The lowering models state classfile shape, mixin and static forwarders and binary names for a subset, and agree with the compilers on every probed program.", ev:[["c","scalac 1,353/1,353"],["c","dotc 1,368/1,368"],["c","javac 17·21·25 on 99"]], l:["scala","java"] },
    { h:"Where do joint and separate compilation differ?", t:"Compositionality (comp) is an obligation; F4, F5 and F6 are proved failures of it. The bug map's comp rows are the open ones.", ev:[["p","SplitProof.Spec.joint_not_comp"],["p","ZincBridgeScala3.not_comp"]], l:["scala","zinc","links"], link:"packages/scala/Scala/Facts.lean" },
    { h:"What must my Zinc bridge record?", t:"The obligations are the specification for ExtractAPI and ExtractDependencies: every traced query, misses included, covered by a recorded key whose hash decides the answer.", ev:[["p","coverage · abstraction · locality"]], l:["inc-comp","zinc"] },
-   { h:"Has the model found compiler bugs?", t:"Calibration disagreements are findings: dotc's shortening of unencoded class names, and 4 membership disagreements on scalac 2.", ev:[["g","scala/scala3#27351"],["c","4,700/4,704 hierarchies"]], l:["scala","scala-types"] },
+   { h:"Why does my program compile in one file order and not another?", t:"A well-founded program compiles the same in every order. Measured exceptions: scalac's implicit search skips a candidate being completed (a clean build accepts what an incremental build rejects), and dotc's wildcard exports read member sets still growing. The explainer maps completers, cycles, levels and phases onto both compilers.", ev:[["p","Lazy.forceAll_ok"],["c","3 of 26 programs order-sensitive"],["c","24-program cycle battery"]], l:["query","scala-types","scala"], link:"packages/scala/docs/track-l.md" },
+   { h:"Has the model found compiler bugs?", t:"Calibration disagreements are findings, kept in a triage register: dotc's shortening of unencoded class names (filed), a scalac crash on a refinement in an F-bounded parent, dotc's export order, and 4 membership disagreements on scalac 2.", ev:[["g","scala/scala3#27351"],["c","register: docs/findings.md"],["c","4,700/4,704 hierarchies"]], l:["scala","scala-types"], link:"docs/findings.md" },
  ]},
  { id:"lib", label:"Library author / MiMa maintainer", cards:[
    { h:"Will this edit break already-compiled clients?", t:"The JVM linkage model says which method a client resolves to before and after your edit, and matches HotSpot on every probed program.", ev:[["p","link_congr"],["c","196,972 programs · HotSpot 21·25·27"]], l:["jvm"], lit:"Binary-compatibility" },

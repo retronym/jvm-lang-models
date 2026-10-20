@@ -12,7 +12,9 @@ Where to start, by goal; then four kinds of document, by what they are for. Per-
 
 **Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from [retronym/zinc#25](https://github.com/retronym/zinc/issues/25)) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in [`packages/harness/scripts/`](../packages/harness/scripts). The workflow is in [`packages/zinc/docs/10-names.md`](../packages/zinc/docs/10-names.md) and [`packages/zinc/docs/12-java.md`](../packages/zinc/docs/12-java.md); pending tests in [`evidence/tests.md`](evidence/tests.md).
 
-**Maintain javac, scalac or dotc.** [`packages/java`](../packages/java), [`packages/scala`](../packages/scala) and [`packages/scala-types`](../packages/scala-types) state what the compilers emit for a subset, calibrated by the probes beside them. [`packages/scala/Scala/Facts.lean`](../packages/scala/Scala/Facts.lean) and the `comp` failures in the bug map are where joint and separate compilation differ.
+**Maintain javac, scalac or dotc.** [`packages/java`](../packages/java), [`packages/scala`](../packages/scala) and [`packages/scala-types`](../packages/scala-types) state what the compilers emit for a subset, calibrated by the probes beside them. [`packages/scala/Scala/Facts.lean`](../packages/scala/Scala/Facts.lean) and the `comp` failures in the bug map are where joint and separate compilation differ. [`track-l.md`](../packages/scala/docs/track-l.md) explains the symbol table as a lazy evaluator, mapped onto both compilers' code: true and spurious cyclic references, what a completer may ask, pushed facts and freezes, facts at a phase, and programs that compile or not by file order.
+
+**Triage what the models found.** [`findings.md`](findings.md) is the register of compiler and tool behaviour that needs a decision (a bug, a spec gap, or by design), with the evidence and the next step; the reports written so far are in [`upstream/`](upstream/README.md).
 
 **Maintain MiMa.** [`packages/mima`](../packages/mima): MiMa as a bridge design, its six gaps, corrected rules; [`packages/links`](../packages/links) connects it to Zinc (B4).
 
@@ -26,6 +28,7 @@ Where to start, by goal; then four kinds of document, by what they are for. Per-
 | [`specification.md`](specification.md) | understand why the model is a specification of the compiler bridge, and the rules that follow (theorems vs `example`s, witnesses, calibration) |
 | [`specification-ledger.md`](specification-ledger.md) | find, per JVMS, JLS and SLS section, the rules that cite it, the behaviour it leaves unspecified and the contradictions the calibrations found (generated) |
 | [`stats.md`](stats.md) | see each package's size: Lean files, lines, theorems and checked examples (generated) |
+| [`findings.md`](findings.md) | triage what the models and probes found in the compilers and tools: open findings with their evidence and next step, and the decided ones |
 | [`roadmap.md`](roadmap.md) | find open work on the JVM, Java, Scala and binary-compatibility layers |
 | [`theorems.md`](theorems.md) | read the obligations and T1–T5, stated once, where their hypotheses bite, and the trust checks |
 

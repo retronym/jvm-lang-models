@@ -26,12 +26,22 @@ The local [`IncComp.Compiler`](../packages/inc-comp/IncComp/Model.lean#L28) has 
 | B4 | [`XCompiler.untouched_eq_clean`](../packages/inc-comp/IncComp/General.lean#L578) | A unit Zinc never recompiles equals the clean build's, so it links as a fresh build does | explicit interfaces, through [`XCompiler.fixpoint_unique_of_explicit`](../packages/inc-comp/IncComp/General.lean#L547) (`:100`) |
 | | [`zinc_sound_charged`](../packages/zinc/Zinc/Loop/Files.lean#L176) | T3a with file-closed rounds and imports charged to one class of the file | charged obligations; file-closed policy |
 
+**Laziness (Track L).** A compiler's symbol table as a lazy evaluator ([`Query.Lazy`](../packages/query/Query/Lazy.lean), [`Query.Freeze`](../packages/query/Query/Freeze.lean); [`track-l.md`](../packages/scala/docs/track-l.md)):
+
+| Name | Statement | Hypotheses |
+|---|---|---|
+| [`Lazy.force_ok`](../packages/query/Query/Lazy.lean#L111) | Forcing any fact from any consistent store returns its value and never black-holes | a ranked fixed point of the rules (well-founded definitions) |
+| [`Lazy.forceAll_ok`](../packages/query/Query/Lazy.lean#L160) | Every order of demands gives the same answers | the same |
+| [`Lazy.cycle_unranked`](../packages/query/Query/Lazy.lean#L176) | A black hole means no ranking puts the fact below the fuel | none |
+| [`Lazy.phase_ranked`](../packages/query/Query/Lazy.lean#L199) | Facts indexed by phase rank lexicographically | no fact reads a later phase; reads within a phase ranked |
+| [`Freeze.guarded_quasi_det`](../packages/query/Query/Freeze.lean#L67) | A pushed fact whose reads freeze it gives every read the whole fact, whatever the order, or the run fails | none |
+
 ## Where the hypotheses bite
 
 - Abstraction is perfect hashing: collisions of Zinc's 32-bit name hashes are excluded by fiat.
 - T3's well-founded case covers every traced query under every oracle, which rules out self-queries and body-level cycles; uniqueness should need only that the dependencies affecting interfaces are well-founded ([sbt/zinc#1284](https://github.com/sbt/zinc/issues/1284)'s condition). Its explicit case needs every interface independent of every oracle, so a mix of annotated and inferred members is unproved.
 - T3 and T4's explicit and well-founded cases are on `Compiler` (and [`TCompiler`](../packages/inc-comp/IncComp/Tree.lean#L26) for T3). On [`XCompiler`](../packages/inc-comp/IncComp/General.lean#L22) only the explicit T3b exists, inside `BinCompat`.
-- `comp` fails for F4, F5 and F6 ([`SplitProof.Spec.joint_not_comp`](../packages/zinc/Zinc/Features/SplitProof.lean#L952), [`ZincBridgeScala3.not_comp`](../packages/links/Links/ZincBridgeScala3.lean#L79)).
+- `comp` fails for F4, F5 and F6 ([`SplitProof.Spec.joint_not_comp`](../packages/zinc/Zinc/Features/SplitProof.lean#L952), [`ZincBridgeScala3.not_comp`](../packages/links/Links/ZincBridgeScala3.lean#L79)), and wherever a compiler skips a fact in progress instead of forcing it: scalac's implicit search gives one program three outcomes by typing order ([`implicitSkip_separate`](../packages/scala-types/ScalaTypes/Laziness.lean#L252), finding L1 of [`findings.md`](findings.md)). [`forceAll_ok`](../packages/query/Query/Lazy.lean#L160)'s order-independence needs every consumer to force; a consumer that peeks ([`Lazy.forcePeek`](../packages/query/Query/Lazy.lean#L249)) is outside it.
 - The set of units is fixed; additions and deletions are absent sources ([`Added.lean`](../packages/zinc/Zinc/Features/Added.lean)).
 - T3a covers only runs that return within fuel.
 - Precision has no framework definition; it is proved per instance.

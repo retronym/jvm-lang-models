@@ -17,6 +17,8 @@ The models are specifications ([`docs/specification.md`](specification.md)): a c
 
 ## Against the bug trackers
 
+What the models found that is not yet in a tracker, or needs a decision, is in [`findings.md`](findings.md).
+
 Against Zinc's bug tracker ([`docs/evidence/bug-map.md`](evidence/bug-map.md), counted from its rows): of 145 catalogued bugs, 56 are covered by an instance, 38 partially, and 50 are gaps, 35 of them compiler `comp` or snapshot-bookkeeping rows with no phase. An instance has a witness with the bug's trace for 52 and the family without this witness for 26; most instances of phases 15 to 28 were built after the bug, so these are not predictions. 16 pending and 3 disabled scripted tests are mapped the same way.
 
 ## Trust
