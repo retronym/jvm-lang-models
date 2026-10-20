@@ -4,3 +4,4 @@ import Scala.Space
 import Scala.Facts
 import Scala.Catalogue
 import Scala.Spec
+import Scala.Names

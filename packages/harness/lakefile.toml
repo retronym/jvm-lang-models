@@ -54,6 +54,10 @@ name = "scalaprobe"
 root = "Harness.ScalaProbe"
 
 [[lean_exe]]
+name = "namesprobe"
+root = "Harness.NamesProbe"
+
+[[lean_exe]]
 name = "javaprobe"
 root = "Harness.JavaProbe"
 

@@ -98,7 +98,7 @@ The calibration is unchanged with the fixes: 4,700/4,704 on 2.12.21 and 2.13.18,
 
 What the probe corrected:
 - **Case classes.** Synthesized `copy`, `toString`, `hashCode`, `equals`, `canEqual` are skipped when a *superclass* defines one concretely (a trait's doesn't count); `productPrefix` is always synthesized. With a superclass's `copy`, Scala 3 keeps `copy$default$N`, Scala 2 drops it. Only a synthesized companion extends `AbstractFunctionN` and overrides `toString`. Serializable objects get `readResolve` in 2.12, `writeReplace` in 2.13; Scala 3 makes every object `Serializable`.
-- **Nesting.** A nested object gets no mirror class; its module class has a public constructor, final only in Scala 3, where the enclosing module class also gets a static field for it. `InnerClasses` names the mirror or companion as outer; a nested class and its companion list each other.
+- **Nesting.** A nested object gets no mirror class; its module class has a public constructor, final only in Scala 3, where the enclosing module class also gets a static field for it. `InnerClasses` names the mirror or companion as outer; of a nested companion pair, the class lists the module in Scala 3 only, and the module lists the class only when it names it (a case class's `apply`). Only Scala 3 gives a pair nested in an object static forwarders ([phase 31](../../zinc/docs/31-forwarders.md)).
 - **Enums.** `values`, `valueOf`, `$values` exist only when every case is a singleton; `$new` is private with no static forwarder.
 - **Inline.** An `inline def` is in the classfile only when it implements or overrides a member.
 
@@ -146,9 +146,36 @@ The exclusions are named:
 - **`bug13199`**, four programs, Scala 2 only: a class's abstract `def m` re-abstracts a trait's `val m` and the subclass overrides it with a `val`. 2.12 and 2.13 accept them, and HotSpot throws `AbstractMethodError` ([scala/bug#13199](https://github.com/scala/bug/issues/13199)); dotc rejects them ([`bug13199_witnesses`](../Scala/Refchecks.lean#L285)). These are the only accepted programs of the space that fail at run time, under any of the three compilers.
 - **`lowerGap`**, from the model's side only: the rows `Scala.Lower` does not model. A trait's `val` overridden by the class: scalac and dotc still give the class the trait's setter `T$_setter_$m_$eq`, which `$init$` calls, and lowering does not, so the model's `new C` fails where HotSpot runs (20 class/owner pairs per Scala 2 dialect, 15 for Scala 3); and a trait's `lazy val`, whose implementation in a class lowering only partly models (24 and 16). Widening `Lower` for them is open; the `bug13199` programs are in the first row.
 
+### Binary names of classes and objects (Track N, first step)
+
+[`Scala.Names`](../Scala/Names.lean) is what a class, trait, case class or object that is not local or anonymous is called on the JVM, and the class's own `InnerClasses` entry, for scalac 2.12 and 2.13 and dotc 3. Neither specification says: JLS §13.1 fixes `Outer$Inner` for a Java member class, the SLS has no binary names. The model is a structured definition (package, chain of enclosing class-likes, kind, source name) and one function from it to strings, read from scalac's `Symbol.javaBinaryNameString`, `StdNames.compactify`, `BTypesFromSymbols.buildNestedInfo` and `NameTransformer`, and dotc's `fullNameSeparated`, `NameOps.compactify`, `Desugar.packageObjectName` and `NameTransformer`. It stands alone for now: `Lower` still spells the names it emits itself.
+
+[`probes/names.py`](../probes/names.py) compiles each program of `namesSpace` in its own run and compares the set of classfiles, each with its own `InnerClasses` entry:
+
+| family | what | 2.12.21 | 2.13.18 | 3.9.0 |
+|---|---|---|---|---|
+| `nest` | class, trait, object, case class and companion pairs, up to three deep, in the empty package, a package and a subpackage | 228/228 | 228/228 | 228/228 |
+| `pkgobj` | members of package objects | 16/16 | 16/16 | 16/16 |
+| `encode` | operators, spaces, non-ASCII and `$` in names, top-level and member | 40/40 | 40/40 | 40/40 |
+| `long` | flat names either side of each version's length limit, nested shortening, encoding that crosses the limit | 30/30 | 30/30 | 30/30 |
+| `s3top` | `<file>$package` for top-level `def`s and implicit classes, file names that need encoding | | | 18/18 |
+
+The rules, the same in all three compilers unless a version is named:
+
+- **Flattening.** A member's flat name is its owner's, `$`, and its own, with the owner's taken without the module suffix: a member of `object O` is `O$C`, of `class C` is `C$C`, an object nested in either adds `$`. A package object is an object called `package`. A top-level object without a companion class also gets a mirror class.
+- **`InnerClasses`.** The simple name is the encoded source name (plus `$` for a module class), never the shortened one. The outer class of a member of a *top-level* object is its companion class or mirror class, not the module class (scalac: "Java compatibility"); of a member of a nested object, the module class.
+- **Encoding.** `NameTransformer`'s table (`+` is `$plus`), and `$uXXXX` for any other character that cannot be part of a Java identifier. Identical in both code bases.
+- **Shortening.** A flat name over the limit becomes its first and last quarter around the MD5 of the whole, printed without leading zeros per byte (16 to 32 hex digits), between `$$$$` markers. The limit is 247 in 2.12 (from `-Xmax-classfile-name`, 255), 233 in 2.13, 234 in dotc, and a top-level name is never shortened. **scalac shortens the encoded name; dotc shortens the source name and encodes afterwards**, so an operator-heavy member (`O` with a member of fifty `+`) is 252 characters encoded: 2.12 and 2.13 shorten it, dotc writes it as it is and fails (`FileSystemException`, then an NPE). The model predicts the failure, and agrees. dotc's limit also leaves no room for the module class's `$` (240 − 6, against scalac's 240 − 7), so a nested object with a 234-character flat name gets a 241-character file name (read from the source, not probed). Draft: [`dotc-compactify-before-encoding.md`](../../../docs/upstream/dotc-compactify-before-encoding.md).
+- **File systems.** The compilers' limits count characters, and APFS (where the probe runs) counts UTF-16 units, so a non-ASCII name that 2.12 keeps at 241 characters writes on macOS; on ext4, which counts bytes, its 488 bytes do not. [`Names.unwritable`](../Scala/Names.lean#L150) takes the file system as a parameter.
+- **Scala 3's wrapper.** Top-level `def`s and implicit classes go in an object `<file>$package`, named after the source file and encoded like any name (`my-file.scala` gives `my$minusfile$package`); an implicit class in it is `my$minusfile$package$I`.
+
+The compile server keeps a symbol table between runs, so programs that define the same class would see each other: each gets a package of its own (`pN`), and the few in the empty package a compiler of their own.
+
+Next for Track N: local and anonymous classes and their numbering, and `Lower` and Zinc's naming models (`ZincNames`, [`Naming.lean`](../../zinc/Zinc/Bridges/Naming.lean)) restated over `Names`. The Merkle PoC's bug fixed in retronym/zinc `fdafc0a4a` was a mismatch between the binary name (`p.Q$A`) and the source names Zinc stores (`p.Q.A`, Scala 3 `p.Q$.A`); those are a third and fourth rendering of the same structure, which this model can now produce and check.
+
 ## Out of scope
 
-Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in [`docs/roadmap.md`](../../../docs/roadmap.md).
+Method bodies and call sites in user code; overloading in general; generic `Signature` attributes; `lazy val` and `var` implementation in classes; `private[this]` and qualified access; specialization; Java-defined parents; binary names of local, anonymous and lambda classes; given instances; case classes with type parameters, several parameter lists or private constructors; enums with type parameters; local classes; macros. The open items are in [`docs/roadmap.md`](../../../docs/roadmap.md).
 
 ## PRs
 
