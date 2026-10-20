@@ -67,7 +67,7 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Why.** Cyclic reference errors, order-dependent answers and phase-dependent facts are where compilers lose determinism, and where incremental and separate compilation disagree with a clean build. The model and the calibration are in [`track-l.md`](../packages/scala/docs/track-l.md).
 
-**Done looks like.** The future work of [`track-l.md`](../packages/scala/docs/track-l.md): Namer's eager forcings as families (givens, extension search, macro annotations), phase 15 over `Query.Lazy`, and the two drafts filed (the scalac crash, dotc's export order).
+**Done looks like.** The future work of [`track-l.md`](../packages/scala/docs/track-l.md): Scala 2 macro annotations as a family, phase 15 over `Query.Lazy`, and the two drafts filed (the scalac crash, dotc's export order).
 
 ### Track N: binary names, the rest
 

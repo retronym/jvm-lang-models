@@ -8,6 +8,10 @@
   3.9.0    in order: error, reversed: cycle   (diagnostic differs)
            in order: value x is not a member of o1.C
            reversed: Overloaded or recursive method y needs return type
+== export-given
+  3.9.0    in order: error, reversed: error
+           in order: Conflicting definitions:
+           reversed: Conflicting definitions:
 == export-inferred-back
   3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok
 == export-inferred-cross
@@ -19,10 +23,28 @@
 == export-mutual-wildcard
   3.9.0    in order: error, reversed: ok   <-- compiles or not by order
            in order: Conflicting definitions:
+== export-three-cycle
+  3.9.0    in order: ok, reversed: ok, A.scala alone: ok, B.scala alone: ok, C.scala alone: ok
 == export-wildcard-both
   3.9.0    in order: error, reversed: error
            in order: Conflicting definitions:
            reversed: Conflicting definitions:
+== export-wildcard-mutual-defs
+  3.9.0    in order: error, reversed: error
+           in order: Conflicting definitions:
+           reversed: Conflicting definitions:
+== extension-inferred-mutual
+  3.9.0    in order: ok, reversed: ok, E.scala alone: ok, U.scala alone: ok
+== extension-overload-completing
+  3.9.0    in order: error, reversed: cycle   (diagnostic differs)
+           in order: value f is not a member of String.
+           reversed: Overloaded or recursive method g needs return type
+== given-anonymous-mutual
+  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+== given-from-inferred-def
+  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
+== given-two-candidates-one-completing
+  3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
 == implicit-explicit-type
   2.12.21  in order: error, reversed: error
            in order: ambiguous implicit values:
@@ -109,4 +131,4 @@
            in order: ';' expected but 'def' found.
            reversed: ';' expected but 'def' found.
   3.9.0    in order: ok, reversed: ok, O.scala alone: ok, U.scala alone: ok
-18 programs, 3 compilers: 5 (program, compiler) pairs that compile or not by order
+26 programs, 3 compilers: 5 (program, compiler) pairs that compile or not by order

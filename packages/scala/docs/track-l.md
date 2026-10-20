@@ -112,7 +112,7 @@ This is also where Track N meets Track L: a binary name ([track-s.md](track-s.md
 
 ## 6. Order sensitivity, measured
 
-A well-founded program compiles the same in every order ([`forceAll_ok`](../../query/Query/Lazy.lean#L160)). [`probes/forcing/order.py`](../probes/forcing/order.py) tests the converse on real compilers: each multi-file program is compiled jointly in its file order, jointly reversed, and, after the first, each file alone against the classfiles, as an incremental build does after an edit to it. Of eighteen programs (implicit candidates, conversions, overloading, case-class defaults, parents, inherited types, Scala 3 exports and transparent inline), three compile or not by order:
+A well-founded program compiles the same in every order ([`forceAll_ok`](../../query/Query/Lazy.lean#L160)). [`probes/forcing/order.py`](../probes/forcing/order.py) tests the converse on real compilers: each multi-file program is compiled jointly in its file order, jointly reversed, and, after the first, each file alone against the classfiles, as an incremental build does after an edit to it. Of twenty-six programs (implicit candidates, conversions, overloading, case-class defaults, parents, inherited types; for Scala 3 also exports, givens, extension methods and transparent inline), three compile or not by order:
 
 * **An implicit candidate skipped while it is completed** (scalac 2.12.21 and 2.13.18):
 
@@ -126,7 +126,7 @@ A well-founded program compiles the same in every order ([`forceAll_ok`](../../q
   With `O.scala` first, completing `y` types `U.z`, whose implicit search skips `y` (`LOCKED`) and resolves to `x`: it compiles, and `U.z` is `1`. With `U.scala` first: "recursive method z needs result type". Recompiling `U.scala` alone, with `y`'s type from the classfile: "ambiguous implicit values". So **a clean build accepts what an incremental build rejects**: retronym/zinc `claude/order-sensitive-implicit` has it as a pending scripted test, failing on Zinc `develop` after a comment-only edit to `U.scala`. In the model, a consumer that *peeks* ([`Query.Lazy.forcePeek`](../../query/Query/Lazy.lean#L249)) instead of forcing, and the three outcomes by `decide` ([`implicitSkip_O_first`](../../scala-types/ScalaTypes/Laziness.lean#L242), [`implicitSkip_U_first`](../../scala-types/ScalaTypes/Laziness.lean#L247), [`implicitSkip_separate`](../../scala-types/ScalaTypes/Laziness.lean#L252)). The same shape through an implicit conversion behaves the same. Scala 2.13 warns that an implicit definition should have an explicit type; Scala 3 requires one, which removes the shape. Within one file both orders compile: the order that matters here is the order of compilation units.
 * **Mutual wildcard exports** (dotc 3.9.0): `object A { export B.*; def a = 1 }` with `object B { export A.a; def b = 2 }` fails with "Conflicting definitions" typing `A.scala` first and compiles typing `B.scala` first. `A`'s wildcard export reads `B`'s member set while `B`'s own export forwarders are still being added to it: a growing fact read without a freeze, the shape of §4 ([`exportOrder_reads_differ`](../../scala-types/ScalaTypes/Laziness.lean#L275)). Draft report: [`dotc-export-order.md`](../../../docs/upstream/dotc-export-order.md).
 
-The rest either compile in every mode, are rejected in every mode (some with a diagnostic that depends on the order: overloading across files is "overloaded method f needs result type" one way and "recursive method g needs result type" the other), or are Scala 3 programs skipped for Scala 2.
+dotc's givens and extension methods are order-independent in every shape tried (a given whose definition reads the program that summons it, a given beside an inferred `def`, mutual extensions, an extension overloaded with one being completed): requiring a given's type removes the skipped-candidate shape, and what remains order-sensitive in dotc is a member set that grows (exports). The rest either compile in every mode, are rejected in every mode (some with a diagnostic that depends on the order: overloading across files is "overloaded method f needs result type" one way and "recursive method g needs result type" the other), or are Scala 3 programs skipped for Scala 2.
 
 ## Recipes
 
@@ -147,9 +147,10 @@ For someone changing either compiler, the model reduces to a few rules:
 
 ## Future work
 
-- [x] The order-sensitivity harness (§6): eighteen two-file programs under both file orders and each file recompiled alone; three compile or not by order.
+- [x] The order-sensitivity harness (§6): twenty-six multi-file programs under both file orders and each file recompiled alone; three compile or not by order.
 - [ ] Namer's eager forcings as their own families: case-class synthetics, Scala 3 `export` forwarders, implicit eligibility without a result type, Scala 2 macro annotations.
 - [x] A cycle avoided by skipping the fact (scalac's implicit candidates): `forcePeek`, and one program with three outcomes (§6).
 - [ ] Zinc: a spurious cycle across files makes an incremental build's verdict depend on which files it recompiles; [phase 15](../../zinc/docs/15-cycles.md) restated over `Query.Lazy`.
 - [ ] File the drafts: [`scalac-refinement-parent-crash.md`](../../../docs/upstream/scalac-refinement-parent-crash.md) (the crash, 2.12 and 2.13) and [`dotc-export-order.md`](../../../docs/upstream/dotc-export-order.md).
-- [ ] Scala 3 givens and extension search across files, and Scala 2 macro annotations, in the order harness.
+- [x] Scala 3 givens and extension search across files in the order harness: order-independent in every shape tried.
+- [ ] Scala 2 macro annotations in the order harness (they expand in Namer).
