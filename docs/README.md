@@ -1,6 +1,22 @@
 # Documents
 
-Four kinds of document, by what they are for. Per-package notes are in each package's `docs/`.
+Where to start, by goal; then four kinds of document, by what they are for. Per-package notes are in each package's `docs/`. Documents link every file, Lean name and GitHub reference they mention; [`scripts/lint_links.py`](../scripts/lint_links.py) checks this in CI (`--fix` writes the missing links).
+
+## Start here, by goal
+
+**Understand the theory.** Read [`packages/query/Query/Task.lean`](../packages/query/Query/Task.lean) (a compilation as a query tree with a trace), then [`packages/inc-comp/IncComp/Model.lean`](../packages/inc-comp/IncComp/Model.lean) (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then [`packages/inc-comp/IncComp/General.lean`](../packages/inc-comp/IncComp/General.lean) ([`XCompiler`](../packages/inc-comp/IncComp/General.lean#L22), where T2, T3a, T4 and T5 are proved once). [`packages/inc-comp/IncComp/Uniqueness.lean`](../packages/inc-comp/IncComp/Uniqueness.lean) and [`packages/zinc/Zinc/Loop/Cycles.lean`](../packages/zinc/Zinc/Loop/Cycles.lean) show when incremental equals clean and where it fails. The statements are in [`theorems.md`](theorems.md); [`specification.md`](specification.md) gives the rationale for the method.
+
+**Start from a bug you know.** [`evidence/bug-map.md`](evidence/bug-map.md) maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
+
+**Add a language feature to the Zinc model.** [`packages/zinc/Zinc/Features/Sam.lean`](../packages/zinc/Zinc/Features/Sam.lean) is the template: the compiler's algorithm as the unit task of a [`TCompiler`](../packages/inc-comp/IncComp/Tree.lean#L26), today's bridge as keys, the failing cases as witnesses ([`p1_today`](../packages/zinc/Zinc/Features/Sam.lean#L565), [`p2_today`](../packages/zinc/Zinc/Features/Sam.lean#L571)), the fix with `obligations_fix` and `fix_sound`. [`packages/zinc/docs/28-sam.md`](../packages/zinc/docs/28-sam.md) has the question behind it. The witnesses became scripted tests in [retronym/zinc#58](https://github.com/retronym/zinc/issues/58), which fail on `develop` as predicted. The gap clusters in [`evidence/bug-map.md`](evidence/bug-map.md) are the candidate features.
+
+**Test Zinc.** The conformance harness (`sbt.internal.inc.bench.Conformance`, from [retronym/zinc#25](https://github.com/retronym/zinc/issues/25)) renders each program of a dump, applies each edit, and compares the incremental build's classfiles with a clean build's. `lake exe conformance` and `lake exe jconformance` write the dumps; the analysis scripts are in [`packages/harness/scripts/`](../packages/harness/scripts). The workflow is in [`packages/zinc/docs/10-names.md`](../packages/zinc/docs/10-names.md) and [`packages/zinc/docs/12-java.md`](../packages/zinc/docs/12-java.md); pending tests in [`evidence/tests.md`](evidence/tests.md).
+
+**Maintain javac, scalac or dotc.** [`packages/java`](../packages/java), [`packages/scala`](../packages/scala) and [`packages/scala-types`](../packages/scala-types) state what the compilers emit for a subset, calibrated by the probes beside them. [`packages/scala/Scala/Facts.lean`](../packages/scala/Scala/Facts.lean) and the `comp` failures in the bug map are where joint and separate compilation differ.
+
+**Maintain MiMa.** [`packages/mima`](../packages/mima): MiMa as a bridge design, its six gaps, corrected rules; [`packages/links`](../packages/links) connects it to Zinc (B4).
+
+**Maintain the IntelliJ Scala plugin.** [`packages/intellij`](../packages/intellij): the theorems behind the plugin's substitutor checks, on top of `ScalaTypes.AsSeenFrom`.
 
 ## Current: what holds now
 
@@ -11,7 +27,7 @@ Four kinds of document, by what they are for. Per-package notes are in each pack
 | [`specification-ledger.md`](specification-ledger.md) | find, per JVMS, JLS and SLS section, the rules that cite it, the behaviour it leaves unspecified and the contradictions the calibrations found (generated) |
 | [`stats.md`](stats.md) | see each package's size: Lean files, lines, theorems and checked examples (generated) |
 | [`roadmap.md`](roadmap.md) | find open work on the JVM, Java, Scala and binary-compatibility layers |
-| [the root README](../README.md#the-theorems) | read the obligations and T1–T5, stated once |
+| [`theorems.md`](theorems.md) | read the obligations and T1–T5, stated once, where their hypotheses bite, and the trust checks |
 
 ## Evidence: the bugs and tests the model is held against
 
@@ -33,7 +49,7 @@ Start from a bug you know: find it in `bug-map.md`, which names the Lean file an
 
 ## History: how it got here
 
-Kept as written; only their paths to other files were updated.
+Kept as written; only their paths to other files were updated. The Zinc model started in retronym/talks (`zinc-incrementality/lean/`, moved here with its history from talks `b9058db`), the IntelliJ model in retronym/scala-type-system-tck (`lean/`, likewise).
 
 | document | contents |
 |---|---|

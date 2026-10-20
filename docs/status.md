@@ -1,6 +1,6 @@
 # Status: what is proved, and what is checked
 
-The models are specifications ([`docs/specification.md`](specification.md)): a compiler, a linker or a checker is an instance whose algorithm is a task with a trace. A **theorem** holds for every program; a **check** (an `example`, often by `native_decide`, or a probe against the real tool) holds on a bounded space. Each layer is calibrated against its real tool before theorems are built on it. The obligations and T1–T5 are stated in [the root README](../README.md#the-theorems).
+The models are specifications ([`docs/specification.md`](specification.md)): a compiler, a linker or a checker is an instance whose algorithm is a task with a trace. A **theorem** holds for every program; a **check** (an `example`, often by `native_decide`, or a probe against the real tool) holds on a bounded space. Each layer is calibrated against its real tool before theorems are built on it. The obligations and T1–T5 are stated in [`theorems.md`](theorems.md).
 
 | package | proved, for every program | checked on a space, or calibrated against the real tool |
 |---|---|---|

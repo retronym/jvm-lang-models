@@ -73,7 +73,7 @@ def clean (src) : CUnit → Out := group S src ext      -- ext: the external/lib
 
 ## Obligations and theorems
 
-The canonical statement of the obligations on the compiler bridge and of T1–T5 is in [the root README](../../README.md#the-theorems); [`General.lean`](../../packages/inc-comp/IncComp/General.lean) proves T2, T3a, T4 (monotone) and T5 once for [`XCompiler`](../../packages/inc-comp/IncComp/General.lean#L22). This plan's original design statements of them are superseded and were removed. Precision, planned here as optional, is still not defined in the framework (REVIEW-2026-10-11, finding 4).
+The canonical statement of the obligations on the compiler bridge and of T1–T5 is in [`docs/theorems.md`](../theorems.md); [`General.lean`](../../packages/inc-comp/IncComp/General.lean) proves T2, T3a, T4 (monotone) and T5 once for [`XCompiler`](../../packages/inc-comp/IncComp/General.lean#L22). This plan's original design statements of them are superseded and were removed. Precision, planned here as optional, is still not defined in the framework (REVIEW-2026-10-11, finding 4).
 
 ## Toy instance — [`packages/zinc/Zinc/Toy.lean`](../../packages/zinc/Zinc/Toy.lean), [`packages/zinc/Zinc/Examples.lean`](../../packages/zinc/Zinc/Examples.lean)
 

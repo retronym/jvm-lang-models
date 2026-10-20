@@ -6,7 +6,7 @@ When does an incremental build equal a clean one, for any compiler and any inval
 
 **Calibration.** The instances in `zinc` and the harness calibrate it against real Zinc.
 
-**Gaps.** T3 (incremental = clean) needs hypotheses real Scala does not meet (root README, "Where the hypotheses bite"); precision has no framework definition yet.
+**Gaps.** T3 (incremental = clean) needs hypotheses real Scala does not meet ([`docs/theorems.md`](../../docs/theorems.md#where-the-hypotheses-bite)); precision has no framework definition yet.
 
 ## Files
 
