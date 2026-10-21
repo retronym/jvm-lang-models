@@ -3,6 +3,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             16       8/16        11/14.0
    scalac-after              16       0/16        11/14.0
+   scalac-proposed           16       0/16        11/14.0
    dotc-metals               16       0/16        11/11.0
    dotc-interrupted          16       0/16        11/16.8
    psi                       19       0/19        13/13.2
@@ -27,6 +28,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             16      16/16        11/14.0
    scalac-after              16      16/16        11/14.0
+   scalac-proposed           16       0/16        11/14.0
    dotc-metals               16       0/16        11/11.0
    dotc-interrupted          16       0/16        11/16.8
    psi                       19       0/19        12/12.4
@@ -63,6 +65,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             12       0/12        12/16.0
    scalac-after              12       0/12        12/16.0
+   scalac-proposed           12       0/12        12/16.0
    dotc-metals               12       0/12        12/12.0
    dotc-interrupted          12       0/12        12/19.5
    psi                       13       0/13          9/9.3
@@ -78,6 +81,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             11       0/11        22/18.9
    scalac-after              11       0/11        22/18.9
+   scalac-proposed           11       0/11        22/18.9
    dotc-metals               11       0/11        22/22.0
    dotc-interrupted          11       5/11        22/17.7
    psi                       11       0/11        14/12.9
@@ -102,6 +106,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             17      10/17        17/22.0
    scalac-after              17       0/17        17/21.8
+   scalac-proposed           17       0/17        17/21.8
    dotc-metals               17       0/17        17/17.0
    dotc-interrupted          17       0/17        17/26.7
    psi                       16       0/16        11/11.2
@@ -123,6 +128,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             14      13/14        14/17.0
    scalac-after              14       0/14        14/17.0
+   scalac-proposed           14       0/14        14/17.0
    dotc-metals               14       0/14        14/14.0
    dotc-interrupted          14       0/14        14/22.2
    psi                       14       0/14        10/10.2
@@ -144,6 +150,7 @@
    kernel            safepoints  divergent  work ref/mean
    scalac-before             18       9/18        13/16.0
    scalac-after              18       0/18        13/16.0
+   scalac-proposed           18       0/18        13/16.0
    dotc-metals               18       0/18        13/13.0
    dotc-interrupted          18       0/18        13/19.9
    psi                       20       0/20        14/14.2
