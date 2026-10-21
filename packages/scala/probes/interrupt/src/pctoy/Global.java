@@ -72,12 +72,17 @@ public abstract class Global {
 
   /** The choices under test. The first four are what scala/scala#11328 changed (false = before, true = after);
    * `unlockOnUnwind` is scalac (true, `completeInfo`'s `finally unlock()`) against dotc (false, `Touched` stays);
-   * `reuseSymbols` is scalac's `enterExistingSym` (true) against dotc's `unlinkFromFile` and fresh symbols (false). */
+   * `reuseSymbols` is scalac's `enterExistingSym` (true) against dotc's `unlinkFromFile` and fresh symbols (false).
+   * `idempotentSynthetics` is the proposal: a type check adds every synthetic its tree lacks, enters the ones
+   * missing from the scope, and consumes nothing, so two checks of one template in a run both get a whole
+   * tree, whatever the interleaving, and no region needs to be uninterruptible. */
   public record Policy(boolean uninterruptibleSynthesis, boolean keepSyntheticsForTargeted, boolean keepFactory,
-                       boolean suspendTargetedWarnings, boolean unlockOnUnwind, boolean reuseSymbols) {
-    public static final Policy SCALAC_BEFORE = new Policy(false, false, false, false, true, true);
-    public static final Policy SCALAC_AFTER = new Policy(true, true, true, true, true, true);
-    public static final Policy DOTC = new Policy(true, true, true, true, false, false);
+                       boolean suspendTargetedWarnings, boolean unlockOnUnwind, boolean reuseSymbols,
+                       boolean idempotentSynthetics) {
+    public static final Policy SCALAC_BEFORE = new Policy(false, false, false, false, true, true, false);
+    public static final Policy SCALAC_AFTER = new Policy(true, true, true, true, true, true, false);
+    public static final Policy SCALAC_PROPOSED = new Policy(false, false, true, true, true, true, true);
+    public static final Policy DOTC = new Policy(true, true, true, true, false, false, false);
   }
 
   public final Policy policy;
@@ -387,6 +392,14 @@ public abstract class Global {
   /** `addSyntheticMethods` for a case class: `copy`, `equals`, `hashCode`, `toString`, one at a time, unless
    * the class already has them. */
   private void finishMethodSynthesis(Unit u, Sym cls, ClassInfo ci, List<String> body) {
+    if (policy.idempotentSynthetics) {                       // per method: enter what is missing, add all to the tree
+      for (String name : List.of("copy", "equals", "hashCode", "toString")) {
+        if (ci.decls.term(name) == null) ci.decls.enter(syntheticMethod(u, cls, name));
+        body.add(name);
+        signalDone(u, "synth " + cls.name + "." + name, null);
+      }
+      return;
+    }
     if (ci.decls.term("copy") != null) {
       if (cls.synthesized != null && cls.synthesizedRun == runId) {
         body.addAll(cls.synthesized);                        // the trees a targeted check added
@@ -396,18 +409,23 @@ public abstract class Global {
     }
     List<String> added = new ArrayList<>();
     for (String name : List.of("copy", "equals", "hashCode", "toString")) {
-      Sym s = newSym(name, Kind.DEF, u.name());
-      s.owner = cls; s.synthetic = true;
-      s.info = name.equals("copy") ? Type.of(cls) : Type.builtin(name.equals("equals") ? "Boolean" : name.equals("hashCode") ? "Int" : "String");
-      ci.decls.enter(s);
+      ci.decls.enter(syntheticMethod(u, cls, name));
       body.add(name); added.add(name);
       signalDone(u, "synth " + cls.name + "." + name, null);
     }
     if (u.target != null && policy.keepSyntheticsForTargeted) { cls.synthesized = added; cls.synthesizedRun = runId; }
   }
 
+  private Sym syntheticMethod(Unit u, Sym cls, String name) {
+    Sym s = newSym(name, Kind.DEF, u.name());
+    s.owner = cls; s.synthetic = true;
+    s.info = name.equals("copy") ? Type.of(cls) : Type.builtin(name.equals("equals") ? "Boolean" : name.equals("hashCode") ? "Int" : "String");
+    return s;
+  }
+
   /** `addSynthetics`: the synthetic trees from declaration `pos` join their owner's body and are consumed,
-   * unless a targeted check is told to leave them for the full one. */
+   * unless a targeted check is told to leave them for the full one; under the proposal they are never consumed,
+   * and a tree takes each one once. */
   private void addSynthetics(Unit u, int pos, Map<String, List<String>> bodies) {
     Runnable op = () -> {
       for (Map.Entry<Sym, Integer> e : new ArrayList<>(u.synthetics.entrySet())) {
@@ -415,8 +433,10 @@ public abstract class Global {
         Sym s = e.getKey();
         if (s.kind == Kind.DEF) force(s);
         String owner = s.owner != null ? (s.owner.kind == Kind.OBJECT ? "object " : "class ") + s.owner.name : "<toplevel>";
-        bodies.computeIfAbsent(owner, k -> new ArrayList<>()).add(s.name);
-        if (u.target == null || !policy.keepSyntheticsForTargeted) u.synthetics.remove(s);
+        List<String> body = bodies.computeIfAbsent(owner, k -> new ArrayList<>());
+        if (policy.idempotentSynthetics) { if (body.contains(s.name)) continue; }
+        else if (u.target == null || !policy.keepSyntheticsForTargeted) u.synthetics.remove(s);
+        body.add(s.name);
         signalDone(u, "synthetic " + owner + "." + s.name, null);
       }
     };

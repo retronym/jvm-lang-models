@@ -16,6 +16,7 @@ public final class Harness {
   static {
     KERNELS.put("scalac-before", s -> new Scala2Kernel("scalac-before", Global.Policy.SCALAC_BEFORE, s));
     KERNELS.put("scalac-after", s -> new Scala2Kernel("scalac-after", Global.Policy.SCALAC_AFTER, s));
+    KERNELS.put("scalac-proposed", s -> new Scala2Kernel("scalac-proposed", Global.Policy.SCALAC_PROPOSED, s));
     KERNELS.put("dotc-metals", s -> new Scala3Kernel("dotc-metals", false, s));
     KERNELS.put("dotc-interrupted", s -> new Scala3Kernel("dotc-interrupted", true, s));
     KERNELS.put("psi", s -> new PsiKernel("psi", s));

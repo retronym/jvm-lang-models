@@ -68,6 +68,7 @@ The difference in one line: scalac buys latency by running other requests inside
 | kernel | where a request runs | model of |
 |---|---|---|
 | `scalac-before`, `scalac-after` ([`Scala2Kernel`](../probes/interrupt/src/pctoy/Scala2Kernel.java)) | nested at `signalDone` when `interruptsEnabled && lockedCount == 0`; a targeted check unwinds with `TyperResult`; an edit is a new run and `FreshRunReq` | scalac before and after [scala/scala#11328](https://github.com/scala/scala/pull/11328)'s four policy changes |
+| `scalac-proposed` | as `scalac-after`, but synthetics are idempotent and no region is uninterruptible: `addSyntheticMethods` enters each synthetic method the scope lacks and adds all of them to the tree; `addSynthetics` consumes nothing, and a tree takes each synthetic once (`Policy.idempotentSynthetics`) | the proposal below |
 | `dotc-metals` ([`Scala3Kernel`](../probes/interrupt/src/pctoy/Scala3Kernel.java)) | a fresh run of the file per request, whole unit, LIFO queue, never interrupted, `CachingDriver`'s skip, `cleanup` | dotc under Metals |
 | `dotc-interrupted` | as above, but the interrupt is delivered once at the next checkpoint of the job it arrived in, the job unwinds, and the driver is kept | the hypothetical `InterruptException => default` path |
 | `psi` ([`PsiKernel`](../probes/interrupt/src/pctoy/PsiKernel.java)) | stubs by name; `cached(key)` under a modification count with a recursion guard that answers `null` and taints the frames above; a request is a read action on a fresh guard stack; an edit is a write action that cancels the daemon at its next `checkCanceled` | IntelliJ PSI as the Scala plugin uses it |
@@ -78,21 +79,22 @@ The difference in one line: scalac buys latency by running other requests inside
 
 [`results.txt`](../probes/interrupt/results.txt), from `run.sh`. Divergent safepoints out of the background's total, and work (reference / mean over the interleavings):
 
-| scenario (the PR's test it mirrors) | scalac-before | scalac-after | dotc-metals | dotc-interrupted | psi |
-|---|---|---|---|---|---|
-| `case-class-completion` (dollar-completion, scala-dev#915) | 8/16 | 0/16 | 0/16 | 0/16 | 0/19 |
-| `case-class-loaded` (nested `askType` while apply/unapply are added) | 16/16 | **16/16** | 0/16 | 0/16 | 0/19 |
-| `targeted-consumes-synthetics` (local-case-class-interleaved) | 9/18 | 0/18 | 0/18 | 0/18 | 0/20 |
-| `implicit-class` (implicit-class-interleaved) | 10/17 | 0/17 | 0/17 | 0/17 | 0/16 |
-| `nowarn` (t12308, scala-dev#840) | 13/14 | 0/14 | 0/14 | 0/14 | 0/14 |
-| `cycle` (a true cycle beside a well-founded reference) | 0/12 | 0/12 | 0/12 | 0/12 | 0/13 |
-| `edit-cross-file` (an edit of `B` while `A`, which reads `B`, is typed) | 0/11 | 0/11 | 0/11 | **5/11** | 0/11 |
-| work, `implicit-class` | 17 / 22.0 | 17 / 21.8 | 17 / 17.0 | 17 / 26.7 | 11 / 11.2 |
+| scenario (the PR's test it mirrors) | scalac-before | scalac-after | scalac-proposed | dotc-metals | dotc-interrupted | psi |
+|---|---|---|---|---|---|---|
+| `case-class-completion` (dollar-completion, scala-dev#915) | 8/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/19 |
+| `case-class-loaded` (nested `askType` while apply/unapply are added) | 16/16 | **16/16** | 0/16 | 0/16 | 0/16 | 0/19 |
+| `targeted-consumes-synthetics` (local-case-class-interleaved) | 9/18 | 0/18 | 0/18 | 0/18 | 0/18 | 0/20 |
+| `implicit-class` (implicit-class-interleaved) | 10/17 | 0/17 | 0/17 | 0/17 | 0/17 | 0/16 |
+| `nowarn` (t12308, scala-dev#840) | 13/14 | 0/14 | 0/14 | 0/14 | 0/14 | 0/14 |
+| `cycle` (a true cycle beside a well-founded reference) | 0/12 | 0/12 | 0/12 | 0/12 | 0/12 | 0/13 |
+| `edit-cross-file` (an edit of `B` while `A`, which reads `B`, is typed) | 0/11 | 0/11 | 0/11 | 0/11 | **5/11** | 0/11 |
+| work, `implicit-class` | 17 / 22.0 | 17 / 21.8 | 17 / 21.8 | 17 / 17.0 | 17 / 26.7 | 11 / 11.2 |
 
 What the table says:
 
 * **The PR's four fixes close the four shapes they target**, and the toy reproduces each with the mechanism the commit messages describe: the partial burst and the all-or-nothing skip, the consumed map, the replaced symbol in the cache, the premature completeness claim. In `implicit-class` the divergent safepoints are 0–6 and 14–16: a completion served while `Before` is typed (the factory replaced after the cache is filled) or after `Use.g` is typed (the cache filled, then the factory replaced by the next retype).
 * **A nested full type check is still unsafe after the PR** (`case-class-loaded`, finding I1/I2). Served at a safepoint before the background has typed the case class, the nested check consumes the synthetics and the background's own tree, which it stores last, lacks the companion, `apply`, `unapply` and, by the all-or-nothing skip, `copy`..`toString`; served after, the request's own tree lacks them all. The PR closes only the window inside `addSynthetics`. The mechanism in scalac is `typeCheck(unit)` (`Global.scala:675`): the outer `typer.typed(unit.body)` took the old body as its argument and assigns `unit.body` when it returns, after the nested one; `typed` short-circuits only trees that carry a type, and the old `ClassDef` does not. This is a prediction from the toy, to be checked with a test in the shape of the PR's.
+* **The proposal closes it without exclusion** (`scalac-proposed`, 0 everywhere). The two shared resources of the nested-check bug are a linear one (`unit.synthetics`, consumed by whichever check adds the tree first) and an all-or-nothing check against the scope. Making both idempotent (each check adds every synthetic its own tree lacks, enters the symbols the scope lacks, consumes nothing) gives each check a whole tree whatever the interleaving, so neither `uninterruptible` region nor the `SynthesizedMethods` attachment is needed; the factory and warning fixes stay. In scalac this is `addSyntheticMethods` adding the methods missing instead of returning when any is present, and `addSynthetics` keeping `unit.synthetics` for the run and skipping trees the stats already contain. The work column does not change: idempotence costs nothing the retype did not already cost.
 * **dotc under Metals never diverges**, and does no extra work for a request that arrives during the background compile, because the request waits. The reference work equals the mean: the design has no interleavings. Its cost is elsewhere, in a whole-unit run per edit, which the toy's one-file scenarios do not weigh.
 * **An interrupt delivered to dotc would be mostly harmless, and the cache keyed on the last file is the hazard.** `dotc-interrupted` recomputes (mean work 26.7 against 17.0) and diverges only in `edit-cross-file`, at the safepoints inside `B`'s initial compile: the abandoned run leaves `CachingDriver`'s "last compiled" at `A`, so the request after the edit answers from `A`'s compilation against the state before `B` existed. The `Touched` leak does not show in these scenarios, because `cleanup` and the fresh run per file leave no cross-file completer to be interrupted; it would need a symbol loader, which has its own `finally`.
 * **PSI never diverges and does the least work**: the completion after the background costs nothing, an interleaved one computes only what it needs, and the daemon re-annotates only after a change. The recursion guard gives the true cycle the same error in every interleaving, as scalac's `LOCKED` with `ErrorType` does; the two differ for a *peeking* consumer (Track L §6), which the toy does not yet have.
