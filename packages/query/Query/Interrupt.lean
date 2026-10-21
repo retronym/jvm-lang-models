@@ -18,8 +18,8 @@ Over the lazy facts of `Query.Lazy` both are free, and this file says exactly ho
   fact is a black hole for the rest of the run; `forceA_unlock_touched`: under scalac's it is not.
 * **Nested servicing** (§2) with an empty stack is a reordering of demands
   (`nested_empty_stack_reorders`, from `forceAll_ok`). With a non-empty stack the request can
-  black-hole on a fact that the program's own rules rank: a spurious cycle made by the interleaving
-  (`nested_inside_frame_cycles`).
+  black-hole on a fact that the program's own rules rank: a cycle the interleaving makes, by
+  re-entering the frame in progress rather than by bundling (`nested_inside_frame_cycles`).
 * **Peeking with taint** (§3). A consumer that peeks at a fact in progress (`Query.Lazy.forcePeek`)
   gets an answer that depends on the stack. `forceT` carries a taint: a result that saw `absent` is
   not memoized, as IntelliJ's `RecursionManager` forbids caching above the re-entered frame. Under
@@ -386,7 +386,7 @@ theorem nested_empty_stack_reorders (R : Rules Q V) (ρ : Q → V) (r : Q → Na
       simp only [List.mem_append] at hq ⊢
       rcases hq with (h | h) | h <;> simp [h])) s hs⟩
 
-/-! ### With a frame in progress: a spurious cycle
+/-! ### With a frame in progress: a cycle the interleaving makes
 
 `a` asks `b`; `c` asks `a`. Ranked (`b`, `a`, `c`), so alone every demand answers. A request for
 `c` serviced at the safepoint inside `a`'s completer, after `b` has returned, finds `a` in
