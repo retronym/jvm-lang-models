@@ -1,0 +1,10 @@
+// event: completion A Use.f
+// note: scala/scala#11328 local-case-class-interleaved: a targeted check types the case class and uses up its synthetics; the full check in the same run must still have them
+// file: A
+class Int {}
+class Before { def x: Int }
+case class L(a: Int) {}
+object Use {
+  def l: L
+  def f = l.a
+}

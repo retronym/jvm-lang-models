@@ -69,6 +69,12 @@ Each is one shape, one space and one probe run, as Track J6 was.
 
 **Done looks like.** The future work of [`track-l.md`](../packages/scala/docs/track-l.md): Scala 2 macro annotations as a family, phase 15 over `Query.Lazy`, and the two drafts filed (the scalac crash, dotc's export order).
 
+### Track I: interruptibility, the model
+
+**Why.** A presentation compiler answers requests in the middle of a type check, and the three designs (scalac's nested servicing, dotc's fresh run per request under Metals, IntelliJ's abort-and-restart over pure caches) make different promises; over lazy facts the property is free, and [scala/scala#11328](https://github.com/scala/scala/pull/11328)'s bugs are all state outside the facts ([`track-i.md`](../packages/scala/docs/track-i.md)).
+
+**Done looks like.** The future work of [`track-i.md`](../packages/scala/docs/track-i.md): the two predictions (I1, I2) checked against scala/scala at the PR's branch, a peeking consumer and body-local edits in the toy, and the Lean statements of abort safety, nested servicing as reordering, peek with taint and the three kinds of non-fact state over `Query.Lazy`.
+
 ### Track LUB: joins, the rest
 
 **Why.** An inferred join is a public signature: its parent order and its erasure are what callers link against and what Zinc hashes, and both compilers let them depend on branch order or symbol creation order ([`track-lub.md`](../packages/scala-types/docs/track-lub.md)).

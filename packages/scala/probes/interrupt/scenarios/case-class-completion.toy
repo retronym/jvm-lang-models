@@ -1,0 +1,9 @@
+// event: completion A Use.f
+// note: scala-dev#915 dollar-completion: a completion of a case class's members served while its synthetic methods are being added
+// file: A
+class Int {}
+case class L(a: Int) { def self: L }
+object Use {
+  def l: L
+  def f = l.self
+}

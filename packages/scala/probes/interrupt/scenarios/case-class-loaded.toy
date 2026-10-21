@@ -1,0 +1,9 @@
+// event: loadedTyped A
+// note: scala/scala#11328 "don't service requests while adding synthetic definitions": a full type check served while apply/unapply are being added to the tree
+// file: A
+class Int {}
+case class L(a: Int) { def self: L }
+object Use {
+  def l: L
+  def f = l.self
+}

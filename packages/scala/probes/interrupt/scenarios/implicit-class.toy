@@ -1,0 +1,12 @@
+// event: completion A Use.f
+// note: scala/scala#11328 implicit-class-interleaved: a completion served during background typing; the full type check must still find RichInt.twice
+// file: A
+class Int {}
+class Before { def x: Int }
+implicit class RichInt(i: Int) { def twice: Int }
+object Use {
+  def b: Before
+  def f = b.x
+  def three: Int
+  def g = three.twice
+}

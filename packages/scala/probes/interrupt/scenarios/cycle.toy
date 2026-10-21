@@ -1,0 +1,11 @@
+// event: completion A C.p
+// note: a true cycle between two members, and a well-founded reference next to it; the cycle's error must be the same whenever the request arrives
+// file: A
+class Int {}
+class C {
+  def a = b
+  def b = a
+  def c: Int
+  def p = q.c
+  def q: C
+}

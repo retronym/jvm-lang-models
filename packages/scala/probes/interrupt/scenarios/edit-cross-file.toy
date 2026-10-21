@@ -1,0 +1,18 @@
+// event: edit B then loadedTyped A
+// note: an edit of B arrives while A, which refers to B, is being typed; afterwards A must be typed against the new B
+// file: A
+class Int {}
+class A {
+  def y = B.x
+  def z = B.w
+}
+// file: B
+object B {
+  def x: Int
+  def w: Int
+}
+// edit: B
+object B {
+  def x: Int
+  def w: A
+}

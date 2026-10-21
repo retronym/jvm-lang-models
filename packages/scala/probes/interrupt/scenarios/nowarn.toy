@@ -1,0 +1,13 @@
+// event: completion A Use.foo
+// note: scala-dev#840 / t12308: a targeted check ends before the unit's nowarn annotations are known, and marks the suppressions complete
+// file: A
+class Int {}
+class Old { deprecated def m: Int }
+object Use {
+  def o: Old
+  def foo = o.m
+}
+nowarn object Later {
+  def o: Old
+  def bar = o.m
+}

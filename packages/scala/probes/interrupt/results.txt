@@ -1,0 +1,166 @@
+== case-class-completion: completion A:Use.f
+   scala-dev#915 dollar-completion: a completion of a case class's members served while its synthetic methods are being added
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             16       8/16        11/14.0
+   scalac-after              16       0/16        11/14.0
+   dotc-metals               16       0/16        11/11.0
+   dotc-interrupted          16       0/16        11/16.8
+   psi                       19       0/19        13/13.2
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode self toString
+      - synthetic companions: L
+      - object L (synthetic): apply unapply
+      + class L: a self
+    ... 7 more (--all)
+   reference:
+    answer 1: L: a copy equals hashCode self toString
+    answer 2: class Int: 
+              class L: a copy equals hashCode self toString
+              object Use: f l
+              synthetic companions: L
+              object L (synthetic): apply unapply
+
+== case-class-loaded: loadedTyped A
+   scala/scala#11328 "don't service requests while adding synthetic definitions": a full type check served while apply/unapply are being added to the tree
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             16      16/16        11/14.0
+   scalac-after              16      16/16        11/14.0
+   dotc-metals               16       0/16        11/11.0
+   dotc-interrupted          16       0/16        11/16.8
+   psi                       19       0/19        12/12.4
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode self toString
+      - synthetic companions: L
+      - object L (synthetic): apply unapply
+      + class L: a self
+    ... 15 more (--all)
+   scalac-after diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode self toString
+      - synthetic companions: L
+      - object L (synthetic): apply unapply
+      + class L: a self
+    ... 15 more (--all)
+   reference:
+    answer 1: class Int: 
+              class L: a copy equals hashCode self toString
+              object Use: f l
+              synthetic companions: L
+              object L (synthetic): apply unapply
+    answer 2: class Int: 
+              class L: a copy equals hashCode self toString
+              object Use: f l
+              synthetic companions: L
+              object L (synthetic): apply unapply
+
+== cycle: completion A:C.p
+   a true cycle between two members, and a well-founded reference next to it; the cycle's error must be the same whenever the request arrives
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             12       0/12        12/16.0
+   scalac-after              12       0/12        12/16.0
+   dotc-metals               12       0/12        12/12.0
+   dotc-interrupted          12       0/12        12/19.5
+   psi                       13       0/13          9/9.3
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              class C: a b c p q
+              error A:C.a: cyclic reference involving a
+              error A:C.b: cyclic reference involving a
+
+== edit-cross-file: edit B then loadedTyped A
+   an edit of B arrives while A, which refers to B, is being typed; afterwards A must be typed against the new B
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             11       0/11        22/18.9
+   scalac-after              11       0/11        22/18.9
+   dotc-metals               11       0/11        22/22.0
+   dotc-interrupted          11       5/11        22/17.7
+   psi                       11       0/11        14/12.9
+   dotc-interrupted diverges at k = [6, 7, 8, 9, 10]
+    k=6 (event at 'rhs B.x'):
+    answer 1:
+      + error A:A.y: not found: value B
+      + error A:A.z: not found: value B
+    answer 2:
+      + error A:A.y: not found: value B
+      + error A:A.z: not found: value B
+    ... 4 more (--all)
+   reference:
+    answer 1: class Int: 
+              class A: y z
+    answer 2: class Int: 
+              class A: y z
+    answer 3: object B: w x
+
+== implicit-class: completion A:Use.f
+   scala/scala#11328 implicit-class-interleaved: a completion served during background typing; the full type check must still find RichInt.twice
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             17      10/17        17/22.0
+   scalac-after              17       0/17        17/21.8
+   dotc-metals               17       0/17        17/17.0
+   dotc-interrupted          17       0/17        17/26.7
+   psi                       16       0/16        11/11.2
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 14, 15, 16]
+    k=0 (event at 'class Int'):
+    answer 2:
+      + error A:Use.g: value twice is not a member of Int
+    ... 9 more (--all)
+   reference:
+    answer 1: Int: twice via RichInt
+    answer 2: class Int: 
+              class Before: x
+              class RichInt: twice
+              object Use: b f g three
+              synthetic companions: RichInt
+
+== nowarn: completion A:Use.foo
+   scala-dev#840 / t12308: a targeted check ends before the unit's nowarn annotations are known, and marks the suppressions complete
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             14      13/14        14/17.0
+   scalac-after              14       0/14        14/17.0
+   dotc-metals               14       0/14        14/14.0
+   dotc-interrupted          14       0/14        14/22.2
+   psi                       14       0/14        10/10.2
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    k=0 (event at 'class Int'):
+    answer 2:
+      + warning A:Later.bar: method m in Old is deprecated
+    ... 12 more (--all)
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              class Old: m
+              object Use: foo o
+              object Later: bar o
+              warning A:Use.foo: method m in Old is deprecated
+
+== targeted-consumes-synthetics: completion A:Use.f
+   scala/scala#11328 local-case-class-interleaved: a targeted check types the case class and uses up its synthetics; the full check in the same run must still have them
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             18       9/18        13/16.0
+   scalac-after              18       0/18        13/16.0
+   dotc-metals               18       0/18        13/13.0
+   dotc-interrupted          18       0/18        13/19.9
+   psi                       20       0/20        14/14.2
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode toString
+      - synthetic companions: L
+      - object L (synthetic): apply unapply
+      + class L: a
+    ... 8 more (--all)
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              class Before: x
+              class L: a copy equals hashCode toString
+              object Use: f l
+              synthetic companions: L
+              object L (synthetic): apply unapply
+
