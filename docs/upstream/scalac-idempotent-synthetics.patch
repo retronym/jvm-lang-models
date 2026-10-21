@@ -1,0 +1,287 @@
+diff --git a/src/compiler/scala/tools/nsc/Global.scala b/src/compiler/scala/tools/nsc/Global.scala
+index ca10ae1e4f..1f70162f99 100644
+--- a/src/compiler/scala/tools/nsc/Global.scala
++++ b/src/compiler/scala/tools/nsc/Global.scala
+@@ -293,13 +293,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
+   def interruptsEnabled: Boolean = false
+   def interruptsEnabled_=(enabled: Boolean): Unit = ()
+ 
+-  /** Runs `op` without servicing presentation compiler requests in between, which would see its changes half done. */
+-  final def uninterruptible[T](op: => T): T = {
+-    val saved = interruptsEnabled
+-    interruptsEnabled = false
+-    try op finally interruptsEnabled = saved
+-  }
+-
+   /** Called from parser, which signals hereby that a method definition has been parsed. */
+   def signalParseProgress(pos: Position): Unit = {}
+ 
+diff --git a/src/compiler/scala/tools/nsc/typechecker/MethodSynthesis.scala b/src/compiler/scala/tools/nsc/typechecker/MethodSynthesis.scala
+index 8ffea360a3..11006558d0 100644
+--- a/src/compiler/scala/tools/nsc/typechecker/MethodSynthesis.scala
++++ b/src/compiler/scala/tools/nsc/typechecker/MethodSynthesis.scala
+@@ -51,15 +51,25 @@ trait MethodSynthesis {
+         else DefDef(method, f(method))
+       )
+ 
+-    private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
+-      val name1 = name.toTermName
+-      val m = clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
+-      finishMethod(m setInfoAndEnter info, f)
+-    }
++    /** A synthetic method of this name and type that the class already has. The presentation compiler types a
++     *  template more than once in a run (a targeted check, then the full one, or a request served between two
++     *  statements); the second time, the tree is regenerated for the symbol the first time entered, so each
++     *  typed template is whole and no symbol is entered twice.
++     */
++    private def existingSynthetic(name: TermName, infoFn: Symbol => Type): Symbol =
++      clazz.info.decl(name).filter(m => m.isSynthetic && m.owner == clazz).alternatives.find(m => m.info matches infoFn(m)).getOrElse(NoSymbol)
++
++    private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree =
++      createInternal(name, f, (_: Symbol) => info)
+     private def createInternal(name: Name, f: Symbol => Tree, infoFn: Symbol => Type): Tree = {
+       val name1 = name.toTermName
+-      val m = clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
+-      finishMethod(m setInfoAndEnter infoFn(m), f)
++      existingSynthetic(name1, infoFn) match {
++        case NoSymbol =>
++          val m = clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
++          finishMethod(m setInfoAndEnter infoFn(m), f)
++        case m =>
++          finishMethod(m, f)
++      }
+     }
+     private def cloneInternal(original: Symbol, f: Symbol => Tree, name: Name): Tree = {
+       val m = original.cloneSymbol(clazz, newMethodFlags(original), name) setPos clazz.pos.focus
+diff --git a/src/compiler/scala/tools/nsc/typechecker/SyntheticMethods.scala b/src/compiler/scala/tools/nsc/typechecker/SyntheticMethods.scala
+index c8877388e1..cee92490fd 100644
+--- a/src/compiler/scala/tools/nsc/typechecker/SyntheticMethods.scala
++++ b/src/compiler/scala/tools/nsc/typechecker/SyntheticMethods.scala
+@@ -44,20 +44,6 @@ trait SyntheticMethods extends ast.TreeDSL {
+   import definitions._
+   import CODE._
+ 
+-  private lazy val productSymbols    = List(Product_productPrefix, Product_productArity, Product_productElement) ::: Product_productElementName.toOption.toList ::: List(Product_iterator, Product_canEqual)
+-  private lazy val valueSymbols      = List(Any_hashCode, Any_equals)
+-  private lazy val caseSymbols       = List(Object_hashCode, Object_toString) ::: productSymbols
+-  private lazy val caseValueSymbols  = Any_toString :: valueSymbols ::: productSymbols
+-  private lazy val caseObjectSymbols = Object_equals :: caseSymbols
+-  private def symbolsToSynthesize(clazz: Symbol): List[Symbol] = {
+-    if (clazz.isCase) {
+-      if (clazz.isDerivedValueClass) caseValueSymbols
+-      else if (clazz.isModuleClass) caseSymbols
+-      else caseObjectSymbols
+-    }
+-    else if (clazz.isDerivedValueClass) valueSymbols
+-    else Nil
+-  }
+   private lazy val renamedCaseAccessors = perRunCaches.newMap[Symbol, mutable.Map[TermName, TermName]]()
+   /** Does not force the info of `caseclazz` */
+   final def caseAccessorName(caseclazz: Symbol, paramName: TermName) =
+@@ -69,13 +55,7 @@ trait SyntheticMethods extends ast.TreeDSL {
+   /** Add the synthetic methods to case classes.
+    */
+   def addSyntheticMethods(templ: Template, clazz0: Symbol, context: Context): Template = {
+-    val syntheticsOk = (phase.id <= currentRun.typerPhase.id) && {
+-      symbolsToSynthesize(clazz0).filter(_.matchingSymbol(clazz0.info).isSynthetic) match {
+-        case Nil  => true
+-        case syms => log("Not adding synthetic methods: already has " + syms.mkString(", ")) ; false
+-      }
+-    }
+-    if (!syntheticsOk)
++    if (phase.id > currentRun.typerPhase.id)
+       return templ
+ 
+     val typer = newTyper(if (reporter.hasErrors) context.makeSilent(reportAmbiguousErrors = false) else context)
+@@ -117,6 +97,11 @@ trait SyntheticMethods extends ast.TreeDSL {
+         (m0 ne meth) && !m0.isDeferred && !m0.isSynthetic && (m0.owner != AnyValClass) && (typeInClazz(m0) matches typeInClazz(meth))
+       }
+     }
++    // The template already carries the synthetic (a typed template typed again): nothing to add for it.
++    def inTemplate(meth: Symbol) = templ.body exists { t =>
++      val s = t.symbol
++      (s ne null) && (s ne NoSymbol) && s.isSynthetic && s.name == meth.name && (typeInClazz(s) matches typeInClazz(meth))
++    }
+     def productIteratorMethod =
+       createMethod(nme.productIterator, iteratorOfType(AnyTpe))(_ =>
+         gen.mkMethodCall(ScalaRunTimeModule, nme.typedProductIterator, List(AnyTpe), List(mkThis))
+@@ -405,7 +390,7 @@ trait SyntheticMethods extends ast.TreeDSL {
+        * so they can appear in universal traits without breaking value semantics.
+        */
+       def impls = {
+-        def shouldGenerate(m: Symbol) = {
++        def shouldGenerate(m: Symbol) = !inTemplate(m) && {
+           !hasOverridingImplementation(m) || {
+             clazz.isDerivedValueClass && (m == Any_hashCode || m == Any_equals) && {
+               // Without a means to suppress this warning, I've thought better of it.
+diff --git a/src/compiler/scala/tools/nsc/typechecker/Typers.scala b/src/compiler/scala/tools/nsc/typechecker/Typers.scala
+index 2446d9135d..a50a41998e 100644
+--- a/src/compiler/scala/tools/nsc/typechecker/Typers.scala
++++ b/src/compiler/scala/tools/nsc/typechecker/Typers.scala
+@@ -1964,8 +1964,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
+      *  the tricky method synthesis scenarios, so we'll make it that.
+      */
+     protected def finishMethodSynthesis(templ: Template, clazz: Symbol, context: Context): Template = {
+-      // An interleaved request would retype the class, see some synthetic methods already present and skip adding the others.
+-      uninterruptible(addSyntheticMethods(templ, clazz, context))
++      addSyntheticMethods(templ, clazz, context)
+     }
+     /** For flatMapping a list of trees when you want the DocDefs and Annotated
+      *  to be transparent.
+@@ -3338,9 +3337,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
+       case _                  => log(s"unhandled import: $imp in $unit"); imp
+     }
+ 
+-    /** Called once the tree of a synthetic definition is added to the enclosing statements. */
+-    protected def consumeSynthetic(sym: Symbol): Unit = context.unit.synthetics -= sym
+-
+     def typedStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
+       val inBlock = exprOwner == context.owner
+       def includesTargetPos(tree: Tree) =
+@@ -3466,17 +3462,20 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
+ 
+             (!sym.isModule || shouldAddAsModule) && (inBlock || !context.isInPackageObject(sym, context.owner))
+           }
++          // A synthetic stays in `unit.synthetics` for the run: these statements may be typed again in the same run
++          // (the presentation compiler), and each typing takes every synthetic its statements lack, once.
+           for (sym <- scope)  context.unit.synthetics.get(sym) match {
+             // OPT: shouldAdd is usually true. Call it here, rather than in the outer loop
+-            case Some(tree) if shouldAdd(sym) && !added.contains(sym) =>
++            case Some(tree) if shouldAdd(sym) && !added.contains(sym) && !stats.exists(_.symbol eq sym) =>
+               // if the completer set the IS_ERROR flag, retract the stat (currently only used by applyUnapplyMethodCompleter)
+               if (!sym.initialize.hasFlag(IS_ERROR)) {
+-                newStats += typedStat(tree) // might add even more synthetics to the scope
++                val tree1 = typedStat(tree) // might add even more synthetics to the scope
++                newStats += tree1
++                context.unit.synthetics(sym) = tree1 // a later typing of these statements takes the typed tree
+                 tree.getAndRemoveAttachment[CaseApplyInheritAccess.type].foreach(_ =>
+                   runReporting.warning(tree.pos, "access modifiers for `apply` method are copied from the case class constructor under Scala 3 (or with -Xsource-features:case-apply-copy-access)", Scala3Migration, sym))
+               }
+               added ::= sym
+-              consumeSynthetic(sym)
+             case _ => ()
+           }
+           // the type completer of a synthetic might add more synthetics. example: if the
+@@ -3535,8 +3534,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
+ 
+         // Note that Java units don't have synthetics, but there's no point in making a special case (for performance or correctness),
+         // as we only type check Java units when running Scaladoc on Java sources.
+-        // An interleaved request to type the unit would take the remaining synthetics, they'd be missing from this tree.
+-        uninterruptible(addSynthetics(stats1, scope))
++        addSynthetics(stats1, scope)
+       }
+     }
+ 
+diff --git a/src/interactive/scala/tools/nsc/interactive/Global.scala b/src/interactive/scala/tools/nsc/interactive/Global.scala
+index bf299d8da5..8c986b202c 100644
+--- a/src/interactive/scala/tools/nsc/interactive/Global.scala
++++ b/src/interactive/scala/tools/nsc/interactive/Global.scala
+@@ -61,31 +61,8 @@ trait InteractiveAnalyzer extends Analyzer {
+       case SelectFromTypeTree(_, _) => treeCopy.SelectFromTypeTree(tree, qual, name)
+       case _                        => tree
+     }
+-    private def isTargeted = context.unit match {
+-      case u: RichCompilationUnit => u.targetPos != NoPosition
+-      case _ => false
+-    }
+-    // A targeted type check is abandoned, the full type check of the unit still needs the synthetic definitions.
+-    override protected def consumeSynthetic(sym: Symbol): Unit =
+-      if (!isTargeted) super.consumeSynthetic(sym)
+-    // The synthetic methods a targeted type check adds to a class are not added again when the class is typed
+-    // in the same run, because they exist already. Keep their trees for that type check.
+-    override protected def finishMethodSynthesis(templ: Template, clazz: Symbol, context: Context): Template = {
+-      val templ1 = super.finishMethodSynthesis(templ, clazz, context)
+-      if (templ1.body.lengthCompare(templ.body) > 0) {
+-        if (isTargeted) clazz.updateAttachment(SynthesizedMethods(currentRunId, templ1.body.filterNot(templ.body.contains)))
+-        templ1
+-      } else clazz.attachments.get[SynthesizedMethods] match {
+-        case Some(SynthesizedMethods(runId, trees)) if runId == currentRunId =>
+-          if (!isTargeted) clazz.removeAttachment[SynthesizedMethods]
+-          deriveTemplate(templ1)(_ ++ trees)
+-        case _ => templ1
+-      }
+-    }
+   }
+ 
+-  private case class SynthesizedMethods(runId: RunId, trees: List[Tree])
+-
+   trait InteractiveNamer extends Namer {
+     override def saveDefaultGetter(meth: Symbol, default: Symbol): Unit = {
+       // save the default getters as attachments in the method symbol. if compiling the
+diff --git a/test/files/presentation/full-check-interleaved.check b/test/files/presentation/full-check-interleaved.check
+new file mode 100644
+index 0000000000..9cb37f424b
+--- /dev/null
++++ b/test/files/presentation/full-check-interleaved.check
+@@ -0,0 +1,8 @@
++warning: 1 deprecation (since 2.10.1); re-run with -deprecation for details
++reload: A.scala
++
++final tree is the nested one: false
++nested class L: copy copy$default$1 productPrefix productArity productElement productIterator canEqual productElementName hashCode toString equals
++nested object L: $lessinit$greater$default$1 toString apply apply$default$1 unapply
++final class L: copy copy$default$1 productPrefix productArity productElement productIterator canEqual productElementName hashCode toString equals
++final object L: $lessinit$greater$default$1 toString apply apply$default$1 unapply
+diff --git a/test/files/presentation/full-check-interleaved/Test.scala b/test/files/presentation/full-check-interleaved/Test.scala
+new file mode 100644
+index 0000000000..cafdff2191
+--- /dev/null
++++ b/test/files/presentation/full-check-interleaved/Test.scala
+@@ -0,0 +1,42 @@
++import java.util.concurrent.CountDownLatch
++import scala.tools.nsc.interactive.Global
++import scala.tools.nsc.interactive.tests.InteractiveTest
++
++// A type check of the whole unit (`askType`) is served while background type checking is still in `Before`.
++// Both its tree and the background's, which later `askLoadedTyped`s return, must have the synthetic
++// definitions of `L` and its companion.
++object Test extends InteractiveTest {
++  val reached, posted = new CountDownLatch(1)
++
++  override protected def createGlobal: Global = new Global(settings, compilerReporter) {
++    override def signalDone(context: Context, old: Tree, result: Tree): Unit = {
++      if (onCompilerThread && reached.getCount > 0 && interruptsEnabled && lockedCount == 0) {
++        reached.countDown()
++        posted.await()
++      }
++      super.signalDone(context, old, result)
++    }
++  }
++
++  override protected def runDefaultTests(): Unit = {
++    import compiler._
++    val src = sourceFiles.head
++    reached.await()
++    val typed = new Response[Tree]
++    askType(src, forceReload = false, typed)
++    posted.countDown()
++    val nested = typed.get.swap.toOption.get
++    while (compiler.isOutOfDate) Thread.sleep(10)          // the background type check finishes, and stores its tree
++    val loaded = new Response[Tree]
++    compiler.askLoadedTyped(src, loaded)
++    val tree = loaded.get.swap.toOption.get
++    println(unitOfFile(src.file).problems.mkString("\n"))
++    def show(label: String, t: Tree) = compiler.ask { () =>
++      for (Block(stats, _) <- t.collect { case b: Block => b }; impl <- stats.collect { case i: ImplDef => i })
++        println(s"$label ${impl.symbol}: " + impl.impl.body.collect { case d: DefDef if d.symbol.isSynthetic => d.name }.mkString(" "))
++    }
++    println(s"final tree is the nested one: ${nested eq tree}")
++    show("nested", nested)
++    show("final", tree)
++  }
++}
+diff --git a/test/files/presentation/full-check-interleaved/src/A.scala b/test/files/presentation/full-check-interleaved/src/A.scala
+new file mode 100644
+index 0000000000..aeca9faa83
+--- /dev/null
++++ b/test/files/presentation/full-check-interleaved/src/A.scala
+@@ -0,0 +1,9 @@
++class Before {
++  def x = 1
++}
++object Use {
++  def local = {
++    case class L(a: Int = 0)
++    L.apply(2).copy().a
++  }
++}
