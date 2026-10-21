@@ -152,6 +152,7 @@ public abstract class Global {
     sym.decl = d; sym.mods = d.mods(); sym.synthetic = false; sym.defRunId = runId; sym.locked = false;
     sym.info = classCompleter(u, sym);
     sym.synthesized = null;
+    if (d.isImplicit()) enterImplicitWrapper(u, sym, d);   // the namer enters the factory (enterClassDef)
   }
 
   /** A case class without an `object` of its own gets a synthetic companion; both get `apply` and `unapply`
@@ -173,6 +174,10 @@ public abstract class Global {
       s.info = (Completer) self -> Type.of(cls);
       u.synthetics.put(s, d.pos());
     }
+    Sym copy = newSym("copy", Kind.DEF, u.name());              // Namers.addCopyMethod: the namer's synthetic
+    copy.owner = cls; copy.synthetic = true; copy.defRunId = runId;
+    copy.info = (Completer) self -> Type.of(cls);
+    u.synthetics.put(copy, d.pos());
   }
 
   /** scalac's `enterImplicitWrapper`, run each time the enclosing template is typed: the factory method of
@@ -384,10 +389,10 @@ public abstract class Global {
     signalDone(u, "class " + d.name(), null);
   }
 
-  /** `addSyntheticMethods` for a case class: `copy`, `equals`, `hashCode`, `toString`, one at a time, unless
-   * the class already has them. */
+  /** `addSyntheticMethods` for a case class: `equals`, `hashCode`, `toString`, one at a time, unless the class
+   * already has them (`copy`, like `apply` and `unapply`, is the namer's). */
   private void finishMethodSynthesis(Unit u, Sym cls, ClassInfo ci, List<String> body) {
-    if (ci.decls.term("copy") != null) {
+    if (ci.decls.term("equals") != null) {
       if (cls.synthesized != null && cls.synthesizedRun == runId) {
         body.addAll(cls.synthesized);                        // the trees a targeted check added
         if (u.target == null) cls.synthesized = null;
@@ -395,10 +400,10 @@ public abstract class Global {
       return;
     }
     List<String> added = new ArrayList<>();
-    for (String name : List.of("copy", "equals", "hashCode", "toString")) {
+    for (String name : List.of("equals", "hashCode", "toString")) {
       Sym s = newSym(name, Kind.DEF, u.name());
       s.owner = cls; s.synthetic = true;
-      s.info = name.equals("copy") ? Type.of(cls) : Type.builtin(name.equals("equals") ? "Boolean" : name.equals("hashCode") ? "Int" : "String");
+      s.info = Type.builtin(name.equals("equals") ? "Boolean" : name.equals("hashCode") ? "Int" : "String");
       ci.decls.enter(s);
       body.add(name); added.add(name);
       signalDone(u, "synth " + cls.name + "." + name, null);
@@ -413,6 +418,7 @@ public abstract class Global {
       for (Map.Entry<Sym, Integer> e : new ArrayList<>(u.synthetics.entrySet())) {
         if (e.getValue() != pos) continue;
         Sym s = e.getKey();
+        if (s.unlinked) continue;                         // scalac iterates the scope: a replaced factory's tree is never found
         if (s.kind == Kind.DEF) force(s);
         String owner = s.owner != null ? (s.owner.kind == Kind.OBJECT ? "object " : "class ") + s.owner.name : "<toplevel>";
         bodies.computeIfAbsent(owner, k -> new ArrayList<>()).add(s.name);

@@ -277,7 +277,7 @@ def memberNamesK (p : Program) (scopeSynth : List (Ref × String)) : Nat → Ref
       | none => []
       | some d => (if d.isCase && !d.obj then d.params.map (·.1) else []) ++ d.members.map (·.name)
     let synth := scopeSynth.filterMap fun (r', n) => if r' == r then some n else none
-    let apply := if r.obj && isCaseClass p r.name then ["apply", "unapply"] else []
+    let apply := if r.obj && isCaseClass p r.name then ["apply", "unapply"] else if !r.obj && isCaseClass p r.name then ["copy"] else []
     let inherited := match (findDecl p r).bind (·.parent) with
       | some par => memberNamesK p scopeSynth fuel (cls par)
       | none => []
@@ -365,7 +365,7 @@ def forceMember (nested : Ask → K Answer) (poll : (Ask → K Answer) → K Uni
 
 /-! ## The typer -/
 
-def synthNames : List String := ["copy", "equals", "hashCode", "toString"]
+def synthNames : List String := ["equals", "hashCode", "toString"]
 
 /-- `addSyntheticMethods` for a case class. -/
 def finishMethodSynthesis (nested : Ask → K Answer) (poll : (Ask → K Answer) → K Unit) (f : String) (r : Ref) (body : List String) :
@@ -378,7 +378,7 @@ def finishMethodSynthesis (nested : Ask → K Answer) (poll : (Ask → K Answer)
       body := body ++ [n]
       signalDone nested f s!"synth {r.name}.{n}" none true poll completionAnswer
     return body
-  if (r, "copy") ∈ st.scopeSynth then
+  if (r, "equals") ∈ st.scopeSynth then
     match st.synthesized.find? (·.1 == r) with
     | some (_, names) =>
       if st.target.isNone then modify fun st => { st with synthesized := st.synthesized.filter (·.1 != r) }
@@ -409,11 +409,11 @@ def addSynthetics (nested : Ask → K Answer) (poll : (Ask → K Answer) → K U
     signalDone nested f s!"synthetic {key}.{name}" none true poll completionAnswer
   return bodies
 
-/-- `enterImplicitWrapper`, each time the template is typed: a new factory (generation) unless
-kept. -/
+/-- `enterImplicitWrapper`, each time the template is typed (the namer entered the first factory
+at the run's start): a new factory (generation) unless kept. -/
 def enterImplicitWrapper (f : String) (d : Decl) (pos : Nat) : K Unit := do
   let g ← gen d.name
-  if g == 0 || !(← get).policy.keepFactory then setGen d.name (g + 1)
+  if !(← get).policy.keepFactory then setGen d.name (g + 1)
   modUnit f fun u =>
     if u.synthetics.any (fun (k, n, _) => k == "<toplevel>" && n == d.name) then u
     else { u with synthetics := u.synthetics ++ [("<toplevel>", d.name, pos)] }
@@ -486,16 +486,18 @@ def typeUnit (nested : Ask → K Answer) (poll : (Ask → K Answer) → K Unit) 
 /-! ## Runs, requests, the background -/
 
 /-- A new run (`newRun`): fresh facts, scopes and generations; the units' synthetic trees as the
-namer leaves them (a case class's companion if it has none, with `apply` and `unapply`). -/
+namer leaves them (a case class's companion if it has none, with `apply` and `unapply`, and its
+`copy`), and the implicit factories at their first generation. -/
 def newRun (units : List (String × Program)) : K Unit :=
   modify fun st =>
     { st with
-      store := fun _ => none, scopeSynth := [], synthesized := [], gens := [],
+      store := fun _ => none, scopeSynth := [], synthesized := [],
+      gens := (units.flatMap (·.2)).filterMap fun d => if d.isImplicit && !d.obj then some (d.name, 1) else none,
       units := units.map fun (name, decls) =>
         let synth := (decls.zipIdx).flatMap fun (d, pos) =>
           if d.isCase && !d.obj then
             (if decls.any (fun o => o.obj && o.name == d.name) then [] else [("<toplevel>", d.name, pos)]) ++
-              [("object " ++ d.name, "apply", pos), ("object " ++ d.name, "unapply", pos)]
+              [("object " ++ d.name, "apply", pos), ("object " ++ d.name, "unapply", pos), ("class " ++ d.name, "copy", pos)]
           else []
         { name, decls, synthetics := synth } }
 
@@ -664,22 +666,22 @@ def scenarios : List Scenario :=
 /-- The kernel's safepoints are the Java kernel's, by name and in order (`results.txt`, `--trace`). -/
 theorem caseClassCompletion_trace :
     backgroundTrace .before caseClassCompletion =
-      ["class Int", "rhs L.self", "member L.self", "synth L.copy", "synth L.equals", "synth L.hashCode", "synth L.toString",
-       "class L", "synthetic <toplevel>.L", "synthetic object L.apply", "synthetic object L.unapply", "rhs Use.l",
-       "member Use.l", "rhs Use.f", "member Use.f", "class Use"] := by
+      ["class Int", "rhs L.self", "member L.self", "synth L.equals", "synth L.hashCode", "synth L.toString", "class L",
+       "synthetic <toplevel>.L", "synthetic object L.apply", "synthetic object L.unapply", "synthetic class L.copy",
+       "rhs Use.l", "member Use.l", "rhs Use.f", "member Use.f", "class Use"] := by
   decide +kernel
 
 /-- **`results.txt` is a theorem.** For each scenario: the background's safepoints, and the
 divergent ones under the policy before scala/scala#11328, after it, and the proposal. -/
 theorem results_before_after_proposed :
     scenarios.map (fun sc => (sc.name, safepoints .before sc, divergent .before sc, divergent .after sc, divergent .proposed sc)) =
-      [("case-class-completion", 16, [0, 1, 2, 3, 4, 5, 6, 7], [], []),
+      [("case-class-completion", 16, List.range 7, [], []),
        ("case-class-loaded", 16, List.range 16, List.range 16, []),
        ("cycle", 12, [], [], []),
        ("edit-cross-file", 11, [], [], []),
        ("implicit-class", 17, [0, 1, 2, 3, 4, 5, 6, 14, 15, 16], [], []),
        ("nowarn", 14, List.range 13, [], []),
-       ("targeted-consumes-synthetics", 18, List.range 9, [], [])] := by
+       ("targeted-consumes-synthetics", 18, List.range 8, [], [])] := by
   decide +kernel
 
 end ScalaTypes.ToyKernel
