@@ -12,3 +12,4 @@ import ScalaTypes.Lub
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
 import ScalaTypes.LubArgs
+import ScalaTypes.ToyNamer

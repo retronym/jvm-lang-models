@@ -50,6 +50,16 @@ The local [`IncComp.Compiler`](../packages/inc-comp/IncComp/Model.lean#L28) has 
 | [`Interrupt.forcePeek_memoizes_order`](../packages/query/Query/Interrupt.lean#L739), [`psi_root_order_dependent`](../packages/query/Query/Interrupt.lean#L748), [`fullTaint_stores_nothing`](../packages/query/Query/Interrupt.lean#L755) | `forcePeek` memoizes an order-dependent answer; IntelliJ's rule memoizes the re-entered frame's; full taint memoizes nothing on the cycle | kernel `decide` |
 | [`Interrupt.burst_allOrNothing_whole_iff`](../packages/query/Query/Interrupt.lean#L797), [`consuming_add_one_owner`](../packages/query/Query/Interrupt.lean#L848), [`keep_cache_sound`](../packages/query/Query/Interrupt.lean#L884) | The three non-fact shapes of [scala/scala#11328](https://github.com/scala/scala/pull/11328): a burst read at a safepoint inside it, a consumed map over all interleavings of two checks, an identity cache under every schedule | kernel `decide`; [`keep_cache_sound`](../packages/query/Query/Interrupt.lean#L884) for every schedule |
 
+**The toy language's namer (Track I meets Track L).** The lazy facts of any program of the Java toy's language, as a function of the program and of how a compiler bundles them ([`ScalaTypes.ToyNamer`](../packages/scala-types/ScalaTypes/ToyNamer.lean); [`track-i.md`](../packages/scala/docs/track-i.md) §8):
+
+| Name | Statement | Hypotheses |
+|---|---|---|
+| [`ToyNamer.rulesOf`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L238) | The namer: the rule of every fact (member names, parent, each member's type) of a program, under the `fine`, `scalac` or `dotc` cut | a definition |
+| [`ToyNamer.l9_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L302), [`l9_fine_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L308) | L9: under dotc's cut `A`'s member set has the forwarder `b` with `A.scala` typed first and not with `B.scala` first; under the fine cut both orders agree | kernel `decide` |
+| [`ToyNamer.l9_taint_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L318) | Under full taint the answer is the same in both orders, and nothing on the cycle is stored | kernel `decide` |
+| [`ToyNamer.l2_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L341), [`l2_fine_cycle`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L350) | L2: mutual exports conflict with `A.scala` first and compile with `B.scala` first under dotc's cut; under the fine cut the member sets are a true cycle in both orders | kernel `decide` |
+| [`ToyNamer.cycleToy_all_cuts`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L365), [`implicitToy_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L380), [`caseToy_names`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L392) | The Java toy's `cycle`, `implicit-class` and `case-class` scenarios: a true cycle under every cut, the implicit view order-free under every cut, the synthetics names the namer has | kernel `decide` |
+
 ## Where the hypotheses bite
 
 - Abstraction is perfect hashing: collisions of Zinc's 32-bit name hashes are excluded by fiat.
