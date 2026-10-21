@@ -13,3 +13,4 @@ import ScalaTypes.Scopes
 import ScalaTypes.Fusion
 import ScalaTypes.LubArgs
 import ScalaTypes.ToyNamer
+import ScalaTypes.ToyKernel

@@ -54,11 +54,18 @@ The local [`IncComp.Compiler`](../packages/inc-comp/IncComp/Model.lean#L28) has 
 
 | Name | Statement | Hypotheses |
 |---|---|---|
-| [`ToyNamer.rulesOf`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L238) | The namer: the rule of every fact (member names, parent, each member's type) of a program, under the `fine`, `scalac` or `dotc` cut | a definition |
-| [`ToyNamer.l9_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L302), [`l9_fine_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L308) | L9: under dotc's cut `A`'s member set has the forwarder `b` with `A.scala` typed first and not with `B.scala` first; under the fine cut both orders agree | kernel `decide` |
-| [`ToyNamer.l9_taint_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L318) | Under full taint the answer is the same in both orders, and nothing on the cycle is stored | kernel `decide` |
-| [`ToyNamer.l2_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L341), [`l2_fine_cycle`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L350) | L2: mutual exports conflict with `A.scala` first and compile with `B.scala` first under dotc's cut; under the fine cut the member sets are a true cycle in both orders | kernel `decide` |
-| [`ToyNamer.cycleToy_all_cuts`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L365), [`implicitToy_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L380), [`caseToy_names`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L392) | The Java toy's `cycle`, `implicit-class` and `case-class` scenarios: a true cycle under every cut, the implicit view order-free under every cut, the synthetics names the namer has | kernel `decide` |
+| [`ToyNamer.rulesOf`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L274) | The namer: the rule of every fact (member names, parent, each member's type) of a program, under the `fine`, `scalac` or `dotc` cut | a definition |
+| [`ToyNamer.l9_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L338), [`l9_fine_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L344) | L9: under dotc's cut `A`'s member set has the forwarder `b` with `A.scala` typed first and not with `B.scala` first; under the fine cut both orders agree | kernel `decide` |
+| [`ToyNamer.l9_taint_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L354) | Under full taint the answer is the same in both orders, and nothing on the cycle is stored | kernel `decide` |
+| [`ToyNamer.l2_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L377), [`l2_fine_cycle`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L386) | L2: mutual exports conflict with `A.scala` first and compile with `B.scala` first under dotc's cut; under the fine cut the member sets are a true cycle in both orders | kernel `decide` |
+| [`ToyNamer.cycleToy_all_cuts`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L401), [`implicitToy_order_free`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L416), [`caseToy_names`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L428) | The Java toy's `cycle`, `implicit-class` and `case-class` scenarios: a true cycle under every cut, the implicit view order-free under every cut, the synthetics names the namer has | kernel `decide` |
+
+**The scalac kernel over the namer (Track I).** `Scala2Kernel.java` as a state machine over the namer's facts, with the Java harness ([`ScalaTypes.ToyKernel`](../packages/scala-types/ScalaTypes/ToyKernel.lean); [`track-i.md`](../packages/scala/docs/track-i.md) §9):
+
+| Name | Statement | Hypotheses |
+|---|---|---|
+| [`ToyKernel.caseClassCompletion_trace`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L665) | The kernel's safepoints for `case-class-completion` are the Java kernel's, by name and in order | kernel `decide` |
+| [`ToyKernel.results_before_after_proposed`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L674) | For the seven scenarios of `results.txt`, the background's safepoint counts and the divergent safepoints under the policies before [scala/scala#11328](https://github.com/scala/scala/issues/11328), after it and the proposal are exactly the Java harness's | kernel `decide` |
 
 ## Where the hypotheses bite
 

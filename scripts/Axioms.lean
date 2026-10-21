@@ -147,3 +147,7 @@ import ScalaTypes.Fusion
 #print axioms Query.Interrupt.consuming_add_one_owner
 #print axioms Query.Interrupt.keep_cache_sound
 #print axioms ScalaTypes.Laziness.implicitSkip_taint_rejects
+-- Track I: the namer and the kernel
+#print axioms ScalaTypes.ToyNamer.l9_dotc_order_dependent
+#print axioms ScalaTypes.ToyNamer.l2_dotc_order_dependent
+#print axioms ScalaTypes.ToyKernel.results_before_after_proposed

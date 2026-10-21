@@ -32,6 +32,7 @@ structure Member where
   name : String
   declared : Option String := none
   path : List String := []
+  deprecated : Bool := false
   deriving DecidableEq, Repr
 
 inductive Stat
@@ -44,6 +45,7 @@ structure Decl where
   obj : Bool := false
   isCase : Bool := false
   isImplicit : Bool := false
+  nowarn : Bool := false
   name : String
   params : List (String × String) := []
   parent : Option String := none
@@ -104,13 +106,36 @@ inductive Fact
   | mem (owner : Ref) (name : String)
   deriving DecidableEq, Repr
 
-inductive Value
-  | names (ns : List String)
-  | parent (p : Option String)
-  | ty (r : Ref)
+inductive Ty
+  | ref (r : Ref)
   | builtin (n : String)
   | err (msg : String)
   deriving DecidableEq, Repr
+
+/-- A step of a path that went through an implicit class: the class, the member it supplied and the
+type it was applied to. -/
+structure Via where
+  cls : String
+  member : String
+  onType : String
+  deriving DecidableEq, Repr
+
+/-- A member's type, with how it was reached: the implicit view a step of the path went through, and
+the deprecated members (owner, name) the path referred to. The kernel reads both. -/
+structure Typed where
+  ty : Ty
+  via : Option Via := none
+  deprecated : List (Ref × String) := []
+  deriving DecidableEq, Repr
+
+inductive Value
+  | names (ns : List String)
+  | parent (p : Option String)
+  | typed (t : Typed)
+  | err (msg : String)
+  deriving DecidableEq, Repr
+
+def ty (t : Ty) : Value := .typed { ty := t }
 
 /-- The answer a peek gets for a fact in progress. -/
 def absent : Value := .err "absent"
@@ -160,35 +185,46 @@ def findImplicit (cut : Cut) (p : Program) (r : Ref) (n : String) : List Decl �
       | none => findImplicit cut p r n ds
     else findImplicit cut p r n ds
 
+def isDeprecated (p : Program) (o : Ref) (n : String) : Bool :=
+  ((findDecl p o).bind fun d => d.members.find? (·.name == n)).map (·.deprecated) == some true
+
+/-- One step of a path: the member `n` of owner `o`, its type joined to what was reached so far. -/
+def step (acc : Typed) (p : Program) (o : Ref) (n : String) (via : Option Via) (v : Value) : Typed :=
+  let t := match v with | .typed t => t.ty | .err m => .err m | _ => .err "not a type"
+  { ty := t, via := via <|> acc.via,
+    deprecated := acc.deprecated ++ (if isDeprecated p o n then [(o, n)] else []) }
+
 /-- The type of a path from inside `r`: the first name is a member of `r` or a top-level object,
 each further name a member of the type so far, or of an implicit class taking it. -/
-def walk (cut : Cut) (p : Program) : Value → List String → Rule Value
-  | t, [] => pure t
-  | .ty r, n :: rest => do
-    let o ← lookupIn cut p p.length r n
-    match o with
-    | some o => do let v ← force (.mem o n); walk cut p v rest
-    | none =>
-      let i ← findImplicit cut p r n p
-      match i with
-      | some o => do let v ← force (.mem o n); walk cut p v rest
-      | none => pure (.err s!"value {n} is not a member of {r.name}")
-  | .builtin b, n :: _ => pure (.err s!"value {n} is not a member of {b}")
-  | e, _ => pure e
+def walk (cut : Cut) (p : Program) : Typed → List String → Rule Value
+  | acc, [] => pure (.typed acc)
+  | acc, n :: rest =>
+    match acc.ty with
+    | .ref r => do
+      let o ← lookupIn cut p p.length r n
+      match o with
+      | some o => do let v ← force (.mem o n); walk cut p (step acc p o n none v) rest
+      | none =>
+        let i ← findImplicit cut p r n p
+        match i with
+        | some o => do let v ← force (.mem o n); walk cut p (step acc p o n (some ⟨o.name, n, r.name⟩) v) rest
+        | none => pure (.typed { acc with ty := .err s!"value {n} is not a member of {r.name}" })
+    | .builtin b => pure (.typed { acc with ty := .err s!"value {n} is not a member of {b}" })
+    | .err _ => pure (.typed acc)
 
 def typePath (cut : Cut) (p : Program) (r : Ref) : List String → Rule Value
   | [] => pure (.err "empty path")
   | first :: rest => do
     let o ← lookupIn cut p p.length r first
     match o with
-    | some o => do let v ← force (.mem o first); walk cut p v rest
+    | some o => do let v ← force (.mem o first); walk cut p (step { ty := .err "" } p o first none v) rest
     | none =>
-      if (findDecl p (obj first)).isSome then walk cut p (.ty (obj first)) rest
-      else pure (.err s!"not found: value {first}")
+      if (findDecl p (obj first)).isSome then walk cut p { ty := .ref (obj first) } rest
+      else pure (ty (.err s!"not found: value {first}"))
 
 /-- A declared type: a class of the program, or a builtin. -/
 def declaredType (p : Program) (t : String) : Value :=
-  if (findDecl p (cls t)).isSome then .ty (cls t) else .builtin t
+  if (findDecl p (cls t)).isSome then ty (.ref (cls t)) else ty (.builtin t)
 
 /-- The class or object `export src` refers to. -/
 def exportSource (p : Program) (src : String) : Ref :=
@@ -247,10 +283,10 @@ def rulesOf (cut : Cut) (p : Program) : PRules Fact Value
     | some d =>
       if n ∈ synthetics p r then
         .pure (match n with
-          | "equals" => .builtin "Boolean"
-          | "hashCode" => .builtin "Int"
-          | "toString" => .builtin "String"
-          | _ => .ty (cls r.name))
+          | "equals" => ty (.builtin "Boolean")
+          | "hashCode" => ty (.builtin "Int")
+          | "toString" => ty (.builtin "String")
+          | _ => ty (.ref (cls r.name)))
       else match d.params.find? (·.1 == n) with
       | some (_, t) => .pure (declaredType p t)
       | none =>
@@ -363,7 +399,7 @@ def cycleToy : Program := [int,
 
 /-- A true cycle is a cycle under every cut, and the well-founded member beside it is typed. -/
 theorem cycleToy_all_cuts :
-    ∀ cut ∈ [Cut.fine, .scalac, .dotc], (run cut cycleToy [cls "C"]).2 (.mem (cls "C") "p") = some (.ty (cls "Int")) ∧
+    ∀ cut ∈ [Cut.fine, .scalac, .dotc], (run cut cycleToy [cls "C"]).2 (.mem (cls "C") "p") = some (ty (.ref (cls "Int"))) ∧
       (run cut cycleToy [cls "C"]).2 (.mem (cls "C") "a") = none := by
   decide
 
@@ -375,11 +411,11 @@ def implicitToy : Program := [int,
       .member { name := "b", declared := some "Before" }, .member { name := "f", path := ["b", "x"] },
       .member { name := "three", declared := some "Int" }, .member { name := "g", path := ["three", "twice"] }] }]
 
-/-- The implicit view resolves under every cut, in either file order: the identity cache that
-scala/scala#11328 fixes is kernel state, not a fact. -/
+/-- The implicit view resolves under every cut, in either file order, and the fact records the
+class it went through: the identity cache that scala/scala#11328 fixes is kernel state, not a fact. -/
 theorem implicitToy_order_free :
-    ∀ cut ∈ [Cut.fine, .scalac, .dotc], (run cut implicitToy [cls "Before", cls "RichInt", obj "Use"]).2 (.mem (obj "Use") "g") = some (.ty (cls "Int")) ∧
-      (run cut implicitToy [obj "Use", cls "RichInt", cls "Before"]).2 (.mem (obj "Use") "g") = some (.ty (cls "Int")) := by
+    ∀ cut ∈ [Cut.fine, .scalac, .dotc], (run cut implicitToy [cls "Before", cls "RichInt", obj "Use"]).2 (.mem (obj "Use") "g") = some (.typed { ty := .ref (cls "Int"), via := some ⟨"RichInt", "twice", "Int"⟩ }) ∧
+      (run cut implicitToy [obj "Use", cls "RichInt", cls "Before"]).2 (.mem (obj "Use") "g") = some (.typed { ty := .ref (cls "Int"), via := some ⟨"RichInt", "twice", "Int"⟩ }) := by
   decide
 
 /-- `scenarios/case-class-completion.toy`: a case class's synthetics are names the namer knows. -/
