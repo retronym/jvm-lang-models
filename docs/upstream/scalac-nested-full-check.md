@@ -1,4 +1,4 @@
-# A whole-unit request served inside the background check loses the unit's synthetics (scala/scala#11328)
+# A whole-unit request served inside the background check loses the unit's synthetics ([scala/scala#11328](https://github.com/scala/scala/pull/11328))
 
 **Venue.** A comment on [scala/scala#11328](https://github.com/scala/scala/pull/11328), with the test and the patch. Posted first as a comment on [retronym/jvm-lang-models#12](https://github.com/retronym/jvm-lang-models/pull/12#issuecomment-6316524603).
 
