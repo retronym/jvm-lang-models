@@ -64,8 +64,12 @@ The local [`IncComp.Compiler`](../packages/inc-comp/IncComp/Model.lean#L28) has 
 
 | Name | Statement | Hypotheses |
 |---|---|---|
-| [`ToyKernel.caseClassCompletion_trace`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L667) | The kernel's safepoints for `case-class-completion` are the Java kernel's, by name and in order | kernel `decide` |
-| [`ToyKernel.results_before_after_proposed`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L676) | For the seven scenarios of `results.txt`, the background's safepoint counts and the divergent safepoints under the policies before [scala/scala#11328](https://github.com/scala/scala/issues/11328), after it and the proposal are exactly the Java harness's | kernel `decide` |
+| [`ToyKernel.caseClassCompletion_trace`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L765) | The kernel's safepoints for `case-class-completion` are the Java kernel's, by name and in order | kernel `decide` |
+| [`ToyKernel.results_before_after_proposed`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L774) | For the seven scenarios of `results.txt`, the background's safepoint counts and the divergent safepoints under the policies before [scala/scala#11328](https://github.com/scala/scala/issues/11328), after it and the proposal are exactly the Java harness's | kernel `decide` |
+| [`ToyKernel.abort_proposed_safe`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L737) | With abort-and-restart and idempotent synthetics, no scenario diverges at any safepoint, with no cleanup | kernel `decide` |
+| [`ToyKernel.abort_after_not_resumable`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L743) | Under the PR's policy an abort after the burst began or after synthetic trees were consumed leaves the restart short | kernel `decide` |
+| [`ToyKernel.abort_restore_loses_diagnostics`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L751) | A top-level restore repairs the consumed maps and loses the diagnostics completers emitted, since the memoized facts never re-emit them | kernel `decide` |
+| [`ToyKernel.abort_restore_keep_safe`](../packages/scala-types/ScalaTypes/ToyKernel.lean#L759) | Restore everything but what the completers reported, and nothing diverges under the PR's policy or the proposal | kernel `decide` |
 | [`ToySpace.consumerFirst_safepoints`](../packages/scala-types/ScalaTypes/ToySpace.lean) | The consumer-first scenario has twenty safepoints; its twelve divergent ones under the proposal are observed by `#eval` (`decide +kernel` is stuck on it: open) | kernel `decide` |
 
 ## Where the hypotheses bite

@@ -81,6 +81,8 @@ structure UnitSt where
   name : String
   decls : Program
   synthetics : List (String × String × Nat) := []
+  /-- The namer's synthetic trees, for a check that starts from its own copy. -/
+  synthetics0 : List (String × String × Nat) := []
   suspended : List Problem := []
   problems : List Problem := []
   suppressions : List String := []
@@ -89,12 +91,40 @@ structure UnitSt where
   typed : Bool := false
   implicitCache : Option (List (String × Nat)) := none
 
+/-- How requests are served. `nested`: scalac today, inside the check at a safepoint. `abort`: a
+request waiting at a safepoint unwinds the background check, runs on an empty stack, and the
+background restarts; `restore` puts the unit-scope state back as it was when the background
+started (the top-level `catch`); `perCheck` gives every check its own copy of the unit-scope state
+from the namer, published only by a full check that completes. -/
+structure Mode where
+  abort : Bool := false
+  restore : Bool := false
+  perCheck : Bool := false
+  /-- Diagnostics a completer produced stay with the facts: a restore keeps them. -/
+  keepDiagnostics : Bool := false
+  deriving DecidableEq, Repr
+
+def Mode.nested : Mode := {}
+def Mode.abortOnly : Mode := { abort := true }
+def Mode.abortRestore : Mode := { abort := true, restore := true }
+def Mode.abortRestoreKeep : Mode := { abort := true, restore := true, keepDiagnostics := true }
+def Mode.abortPerCheck : Mode := { abort := true, perCheck := true }
+
+/-- The unit-scope state a check may consume: what the top-level catch restores. -/
+structure Snapshot where
+  units : List UnitSt
+  scopeSynth : List (Ref × String)
+  synthesized : List (Ref × List String)
+  gens : List (String × Nat)
+
 /-- The kernel's state: the units, the run's store of facts, the synthetic methods entered into
 scopes by bursts, the `SynthesizedMethods` attachments, the implicit factories' generations (a new
 symbol is a new generation), `interruptsEnabled`, the targeted check's target, and the scheduler
 (`Core.Scheduler`): the safepoint count, the one to fire at, the event, the queue, the answers. -/
 structure KSt where
   policy : Policy
+  mode : Mode := {}
+  snapshot : Option Snapshot := none
   units : List UnitSt := []
   store : Store Fact Value := fun _ => none
   scopeSynth : List (Ref × String) := []
@@ -251,6 +281,14 @@ def signalDone (nested : Ask → K Answer) (f : String) (where_ : String) (reach
     | some e => modify fun st => { st with fired := true, queue := st.queue ++ [e] }
     | none => pure ()
   let st ← get
+  if st.mode.abort then
+    -- a request is waiting and nothing masks cancellation: unwind the background check
+    if st.inBackground && !st.queue.isEmpty && st.interruptsEnabled then throw .cancelled
+    if !serviceable || !st.interruptsEnabled then return
+    match reached, st.target with
+    | some t, some t' => if t == t' then throw (.typerResult (← completion f t))
+    | _, _ => pure ()
+    return
   if !serviceable || !st.interruptsEnabled then return
   match reached, st.target with
   | some t, some t' => if t == t' then throw (.typerResult (← completion f t))
@@ -465,6 +503,8 @@ def typeDecls (nested : Ask → K Answer) (poll : (Ask → K Answer) → K Unit)
 completion. -/
 def typeUnit (nested : Ask → K Answer) (poll : (Ask → K Answer) → K Unit) (f : String) (target : Option Target) : K Unit := do
   let some u ← getUnit f | return
+  if (← get).mode.perCheck then
+    modUnit f fun u => { u with synthetics := u.synthetics0, suspended := [], suppressions := [], suppressionsKnown := false, implicitCache := none }
   let saved := (← get).target
   modify fun st => { st with target := target }
   let r ← tryCatch (do let b ← typeDecls nested poll f (u.decls.zipIdx) []; pure (Sum.inl b)) (fun e => pure (Sum.inr e))
@@ -499,7 +539,7 @@ def newRun (units : List (String × Program)) : K Unit :=
             (if decls.any (fun o => o.obj && o.name == d.name) then [] else [("<toplevel>", d.name, pos)]) ++
               [("object " ++ d.name, "apply", pos), ("object " ++ d.name, "unapply", pos), ("class " ++ d.name, "copy", pos)]
           else []
-        { name, decls, synthetics := synth } }
+        { name, decls, synthetics := synth, synthetics0 := synth } }
 
 def reload (file : String) (text : Program) : K Unit := do
   let st ← get
@@ -553,14 +593,37 @@ def backgroundCompile (nested : Ask → K Answer) : K Unit := do
     if !u.typed then typeUnit nested pollForWork u.name none
 
 /-- `drain`: the background to completion, restarted after each `FreshRunReq`, then the queue. -/
+def takeSnapshot : K Unit :=
+  modify fun st => { st with snapshot := some ⟨st.units, st.scopeSynth, st.synthesized, st.gens⟩ }
+
+/-- The top-level `catch`: the unit-scope state as the background found it; a unit a request has
+since fully typed stays typed. -/
+def restoreSnapshot : K Unit :=
+  modify fun st => match st.snapshot with
+    | some sn =>
+      let units := sn.units.map fun u =>
+        match st.units.find? (·.name == u.name) with
+        | some cur =>
+          if cur.typed && !u.typed then cur
+          else if st.mode.keepDiagnostics then { u with problems := cur.problems, suspended := cur.suspended }
+          else u
+        | none => u
+      { st with units, scopeSynth := sn.scopeSynth, synthesized := sn.synthesized, gens := sn.gens }
+    | none => st
+
 def drain : Nat → K Unit
   | 0 => pure ()
   | fuel + 1 => do
     let r ← tryCatch
-      (do pollForWork (serve 3); modify fun st => { st with inBackground := true }
+      (do pollForWork (serve 3)
+          takeSnapshot
+          modify fun st => { st with inBackground := true }
           backgroundCompile (serve 3); modify fun st => { st with inBackground := false }; pure true)
       (fun e => match e with
-        | .cancelled => do modify fun st => { st with inBackground := false }; pure false
+        | .cancelled => do
+          modify fun st => { st with inBackground := false }
+          if (← get).mode.restore then restoreSnapshot
+          pure false
         | .typerResult _ => pure true)
     if r then pollForWork (serve 3) else drain fuel
 
@@ -573,34 +636,34 @@ structure Scenario where
 
 def runK (st : KSt) (m : K Unit) : KSt := (m.run.run st).2
 
-def fresh (policy : Policy) (sc : Scenario) (fireAt : Option Nat) : KSt :=
-  { policy, fireAt, event := some sc.event }
+def fresh (policy : Policy) (sc : Scenario) (fireAt : Option Nat) (mode : Mode := {}) : KSt :=
+  { policy, mode, fireAt, event := some sc.event }
 
 /-- The background with the event injected at safepoint `fireAt` (or never). -/
-def background (policy : Policy) (sc : Scenario) (fireAt : Option Nat) : KSt :=
-  runK (fresh policy sc fireAt) (do newRun sc.units; drain 4)
+def background (policy : Policy) (sc : Scenario) (fireAt : Option Nat) (mode : Mode := {}) : KSt :=
+  runK (fresh policy sc fireAt mode) (do newRun sc.units; drain 6)
 
-def safepoints (policy : Policy) (sc : Scenario) : Nat := (background policy sc none).count
+def safepoints (policy : Policy) (sc : Scenario) (mode : Mode := {}) : Nat := (background policy sc none mode).count
 
-def backgroundTrace (policy : Policy) (sc : Scenario) : List String := (background policy sc none).trace
+def backgroundTrace (policy : Policy) (sc : Scenario) (mode : Mode := {}) : List String := (background policy sc none mode).trace
 
 /-- After the background: the event if it was not fired, then a `loadedTyped` of every unit. -/
 def finish (sc : Scenario) (st : KSt) : List Answer :=
   (runK st (do
     if !st.fired then modify fun st => { st with queue := st.queue ++ [sc.event] }
-    drain 4
+    drain 6
     for (f, _) in sc.units do
       modify fun st => { st with queue := st.queue ++ [.request (.loadedTyped f)] }
-      drain 4)).answers
+      drain 6)).answers
 
-def reference (policy : Policy) (sc : Scenario) : List Answer := finish sc (background policy sc none)
+def reference (policy : Policy) (sc : Scenario) (mode : Mode := {}) : List Answer := finish sc (background policy sc none mode)
 
-def atSafepoint (policy : Policy) (sc : Scenario) (k : Nat) : List Answer := finish sc (background policy sc (some k))
+def atSafepoint (policy : Policy) (sc : Scenario) (k : Nat) (mode : Mode := {}) : List Answer := finish sc (background policy sc (some k) mode)
 
 /-- The safepoints at which injecting the event changes an answer. -/
-def divergent (policy : Policy) (sc : Scenario) : List Nat :=
-  let ref := reference policy sc
-  (List.range (safepoints policy sc)).filter fun k => atSafepoint policy sc k != ref
+def divergent (policy : Policy) (sc : Scenario) (mode : Mode := {}) : List Nat :=
+  let ref := reference policy sc mode
+  (List.range (safepoints policy sc mode)).filter fun k => atSafepoint policy sc k mode != ref
 
 /-! ## The scenarios of `probes/interrupt/scenarios`, and `results.txt` as theorems -/
 
@@ -662,6 +725,41 @@ def targetedConsumes : Scenario :=
 
 def scenarios : List Scenario :=
   [caseClassCompletion, caseClassLoaded, cycleSc, editCrossFile, implicitClass, nowarnSc, targetedConsumes]
+
+/-! ### Abort and restart
+
+The same scenarios with a request *aborting* the background check at its safepoint instead of
+being serviced inside it. The theorems are the obligations of track-i.md §11, one per bit of
+cleanup. -/
+
+/-- **Idempotent synthetics make abort safe with no cleanup at all**: under the proposal, with no
+restore, no scenario diverges at any safepoint. -/
+theorem abort_proposed_safe :
+    scenarios.map (fun sc => divergent .proposed sc .abortOnly) = scenarios.map (fun _ => []) := by
+  decide +kernel
+
+/-- **Consumed maps and the burst are not resumable**: under the PR's policy, an abort after the
+burst has begun (safepoint 3) or after synthetic trees were consumed leaves the restart short. -/
+theorem abort_after_not_resumable :
+    divergent .after caseClassLoaded .abortOnly = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] ∧
+    divergent .after caseClassCompletion .abortOnly = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] := by
+  decide +kernel
+
+/-- **A top-level restore repairs them**, and loses the diagnostics: the warning `Use.foo`
+emitted when its type was completed is wiped by the restore and never re-emitted, since the fact is
+memoized; the cyclic-reference errors likewise, under every policy. -/
+theorem abort_restore_loses_diagnostics :
+    divergent .after caseClassLoaded .abortRestore = [] ∧
+    divergent .after nowarnSc .abortRestore = [6, 7, 8, 9, 10, 11, 12, 13] ∧
+    divergent .proposed cycleSc .abortRestore = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] := by
+  decide +kernel
+
+/-- **Diagnostics kept with the facts close the last gap**: restore everything but what the
+completers reported, and nothing diverges under the PR's policy or the proposal. -/
+theorem abort_restore_keep_safe :
+    scenarios.map (fun sc => divergent .after sc .abortRestoreKeep) = scenarios.map (fun _ => []) ∧
+    scenarios.map (fun sc => divergent .proposed sc .abortRestoreKeep) = scenarios.map (fun _ => []) := by
+  decide +kernel
 
 /-- The kernel's safepoints are the Java kernel's, by name and in order (`results.txt`, `--trace`). -/
 theorem caseClassCompletion_trace :
