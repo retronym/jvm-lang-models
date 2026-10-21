@@ -1,5 +1,6 @@
 import Query.Lazy
 import Query.Freeze
+import Query.Interrupt
 /-!
 # True and spurious cycles, in the shapes scalac and dotc have
 
@@ -252,6 +253,37 @@ theorem implicitSkip_U_first :
 theorem implicitSkip_separate :
     (forcePeekAll implicitRules "absent" 10 [.z] (fun q => if q = .y then some "Int" else none)).1 =
       [.ok "ambiguous: x, y"] := by
+  decide
+
+/-- With the peek read as a force, the rules have a fixed point (`y : Int`, `z` ambiguous): the
+answer of a build in which `y` is finished before `z` asks, which is the separate compilation. It
+is not ranked (`y` asks `z`, `z` peeks `y`). -/
+theorem implicitRules_fix :
+    Query.Interrupt.PFix implicitRules fun | .y => "Int" | .z => "ambiguous: x, y" := by
+  intro q; cases q <;> rfl
+
+/-- **scalac memoizes the order-dependent answer**: typing `O.scala` first stores `z = x`, which
+is not `z`'s value under the fixed point. A later consumer in the same run (another unit's
+implicit search through `U.z`) inherits the typing order. -/
+theorem implicitSkip_memoizes_wrong :
+    (forcePeekAll implicitRules "absent" 10 [.y, .z] (fun _ => none)).2 .z = some "x" := by decide
+
+/-- **Full taint rejects the program in every order**, as dotc does: `z`'s answer `x` is tainted
+and not stored, nor is `y`'s, and the second demand of `z` forces `y`, which forces `z`: a cyclic
+reference. The store never holds a value that is not the fixed point's
+([`forceT_agree`](../../query/Query/Interrupt.lean)). -/
+theorem implicitSkip_taint_rejects :
+    (Query.Interrupt.forceTAll implicitRules false "absent" 10 [.y, .z] (fun _ => none)).1 =
+      [.ok "Int", .cyc .z] ∧
+    (Query.Interrupt.forceTAll implicitRules false "absent" 10 [.y, .z] (fun _ => none)).2 .z = none := by
+  decide
+
+/-- **IntelliJ's rule caches the re-entered `y`** (its value does not depend on `z`'s) and not the
+tainted `z`, so the second demand of `z` finds `y` finished and answers as the separate
+compilation does: ambiguous. Here the root of the cycle happens to be order-independent. -/
+theorem implicitSkip_psi_ambiguous :
+    (Query.Interrupt.forceTAll implicitRules true "absent" 10 [.y, .z] (fun _ => none)).1 =
+      [.ok "Int", .ok "ambiguous: x, y"] := by
   decide
 
 /-! ## A wildcard export reads a member set that is still growing (dotc)

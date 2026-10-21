@@ -5,6 +5,7 @@ import Links.ZincBridgeKeys
 import Links.ZincBridgeLibs
 import Query.Lazy
 import Query.Freeze
+import Query.Interrupt
 import ScalaTypes.Laziness
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
@@ -133,3 +134,16 @@ import ScalaTypes.Fusion
 #print axioms ScalaTypes.Scopes.lifted_unsound
 #print axioms ScalaTypes.Fusion.fused_eq_seq_of_relabel
 #print axioms ScalaTypes.Scopes.flatname_guarded
+-- Track I: interruptibility
+#print axioms Query.Interrupt.forceA_agree
+#print axioms Query.Interrupt.abort_restart_ok
+#print axioms Query.Interrupt.forceA_unlock_touched
+#print axioms Query.Interrupt.abort_touched
+#print axioms Query.Interrupt.nested_empty_stack_reorders
+#print axioms Query.Interrupt.nested_inside_frame_cycles
+#print axioms Query.Interrupt.forcePeek_ok
+#print axioms Query.Interrupt.forceT_agree
+#print axioms Query.Interrupt.psi_root_order_dependent
+#print axioms Query.Interrupt.consuming_add_one_owner
+#print axioms Query.Interrupt.keep_cache_sound
+#print axioms ScalaTypes.Laziness.implicitSkip_taint_rejects

@@ -4,3 +4,4 @@ import Query.Interp
 import Query.Spec
 import Query.Lazy
 import Query.Freeze
+import Query.Interrupt
