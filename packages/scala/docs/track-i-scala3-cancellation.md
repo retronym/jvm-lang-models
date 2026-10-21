@@ -77,11 +77,36 @@ With abort in place, the cost of a request is the time to type the file up to th
 
 ## 6. The spike
 
-A scratch worktree of scala3 at `d168df2a76`, the change list above, and the test of item 8. Status and transcripts are kept on the project board and will be summarised here when the run completes.
+A scratch worktree of scala3 at `d168df2a76`, the change list of §3 as [`dotc-cancellation.patch`](../../../docs/upstream/dotc-cancellation.patch) (12 files, +344/−12), and a new `CompletionAbortSuite` (three tests). A full rebuild of the bootstrapped compiler took two minutes, test iterations 7–20 s. **All three suites pass**, `CompletionCancelSuite` and `CompilerCachingSuite` included:
+
+```
+[abort-inside-completion] thrown=true polls=1
+[abort-inside-completion] completion after abort: greetAlpha: Any
+[abort-from-typer] thrown=true typerPolls=2 runId 5 -> 5
+[abort-from-typer] runId after following request: 7
+[abort-via-token] runId before cancelled request: 7
+[abort-via-token] runId after cancelled request: 7
+[abort-via-token] runId after following request: 9
+[info] Passed: Total 11, Failed 0, Errors 0, Passed 11
+```
+
+What the tests pin down. `abort-via-token`, end to end through Metals' `CompilerAccess`: a token that cancels 20 ms after submission on a 400-method object; the request answers with `InterruptException()`, the driver is the same object before and after (`runId` 7 → 7, not recreated), and the next completion on the file is whole (`runId` 9: the aborted run consumed one id, so +2, where a recreated driver would restart at 2). `abort-from-typer`: the checker is driven directly and answers true at the second poll whose stack holds `checkCancelledTyping`, so the abort provably comes from the typer checkpoint; `myCtx`, the opened file and the compilation unit are the previous ones afterwards. `abort-inside-completion-of-sourcepath-symbol`: the cancellation lands inside `completeFrom` of a sourcepath symbol whose body is 2,000 trees (`polls=1`: the first 1,024 trees of the run are inside its Namer completion); after the abort the next completion lists it. **The control run** with `untouchIfIncomplete` made a no-op: the same completion comes back empty, because the symbol is a `CyclicReference` for the rest of the run. That is `touched_stays_cyclic` on the real compiler, and the reset is the fix.
+
+What the spike found beyond the change list:
+
+* **A cancellation before the typer drops the unit.** `tryEnterUnit` skips a unit when the callback is already cancelled, and `InteractiveDriver.run` then fails on `ctxRun.suspendedUnits.head`, which mtags would treat as a crash and discard the driver. The patch checks the callback after `compileSources` and throws `CancelledCompilation`; `CompletionCancelSuite.basic` (a token cancelled before the thunk runs) now exercises that path.
+* **The throw is guarded by `Mode.Interactive`.** Batch and sbt keep today's behaviour (a cancelled run skips its remaining units); without the guard sbt would get a `ControlThrowable` out of `compileSources`.
+* **`Compiler.newRun` resets the `ContextBase`** (uniques, sources, files, comparers) before the run starts, so after an abort the previous run's trees are not servable even with `myCtx` restored: a completion on identical content answered from `CachingDriver`'s cache came back empty. The patch invalidates the cache on a cancelled run (`lastCompiledURI = null`), so the next request recompiles. For the non-caching `InteractiveDriver` the retained `myOpenedTrees`/`myCompilationUnits` have the same staleness; `close(uri)`, what the `FatalError` path does, may be the honest choice. Open.
+* **A symbol first touched in a later run than its namer gets `Any`.** The retried completion lists `greetAlpha: Any`, not `Int`: `Namer.Completer.complete` refuses to complete in a run later than its creation run (`denot.info = UnspecifiedErrorType`, asserting `Mode.Interactive`). Pre-existing for any sourcepath member first touched late, and the model's `abort_restore_loses_diagnostics` in another form: a fact dropped on abort and not regenerated. A real fix re-enters the file or re-creates the completer in the next run (finding I7).
+* **`LazyAnnotation`'s restore must re-wrap the thunk**: assigning the context function to the union-typed field applies it during unwinding.
+* **`getCause` on a `ControlThrowable`** can be overridden (the constructor only pins the `cause` field), so mtags' `InterruptException` matches `CancelledCompilation` with no change on the Metals side; `Scala3CompilerAccess` overrides `withInterruptableCompiler` once to install the checker from `token.onCancel()`, with no per-call-site change in `ScalaPresentationCompiler`.
+* **Build note**: the Homebrew `sbt` script appends `-Xmx2G` after `.jvmopts`' 8 GB, and GenBCode ran out of memory once; `sbt --mem 8192`.
 
 ## Future work
 
-- [ ] Spike results: the patch, the test's output, the build time; the `Touched` leak reproduced on a classpath symbol if a test can land the cancellation inside its completion.
+- [x] Spike: the patch, three tests, the `Touched` leak reproduced on a sourcepath symbol and fixed (§6).
+- [ ] The two open questions of §6: `close(uri)` after an abort for the non-caching driver; a symbol first touched after its namer's run (I7).
+- [ ] The checkpoint inside implicit search (`searchImplicit`), for [scala/scala3#19320](https://github.com/scala/scala3/issues/19320)'s shape.
 - [ ] Targeting (§5) as a second patch, with the tree model behind it.
 - [ ] The dotc kernel in Lean with abort, so that `abort_*` have dotc-shaped twins (facts dropped per run, diagnostics per run).
 - [ ] Upstream: a scala/scala3 issue that the 3.8.0 `InteractiveDriver` cancellation is never sticky (the interrupt bit is consumed by `checkCancellation`), with the spike's test; then the patch as the "future change" #24133 named, framed against #9429's graceful-exit position with #23191's evidence.
