@@ -28,8 +28,10 @@ import dotty.tools.pc.tests.buildinfo.BuildInfo
  *  x-ray is read from the driver; nothing is simulated.
  *
  *  Run from the scala3 worktree with the session patch applied:
- *    sbt --mem 8192 "scala3-presentation-compiler/Test/runMain dotty.tools.pc.xray.XrayServer"
- *  then open http://127.0.0.1:8791/ (`-Dxray.port` to change).
+ *    sbt "scala3-presentation-compiler/Test/runMain dotty.tools.pc.xray.XrayServer"
+ *  then open http://127.0.0.1:8791/ (`-Dxray.port` to change). The explorer
+ *  shows `out/xray-sources` if it exists (a snapshot of the base commit's
+ *  sources), else the worktree's own compiler sources.
  */
 object XrayServer:
 
@@ -46,7 +48,10 @@ object XrayServer:
   private val sourcesRoot: Option[Path] =
     sys.props.get("xray.sources").map(Paths.get(_)).filter(Files.isDirectory(_)).orElse(
       Iterator.iterate(Paths.get("").toAbsolutePath)(_.getParent).takeWhile(_ != null)
-        .map(_.resolve("out/xray-sources/compiler/src/dotty/tools/dotc")).find(Files.isDirectory(_)))
+        .map(_.resolve("out/xray-sources/compiler/src/dotty/tools/dotc")).find(Files.isDirectory(_))).orElse(
+      // no snapshot: the worktree's own compiler sources (with the patch's edits)
+      Iterator.iterate(Paths.get("").toAbsolutePath)(_.getParent).takeWhile(_ != null)
+        .map(_.resolve("compiler/src/dotty/tools/dotc")).find(Files.isDirectory(_)))
 
   /** Paths of the snapshot's sources, relative to the root, package by package. */
   private def sourceFiles(): List[String] = sourcesRoot match
@@ -283,7 +288,13 @@ object XrayServer:
     println(s"[xray] #$seq ${if file.isEmpty then "A.scala" else file}:$line $kind@$offset${if cancel >= 0 then s" cancel=$cancel" else ""}${if latch then " latched" else ""} -> ${r.getOrElse("outcome", "?")} run=${r.getOrElse("runId", "?")} typedTop=${r.getOrElse("prefixBefore", "?")}->${r.getOrElse("prefix", "?")} skipped=${r.getOrElse("untypedSpans", "?")} trees=${r.getOrElse("typedTrees", "?")} ${r.getOrElse("ms", "?")}ms touched=${r.getOrElse("touched", "?")}${if r.get("tainted").contains(true) then " TAINTED" else ""} | $tail${r.get("error").collect { case e: String => s" | ERROR $e" }.getOrElse("")}${r.get("where").collect { case w: String => s" | $w" }.getOrElse("")} | «$snippet»")
 
   /** The latch file `xray.Latch.await` polls, armed for a latched request. */
-  private val latchFile: Option[java.io.File] = sys.props.get("xray.latch").map(new java.io.File(_))
+  /** The latch file the `Latch.await` macro polls: `-Dxray.latch`, else one
+   *  under the temp directory, set as the property so that the macro (which
+   *  runs in this JVM, inside the typer) finds it.
+   */
+  private val latchFile: Option[java.io.File] =
+    Some(new java.io.File(sys.props.getOrElseUpdate("xray.latch",
+      Paths.get(sys.props("java.io.tmpdir"), s"xray-latch-${ProcessHandle.current.pid}").toString)))
   private def armLatch(): Unit = latchFile.foreach { f => f.getParentFile.mkdirs(); f.createNewFile() }
   private def releaseLatch(): Unit = latchFile.foreach(_.delete())
   private def latched: Boolean = latchFile.exists(_.exists())

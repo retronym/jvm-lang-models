@@ -1,5 +1,7 @@
 # dotc session x-ray: a toy IDE over the patched `InteractiveDriver`
 
+![The session and cancel demos](xray-demo.gif)
+
 A web page that calls into the real Scala 3 compiler with [`dotc-session.patch`](../../../../../docs/upstream/dotc-session.patch) applied (typing only the path to the request with `runUpTo`, a resumable run per file, cancellation that unwinds with `CancelledCompilation`), and shows an x-ray of what the driver did for each request: run id, which top-level statements are typed and which of their members were skipped, where a cancellation unwound, `Run.typedTreeCount` consumed, wall time, how many symbols of the file are still `Touched` (`isCompleting`) afterwards, and whether the run is tainted (a cyclic reference prevented: the next request starts fresh). Every number is read from the driver; nothing is simulated. [track-i-dotc-session-design.md](../../../docs/track-i-dotc-session-design.md) is the design these numbers illustrate.
 
 ![the page after the cancel story](xray.png)
