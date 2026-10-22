@@ -10,6 +10,7 @@ import Query.Revision
 import ScalaTypes.Laziness
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
+import ScalaTypes.ToyTree
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
@@ -155,3 +156,8 @@ import ScalaTypes.Fusion
 #print axioms ScalaTypes.ToyNamer.l9_dotc_order_dependent
 #print axioms ScalaTypes.ToyNamer.l2_dotc_order_dependent
 #print axioms ScalaTypes.ToyKernel.results_before_after_proposed
+-- Track I: trees
+#print axioms ScalaTypes.ToyTree.targeted_eq_whole
+#print axioms ScalaTypes.ToyTree.tier1_body_edit
+#print axioms ScalaTypes.ToyTree.tier3b_scope_member
+#print axioms ScalaTypes.ToyTree.big_session

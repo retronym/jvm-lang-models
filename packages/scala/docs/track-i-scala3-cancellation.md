@@ -98,6 +98,8 @@ Two findings from the spike. **Typing is not idempotent on untyped trees** (I8):
 
 Simplifications: resume is per statement, not a resumption of `traverse`'s closure, so `MainProxies` are generated only for the initial batch and `checkNoTargetNameConflict` runs per batch; a target between statements types the whole file; the session's diagnostics are the prefix's.
 
+The tree model of this, with the tiers as theorems on an example each and the re-validation hook made precise (`reval`'s reuse branch is `bringForward` with the dep check added), is [track-i.md §12](track-i.md).
+
 Two interactions to design for dotc, both about facts that outlive a run: `cleanup` turns every still-lazy symbol of the typed tree into `UnspecifiedErrorType` so that no completer captures a dead run's context, which a targeted run would do to most members; and a targeted run's answers for members after the target are the namer's, the gap the space found on scalac (I5, [track-i.md §10](track-i.md)).
 
 ## 6. The spike

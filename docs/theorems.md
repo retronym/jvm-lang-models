@@ -50,6 +50,23 @@ The local [`IncComp.Compiler`](../packages/inc-comp/IncComp/Model.lean#L28) has 
 | [`Interrupt.forcePeek_memoizes_order`](../packages/query/Query/Interrupt.lean#L739), [`psi_root_order_dependent`](../packages/query/Query/Interrupt.lean#L748), [`fullTaint_stores_nothing`](../packages/query/Query/Interrupt.lean#L755) | `forcePeek` memoizes an order-dependent answer; IntelliJ's rule memoizes the re-entered frame's; full taint memoizes nothing on the cycle | kernel `decide` |
 | [`Interrupt.burst_allOrNothing_whole_iff`](../packages/query/Query/Interrupt.lean#L797), [`consuming_add_one_owner`](../packages/query/Query/Interrupt.lean#L848), [`keep_cache_sound`](../packages/query/Query/Interrupt.lean#L884) | The three non-fact shapes of [scala/scala#11328](https://github.com/scala/scala/pull/11328): a burst read at a safepoint inside it, a consumed map over all interleavings of two checks, an identity cache under every schedule | kernel `decide`; [`keep_cache_sound`](../packages/query/Query/Interrupt.lean#L884) for every schedule |
 
+**Revisions (Track I).** Facts that outlive a run, re-validated by their recorded traces ([`Query.Revision`](../packages/query/Query/Revision.lean); [`track-i.md`](../packages/scala/docs/track-i.md) §12):
+
+| theorem | says | needs |
+|---|---|---|
+| [`Revision.reuse_sound`](../packages/query/Query/Revision.lean#L235) | Re-validating a fact against the previous revision's store (deps checked in the order the rule asked them, a dep equal to its old value counting as unchanged) returns the new revision's value and leaves a store that agrees with it, traces included | the old store agreeing with the old fixed point; the new rules ranked; the edit's footprint semantic (`Same`) |
+| [`Revision.session_eq_fresh`](../packages/query/Query/Revision.lean#L331) | A sequence of requests on one revision answers as each request on a fresh store | the same |
+| [`Task.mem_trace_of_agree_prefix`](../packages/query/Query/Revision.lean#L32) | A query in a trace is still asked under an oracle that agrees on the queries before it | none |
+
+**The toy's trees (Track I).** The green tree with node identity, typed forms as facts, targeting, the session, the tiers ([`ScalaTypes.ToyTree`](../packages/scala-types/ScalaTypes/ToyTree.lean); [`track-i.md`](../packages/scala/docs/track-i.md) §12):
+
+| theorem | says | by |
+|---|---|---|
+| [`ToyTree.targeted_eq_whole`](../packages/scala-types/ScalaTypes/ToyTree.lean#L354), [`targeted_work_caseToy`](../packages/scala-types/ScalaTypes/ToyTree.lean#L361) | On the seven scenarios, under the fine and scalac cuts, a request at any path answers from an empty store as from the whole-tree check's store and stores only what it stores; the completion at `Use.f` runs 6 rules of 20 | kernel `decide` |
+| [`ToyTree.session_eq_fresh_toy`](../packages/scala-types/ScalaTypes/ToyTree.lean#L373) | A session's answers, every path in order and in reverse, are each request's on a fresh store, on `cycle` too | kernel `decide` |
+| [`ToyTree.tier1_body_edit`](../packages/scala-types/ScalaTypes/ToyTree.lean#L392), [`tier2_signature_edit`](../packages/scala-types/ScalaTypes/ToyTree.lean#L409), [`tier3a_scope_insert`](../packages/scala-types/ScalaTypes/ToyTree.lean#L428), [`tier3b_scope_member`](../packages/scala-types/ScalaTypes/ToyTree.lean#L451) | An edit inside a body whose type is declared changes only that node's typed form (the member's type reruns and is backdated); a declared type changes exactly the facts whose traces hold it; a declaration added to the unit's scope reruns the failed lookup of its name; a member added to a parent reruns every lookup whose trace holds that parent's member set, found or failed, and not the one satisfied in the subclass. Each with the store checked against a fresh run and `Same` outside the footprint | kernel `decide` |
+| [`ToyTree.big_session`](../packages/scala-types/ScalaTypes/ToyTree.lean#L514) | The editing session of `results-sessions.txt`: every answer the fresh store's; the first edit pays for the unit (eager re-validation), each later edit runs its footprint's 3 rules, the requests after it none, against 242 per whole unit fresh | kernel `decide` |
+
 **The toy language's namer (Track I meets Track L).** The lazy facts of any program of the Java toy's language, as a function of the program and of how a compiler bundles them ([`ScalaTypes.ToyNamer`](../packages/scala-types/ScalaTypes/ToyNamer.lean); [`track-i.md`](../packages/scala/docs/track-i.md) §8):
 
 | Name | Statement | Hypotheses |
