@@ -451,7 +451,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..1ccba9c0ca 100644
+index 5b78dc804b..0ead3d1cc6 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -514,7 +514,7 @@ index 5b78dc804b..1ccba9c0ca 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,380 @@ class InteractiveDriver(
+@@ -78,37 +107,387 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -594,6 +594,13 @@ index 5b78dc804b..1ccba9c0ca 100644
 +   */
 +  private val logRequests: Boolean = myInitCtx.settings.YinteractiveLog.value(using myInitCtx)
 +
++  /** The last segment of `uri`, for the log; a `jar:` URI (a source in a
++   *  sources jar, opened by a jump into the library) has no path.
++   */
++  private def fileNameOf(uri: URI): String =
++    val p = uri.getPath
++    (if p == null then uri.toString else p).split('/').last
++
 +  private def logged[T](what: String)(body: => T)(outcome: => String): T =
 +    if !logRequests then body
 +    else
@@ -604,7 +611,7 @@ index 5b78dc804b..1ccba9c0ca 100644
 +  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
 +    val before = mySession
 +    val skippedBefore = if before == null then -1 else before.skipped.size
-+    logged(s"runUpTo ${uri.getPath.nn.split('/').last}@${target.start}")(runUpTo0(uri, source, target)) {
++    logged(s"runUpTo ${fileNameOf(uri)}@${target.start}")(runUpTo0(uri, source, target)) {
 +      val s = mySession
 +      val how =
 +        if s eq null then "whole-file"
@@ -813,7 +820,7 @@ index 5b78dc804b..1ccba9c0ca 100644
 +    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
 +
 +  private def run(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
-+    logged(s"run ${uri.getPath.nn.split('/').last}${if target.exists then s"@${target.start}" else " (whole file)"}")(run0(uri, source, target)) {
++    logged(s"run ${fileNameOf(uri)}${if target.exists then s"@${target.start}" else " (whole file)"}")(run0(uri, source, target)) {
 +      s"run=${runIdOf(uri)} typedTop=${typedPrefixLength(uri)} skipped=${untypedSpans(uri).size}"
 +    }
 +
@@ -899,7 +906,7 @@ index 5b78dc804b..1ccba9c0ca 100644
      }
    }
  
-@@ -140,13 +512,15 @@ class InteractiveDriver(
+@@ -140,13 +519,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -917,7 +924,7 @@ index 5b78dc804b..1ccba9c0ca 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +552,6 @@ class InteractiveDriver(
+@@ -178,3 +559,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
