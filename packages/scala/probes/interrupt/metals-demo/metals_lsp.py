@@ -27,8 +27,11 @@ def reader():
                 notes.append(body)
                 if "id" in body:  # a server request: answer minimally
                     m = body["method"]; result = None
-                    if m == "window/showMessageRequest": result = None
-                    elif m == "workspace/configuration": result = [{} for _ in body["params"]["items"]]
+                    if m == "window/showMessageRequest":
+                        acts = body["params"].get("actions") or []
+                        pick = next((a for a in acts if __import__("re").search(r"import|yes|ok|sbt", a.get("title", ""), __import__("re").I)), acts[0] if acts else None)
+                        print("prompt:", body["params"].get("message", "")[:120], "->", pick and pick.get("title"), flush=True); result = pick
+                    elif m == "workspace/configuration": result = [{"automaticImportBuild": "all", "verboseCompilation": False} for _ in body["params"]["items"]]
                     elif m == "client/registerCapability": result = None
                     data = json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": result}).encode()
                     p.stdin.write(b"Content-Length: %d\r\n\r\n" % len(data) + data); p.stdin.flush()
@@ -47,7 +50,8 @@ send("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "scala"
 # wait for the build import: Metals logs "Imported build" / compiles; poll the log
 t0 = time.time(); imported = False
 while time.time() - t0 < 900:
-    if log.exists() and re.search(r"[Ii]mported build|Compiled root|BSP connection|compiled", log.read_text()): imported = True; break
+    if log.exists() and re.search(r"[Ii]mported build|Compiled root|time: compiled|Finished build import", log.read_text()): imported = True; break
+    if int(time.time() - t0) % 30 == 0: print(f"  waiting for the build import ({time.time() - t0:.0f}s)...", flush=True)
     if p.poll() is not None: break
     time.sleep(3)
 print("build import:", "seen" if imported else "not seen in the log", f"after {time.time() - t0:.0f}s", flush=True)
