@@ -20,10 +20,14 @@ public final class Scala3Kernel extends Global implements Kernel {
    * `forceSiblingFacts` (I13): a skipped case class gets the typer's burst (`equals`, `hashCode`, `toString`) when
    * its info is asked for. `completeSkippedOnLeave` (I17): before a run of another file, the skipped declarations'
    * signatures are completed in the session's run (`completeSymbolsOf`). `mergeOnReplace` (I22): a declaration
-   * replaced after a cancellation is re-indexed with the desugaring that merges a case class into its companion. */
-  public record Fixes(boolean forceSiblingFacts, boolean completeSkippedOnLeave, boolean mergeOnReplace) {
-    public static final Fixes ALL = new Fixes(true, true, true);
-    public static final Fixes NONE = new Fixes(false, false, false);
+   * replaced after a cancellation is re-indexed with the desugaring that merges a case class into its companion.
+   * `typeOffPathWhole` (I21, I25): a nested statement list (a block's, an anonymous template's) is targeted only if the
+   * tree that owns it is on the path to the target; one typed off the path, by a completer typing a body ahead, is
+   * typed whole. Off, every nested list is targeted while a target is set (`typedBlockStats` before the fix).
+   * `inlineBodyWhole` (I28): an inline method's body is never targeted, since its callers inline the typed tree. */
+  public record Fixes(boolean forceSiblingFacts, boolean completeSkippedOnLeave, boolean mergeOnReplace, boolean typeOffPathWhole, boolean inlineBodyWhole) {
+    public static final Fixes ALL = new Fixes(true, true, true, true, true);
+    public static final Fixes NONE = new Fixes(false, false, false, false, false);
   }
 
   private final String name;
@@ -97,8 +101,9 @@ public final class Scala3Kernel extends Global implements Kernel {
 
   /** `runUpTo`: type the declaration that contains the target (with `PREFIX`, every one before it too), resuming
    * the session's run when the content is unchanged and the run is still the current one (one `Session` per
-   * driver: a run of another file ends it); without a session, the whole file. */
-  private void runUpTo(String file, String decl) {
+   * driver: a run of another file ends it); without a session, the whole file. With `PATH` the target is set for the
+   * nested statement lists typed meanwhile (`targetsList`), and the skipped nested statements on its path are resumed. */
+  private void runUpTo(String file, String decl, String member) {
     if (!session) { run(file); return; }
     Ast.Source s = sources.get(file);
     int idx = 0;
@@ -116,9 +121,19 @@ public final class Scala3Kernel extends Global implements Kernel {
       }
       List<Integer> idxs = new ArrayList<>();
       for (int i = targeting == Targeting.PREFIX ? 0 : idx; i <= idx; i++) idxs.add(i);
+      if (targeting == Targeting.PATH) targetPath = decl + "." + member;
       typeDecls(u, idxs);                                   // resume the session's run; nothing if the target's declaration is typed
+      if (targetPath != null) resumeSkipped(u, targetPath); // a target in a skipped nested statement: type it and splice it in
       lastCompiled = file; lastCompiledText = s.text();
-    } finally { inJob = false; }
+    } finally { inJob = false; targetPath = null; }
+  }
+
+  /** Nested statement lists are targeted only on the path session (§2's `typedBlockStats`), with the fixes' exceptions. */
+  @Override protected boolean targetsList(String owner, boolean inline) {
+    if (!session || targeting != Targeting.PATH || targetPath == null) return false;
+    if (fixes.inlineBodyWhole && inline) return false;
+    if (fixes.typeOffPathWhole && !contains(owner, targetPath)) return false;
+    return true;
   }
 
   /** The session's run is the current run and the unit is not finished: its skipped declarations can be resumed. */
@@ -205,7 +220,7 @@ public final class Scala3Kernel extends Global implements Kernel {
 
   private String serve(Ask ask) {
     if (!sources.containsKey(ask.file())) return "<no such file>";
-    if (ask instanceof Ask.Completion c) runUpTo(c.file(), c.decl()); else run(ask.file());
+    if (ask instanceof Ask.Completion c) runUpTo(c.file(), c.decl(), c.member()); else run(ask.file());
     Unit u = units.get(ask.file());
     return switch (ask) {
       case Ask.Completion c -> completionAnswer(u, new Target(c.decl(), c.member()));

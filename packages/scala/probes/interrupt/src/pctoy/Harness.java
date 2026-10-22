@@ -81,7 +81,7 @@ public final class Harness {
 
   private static Ask parseAsk(String[] w) {
     return switch (w[0]) {
-      case "completion" -> { String[] dm = w[2].split("\\."); yield new Ask.Completion(w[1], dm[0], dm[1]); }
+      case "completion" -> { String[] dm = w[2].split("\\.", 2); yield new Ask.Completion(w[1], dm[0], dm[1]); }
       case "loadedTyped" -> new Ask.LoadedTyped(w[1]);
       default -> throw new IllegalArgumentException("unknown event " + w[0]);
     };

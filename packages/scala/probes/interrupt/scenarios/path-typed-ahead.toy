@@ -1,0 +1,11 @@
+// event: completion A M.m.b
+// note: I21: Use.u's inference forces M.m's completer, which types its block ahead under the target Use.u, off the path: every local is stubbed, and the typed-ahead body is cached; the later completion inside M.m reuses it and finds the stub b
+// requests: completion A Use.u; completion A M.m.b; loadedTyped A
+// file: A
+class Int { def plus: Int }
+object M {
+  def m = { def a: Int; def b = a; b }
+}
+object Use { def u = M.m }
+// file: B
+class Other {}

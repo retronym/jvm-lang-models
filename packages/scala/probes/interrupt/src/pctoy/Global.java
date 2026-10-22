@@ -26,6 +26,12 @@ public abstract class Global {
     /** Members another declaration's desugaring merged into this one (a case class's `apply`/`unapply` into its
      * companion, `copy` into itself): dotc merges them into the tree, so a fresh symbol for the tree lacks them. */
     public List<Sym> merged = new ArrayList<>();
+    /** A local's or an anonymous class member's name path (`M.m.a`, `M.sel.foo`) and the context it is typed in;
+     * null for a declaration's member, whose path is `owner.name` and whose context is its class. */
+    public String path; public Ctx ctx;
+    /** A block or anonymous-class body's typed tree, once typed: dotc's `TypedAhead` when the member's completer typed
+     * it (an inferred result type), reused as is when the member itself is typed. */
+    public TypedBody typedBody;
     Sym(String name, Kind kind, String file, int id) { this.name = name; this.kind = kind; this.file = file; this.id = id; }
     public boolean isTerm() { return kind == Kind.OBJECT || kind == Kind.DEF; }
     @Override public String toString() { return name + "#" + id; }
@@ -54,6 +60,29 @@ public abstract class Global {
 
   public interface Completer { Object complete(Sym s); }
 
+  /** Where a body's names are looked up: a block's locals (those entered before the statement), else the class's
+   * members, else the enclosing context; then the top-level terms. `inline` when inside an inline method's body. */
+  public record Ctx(Sym cls, Map<String, Sym> locals, Ctx outer, boolean inline) {}
+
+  /** The typed tree of a block or of an anonymous class's template: per statement its symbol and typed type, or a
+   * stub (type null: a statement skipped by targeting, its symbol entered but its tree untyped; for a template, a
+   * member not entered at all). `display` is what the unit's answer prints, kept current when a stub is resumed. */
+  public static final class TypedBody {
+    public final List<String> names = new ArrayList<>();
+    public final List<Sym> syms = new ArrayList<>();
+    public final List<Type> types = new ArrayList<>();
+    public final List<String> display = new ArrayList<>();
+    public Type result; public boolean complete;
+    int add(Sym s) { names.add(s.name); syms.add(s); types.add(null); display.add("<stub " + s.name + ">"); return names.size() - 1; }
+    void set(int i, Type t) { types.set(i, t); display.set(i, names.get(i)); }
+    public List<String> stubs() { List<String> r = new ArrayList<>(); for (int i = 0; i < names.size(); i++) if (types.get(i) == null) r.add(names.get(i)); return r; }
+  }
+
+  /** A statement of a nested list skipped on the request's path, kept with what types and splices it later: the
+   * spike's `SkippedStat` for a block's statement. Off the path a skipped statement is not recorded: the list it
+   * belongs to was typed by a completer, and its typed tree is a cached value, not part of the unit's tree yet. */
+  public record Skipped(String path, Runnable resume) {}
+
   public record Target(String decl, String member) {}
 
   public static final class Unit {
@@ -73,9 +102,11 @@ public abstract class Global {
     public int typing = -1;
     public Target target;
     public List<Sym> implicitCache; public int implicitCacheRun = -1;
+    /** The nested statements skipped on a request's path, resumed when a later request lands in one or the unit is finished. */
+    public final List<Skipped> skipped = new ArrayList<>();
     public String name() { return source.name(); }
     void reset(Ast.Source s) {
-      source = s; synthetics.clear(); problems.clear(); suspended.clear(); suppressions.clear();
+      source = s; synthetics.clear(); skipped.clear(); problems.clear(); suspended.clear(); suppressions.clear();
       suppressionsKnown = false; bodies = new LinkedHashMap<>(); typed = false; typedDecls.clear(); sessionRun = -1; typing = -1; target = null; implicitCache = null;
     }
   }
@@ -97,6 +128,9 @@ public abstract class Global {
   public boolean interruptsEnabled = true;
   public final Counters counters = new Counters();
   public final Scheduler scheduler;
+  /** The request's target as a name path (`Use.u`, `M.m.b`) while a targeted typer runs, else null: what decides, per
+   * nested statement list, whether it is targeted (`targetsList`). */
+  protected String targetPath;
 
   protected Global(Policy policy, Scheduler scheduler) { this.policy = policy; this.scheduler = scheduler; }
 
@@ -107,9 +141,20 @@ public abstract class Global {
     Event ev = scheduler.at(where);
     if (ev != null) onEvent(ev);
     if (!interruptsEnabled || lockedCount > 0) return;
-    if (reached != null && reached.equals(unit.target)) throw new TyperResult(completionAnswer(unit, reached));
+    if (reached != null && reaches(reached, unit.target)) throw new TyperResult(completionAnswer(unit, unit.target));
     checkForMoreWork(where);
   }
+  /** A member typed whole reaches a target inside its body too. */
+  private static boolean reaches(Target reached, Target target) {
+    return target != null && (reached.equals(target) || reached.decl().equals(target.decl()) && target.member().startsWith(reached.member() + "."));
+  }
+  /** Whether a nested statement list (a block's locals, an anonymous template's members) owned by the tree at `owner`
+   * is targeted: its statements off the path to `targetPath` skipped. Default: typed whole. */
+  protected boolean targetsList(String owner, boolean inline) { return false; }
+  /** `owner` is on the path to `target`: the target is the tree at `owner` or inside it. */
+  protected static boolean contains(String owner, String target) { return target != null && (target.equals(owner) || target.startsWith(owner + ".")); }
+  /** A problem of the unit (the revisions kernel keeps it with the fact being computed). */
+  protected void report(Unit u, Problem p) { u.problems.add(p); }
   /** The harness injected an event at this safepoint. */
   protected abstract void onEvent(Event e);
   /** A safepoint where requests may be serviced (scalac: `pollForWork`). */
@@ -283,18 +328,118 @@ public abstract class Global {
   private Completer memberCompleter(Unit u, Sym m) {
     return self -> {
       Ast.Member mem = m.member;
+      String where = pathOf(m);
       Type t;
       if (!mem.inferred()) {
         Sym c = toplevel.type(mem.declared());
         t = c != null ? Type.of(c) : Type.err("not found: type " + mem.declared());
+      } else if (mem.body() != null) {
+        t = typedBodyOf(u, m).result;                         // typed ahead (`typedAheadExpr`), under whatever target is set
       } else {
-        try { t = typePath(u, m.owner, mem.path(), m.owner.name + "." + m.name); }
+        try { t = typePath(u, ctxOf(m), mem.path(), where); }
         catch (CyclicReference e) { t = Type.err(e.getMessage()); }
       }
-      if (t.isError()) u.problems.add(new Problem("error", u.name(), m.owner.name + "." + m.name, t.error()));
-      signalDone(u, "rhs " + m.owner.name + "." + m.name, null);
+      if (t.isError()) report(u, new Problem("error", u.name(), where, t.error()));
+      signalDone(u, "rhs " + where, null);
       return t;
     };
+  }
+
+  public static String pathOf(Sym m) { return m.path != null ? m.path : m.owner.name + "." + m.name; }
+  protected static Ctx ctxOf(Sym m) { return m.ctx != null ? m.ctx : new Ctx(m.owner, null, null, false); }
+
+  /** The typed body of a member with a block or an anonymous class: the cached one if complete (dotc's `TypedAhead`,
+   * reused whatever target it was typed under), else typed now. */
+  protected TypedBody typedBodyOf(Unit u, Sym m) {
+    if (m.typedBody != null && m.typedBody.complete) return m.typedBody;
+    return typeBody(u, m);
+  }
+
+  /** Types a block or an anonymous template under the current `targetPath`: a targeted list skips the statements off
+   * the path, leaving stubs; those on the path are recorded on the unit for resumption. */
+  protected TypedBody typeBody(Unit u, Sym m) {
+    Ctx outer = ctxOf(m);
+    boolean inline = outer.inline() || m.mods.contains("inline");
+    String path = pathOf(m);
+    TypedBody tb = new TypedBody();
+    m.typedBody = tb;
+    boolean targeted = targetsList(path, inline), onPath = contains(path, targetPath);
+    switch (m.member.body()) {
+      case Ast.Block b -> {
+        Map<String, Sym> locals = new LinkedHashMap<>();
+        for (Ast.Member l : b.locals()) {
+          Sym ls = nestedSym(u, l, m, path, new Ctx(null, new LinkedHashMap<>(locals), outer, inline));
+          locals.put(l.name(), ls);
+          int i = tb.add(ls);
+          if (targeted && !contains(ls.path, targetPath)) {
+            if (onPath) u.skipped.add(new Skipped(ls.path, () -> typeStat(u, tb, i)));
+          } else typeStat(u, tb, i);
+        }
+        try { tb.result = typePath(u, new Ctx(null, locals, outer, inline), b.result(), path); }
+        catch (CyclicReference e) { tb.result = Type.err(e.getMessage()); }
+      }
+      case Ast.New n -> {
+        Sym anon = newSym("<anon>$" + path, Kind.CLASS, u.name());
+        anon.path = path; anon.defRunId = runId;
+        ClassInfo ci = new ClassInfo();
+        anon.info = ci;
+        Ctx inner = new Ctx(anon, null, outer, inline);
+        List<Integer> typed = new ArrayList<>();
+        for (Ast.Member l : n.members()) {                   // the template's members exist once it is typed
+          Sym ms = nestedSym(u, l, anon, path, inner);
+          int i = tb.add(ms);
+          if (targeted && !contains(ms.path, targetPath)) {
+            if (onPath) u.skipped.add(new Skipped(ms.path, () -> { ci.decls.enter(ms); typeStat(u, tb, i); }));
+          } else { ci.decls.enter(ms); typed.add(i); }
+        }
+        for (int i : typed) typeStat(u, tb, i);
+        tb.result = Type.of(anon);
+      }
+    }
+    tb.complete = true;
+    return tb;
+  }
+
+  private Sym nestedSym(Unit u, Ast.Member l, Sym owner, String path, Ctx ctx) {
+    Sym s = newSym(l.name(), Kind.DEF, u.name());
+    s.owner = owner; s.defRunId = runId; s.member = l; s.mods = l.mods(); s.path = path + "." + l.name(); s.ctx = ctx;
+    s.info = memberCompleter(u, s);
+    return s;
+  }
+
+  /** Types statement `i` of a nested list: its signature, and its body against a declared type. */
+  private void typeStat(Unit u, TypedBody tb, int i) {
+    Sym s = tb.syms.get(i);
+    Type t;
+    try { t = typeOf(s); } catch (CyclicReference e) { t = Type.err(e.getMessage()); }
+    checkBody(u, s, ctxOf(s), s.path);
+    tb.set(i, t);
+    counters.membersTyped++;
+    signalDone(u, "local " + s.path, null);
+  }
+
+  /** A body typed against its declared type: a path, or a block or template (whose result is checked to type). */
+  private void checkBody(Unit u, Sym s, Ctx ctx, String where) {
+    Ast.Member m = s.member;
+    if (m.inferred() || !m.hasBody()) return;
+    Type b;
+    if (m.body() != null) b = typedBodyOf(u, s).result;
+    else try { b = typePath(u, ctx, m.path(), where); } catch (CyclicReference e) { b = Type.err(e.getMessage()); }
+    if (b.isError()) report(u, new Problem("error", u.name(), where, b.error()));
+  }
+
+  /** Types the skipped nested statements on the path to `target` (all of them when null), splicing each into its typed
+   * body; nested lists of a resumed statement are targeted in turn. */
+  protected void resumeSkipped(Unit u, String target) {
+    String saved = targetPath;
+    targetPath = target;
+    try {
+      boolean more = true;
+      while (more) {
+        more = false;
+        for (Skipped sk : new ArrayList<>(u.skipped)) if (target == null || contains(sk.path(), target)) { u.skipped.remove(sk); sk.resume().run(); more = true; }
+      }
+    } finally { targetPath = saved; }
   }
 
   public Sym lookupMember(Sym cls, String name) {
@@ -313,12 +458,18 @@ public abstract class Global {
     return (Type) force(m);
   }
 
-  Type typePath(Unit u, Sym owner, List<String> path, String where) {
+  Type typePath(Unit u, Sym owner, List<String> path, String where) { return typePath(u, new Ctx(owner, null, null, false), path, where); }
+
+  Type typePath(Unit u, Ctx ctx, List<String> path, String where) {
     String first = path.get(0);
-    Sym s = lookupMember(owner, first);
+    Sym s = null;
+    for (Ctx c = ctx; c != null && s == null; c = c.outer()) {
+      if (c.locals() != null) s = c.locals().get(first);
+      if (s == null && c.cls() != null) s = lookupMember(c.cls(), first);
+    }
     if (s == null) s = topTerm(first);
     if (s == null || s.kind == Kind.DEF && s.owner == null) return Type.err("not found: value " + first);
-    Type t = typeOf(s);
+    Type t = refType(u, s);
     for (String name : path.subList(1, path.size())) {
       if (t.isError()) return t;
       if (t.cls == null) return Type.err("value " + name + " is not a member of " + t.show());
@@ -329,9 +480,20 @@ public abstract class Global {
       }
       if (m == null) return Type.err("value " + name + " is not a member of " + t.show());
       if (m.mods.contains("deprecated")) warn(u, where, "method " + name + " in " + m.owner.name + " is deprecated");
-      t = typeOf(m);
+      t = refType(u, m);
     }
     return t;
+  }
+
+  /** The type of a reference: the symbol's, except through an inline method with a block or template body, whose
+   * callers inline its typed body (`Inlines.bodyToInline`): a stub in it has no typed tree to copy (I28). */
+  private Type refType(Unit u, Sym s) {
+    Type t = typeOf(s);
+    if (s.kind != Kind.DEF || s.member == null || s.member.body() == null || !s.mods.contains("inline")) return t;
+    TypedBody tb = typedBodyOf(u, s);
+    List<String> stubs = tb.stubs();
+    if (!stubs.isEmpty()) return Type.err("type of TypeTree is not assigned: inline body of " + pathOf(s) + " has stubs " + Core.join(stubs));
+    return tb.result;
   }
 
   /** scalac's implicit search over the implicits in scope, which are cached for the run (`implicitss`); a
@@ -404,7 +566,7 @@ public abstract class Global {
       u.typedDecls.set(i);
     }
     u.typing = -1;
-    if (u.typedDecls.cardinality() >= u.source.decls().size() && !u.typed) { reportSuspended(u); u.typed = true; }
+    if (u.typedDecls.cardinality() >= u.source.decls().size() && !u.typed) { resumeSkipped(u, null); reportSuspended(u); u.typed = true; }
   }
 
   private void typeDecl(Unit u, Ast.Decl d, Map<String, List<String>> bodies) {
@@ -420,6 +582,10 @@ public abstract class Global {
         Type b;
         try { b = typePath(u, cls, m.path(), d.name() + "." + m.name()); } catch (CyclicReference e) { b = Type.err(e.getMessage()); }
         if (b.isError()) u.problems.add(new Problem("error", u.name(), d.name() + "." + m.name(), b.error()));
+      }
+      if (m.body() != null) {                                   // a block or template: the typed-ahead tree, or typed now
+        checkBody(u, ms, ctxOf(ms), d.name() + "." + m.name());
+        bodies.put("body " + d.name() + "." + m.name(), typedBodyOf(u, ms).display);
       }
       body.add(m.name());
       counters.membersTyped++;
@@ -496,10 +662,19 @@ public abstract class Global {
   public String completionAnswer(Unit u, Target t) {
     Sym cls = toplevel.type(t.decl()) != null && !toplevel.type(t.decl()).unlinked ? toplevel.type(t.decl()) : toplevel.term(t.decl());
     if (cls == null) return "<no such declaration " + t.decl() + ">";
-    Sym m = lookupMember(cls, t.member());
+    String[] steps = t.member().split("\\.");
+    Sym m = lookupMember(cls, steps[0]);
     if (m == null) return "<no such member " + t.member() + ">";
     Type tp;
     try { tp = typeOf(m); } catch (CyclicReference e) { tp = Type.err(e.getMessage()); }
+    for (int k = 1; k < steps.length; k++) {                  // inside a body: the typed tree's statement, which may be a stub
+      if (m.member == null || m.member.body() == null) return "<no such member " + t.member() + ">";
+      TypedBody tb = typedBodyOf(u, m);
+      int i = tb.names.indexOf(steps[k]);
+      if (i < 0) return "<no such member " + t.member() + ">";
+      if (tb.types.get(i) == null) return "<stub " + steps[k] + ">: <no members>";
+      m = tb.syms.get(i); tp = tb.types.get(i);
+    }
     if (tp.cls == null) return tp.show() + ": <no members>";
     TreeSet<String> names = new TreeSet<>(memberNames(tp.cls));
     for (Sym cand : implicitCandidates(u)) {
@@ -523,11 +698,15 @@ public abstract class Global {
       String key = d.kind() + " " + d.name();
       printed.add(key);
       b.append(key).append(": ").append(Core.join(new TreeSet<>(u.bodies.getOrDefault(key, List.of())))).append('\n');
+      for (Ast.Member m : d.members()) {                        // a block's statements, a template's members, in order
+        List<String> body = u.bodies.get("body " + d.name() + "." + m.name());
+        if (body != null) b.append("body ").append(d.name()).append('.').append(m.name()).append(": ").append(Core.join(body)).append('\n');
+      }
     }
     List<String> top = u.bodies.getOrDefault("<toplevel>", List.of());
     if (!top.isEmpty()) b.append("synthetic companions: ").append(Core.join(new TreeSet<>(top))).append('\n');
     for (Map.Entry<String, List<String>> e : u.bodies.entrySet())
-      if (!printed.contains(e.getKey()) && !e.getKey().equals("<toplevel>"))
+      if (!printed.contains(e.getKey()) && !e.getKey().equals("<toplevel>") && !e.getKey().startsWith("body "))
         b.append(e.getKey()).append(" (synthetic): ").append(Core.join(new TreeSet<>(e.getValue()))).append('\n');
     TreeSet<String> ps = new TreeSet<>();
     for (Problem p : u.problems) ps.add(p.toString());

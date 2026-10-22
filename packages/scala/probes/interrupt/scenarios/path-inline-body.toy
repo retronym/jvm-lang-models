@@ -1,0 +1,11 @@
+// event: completion A Use.u
+// note: I28: a completion inside the inline method M.m targets its block, on the path, so the local a is stubbed (recorded, resumable); a caller inlines the typed body as a value, and the stub has no typed tree to copy
+// requests: completion A M.m.b; completion A Use.u; loadedTyped A
+// file: A
+class Int { def plus: Int }
+object M {
+  inline def m = { def a: Int; def b = a; b }
+}
+object Use { def u = M.m }
+// file: B
+class Other {}

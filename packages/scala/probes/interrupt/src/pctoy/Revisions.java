@@ -202,7 +202,13 @@ public final class Revisions extends Global implements Kernel {
 
   // ---- facts through Global: forcing, lookups -------------------------------------------------------------
 
-  @Override public Object force(Sym s) { return s.info != null ? s.info : demand(symFacts.get(s)); }
+  /** A local or an anonymous class's member keeps `Global`'s completer, forced inside the fact that types its body. */
+  @Override public Object force(Sym s) { return s.info instanceof Completer ? super.force(s) : s.info != null ? s.info : demand(symFacts.get(s)); }
+
+  /** A body is typed whole, inside the fact that asks for it, and never cached on the symbol, which outlives the revision. */
+  @Override protected TypedBody typedBodyOf(Unit u, Sym m) { return typeBody(u, m); }
+
+  @Override protected void report(Unit u, Problem p) { if (curProblems != null) curProblems.add(p); else super.report(u, p); }
 
   @Override public Sym lookupMember(Sym cls, String n) {
     Sym c = current(cls);
@@ -267,8 +273,10 @@ public final class Revisions extends Global implements Kernel {
   private Object typeRule(Unit u, Sym m) {
     Ast.Member mem = (Ast.Member) read("member " + key(m));
     if (mem == null) return Type.err("no such member " + m.name);
+    m.member = mem;                                            // the node a body is typed from
     Type t;
     if (mem.declared() != null) { Sym c = topType(mem.declared()); t = c != null ? Type.of(c) : Type.err("not found: type " + mem.declared()); }
+    else if (mem.body() != null) t = typedBodyOf(u, m).result;
     else t = typeBody(u, m, mem.path());
     if (t.isError()) problem(m.owner.name + "." + m.name, t.error());
     return t;
@@ -278,6 +286,12 @@ public final class Revisions extends Global implements Kernel {
   private Object typedRule(Unit u, Sym m) {
     Type sig = typeOf(m);
     Ast.Member mem = (Ast.Member) read("member " + key(m));
+    if (mem != null && mem.declared() != null && mem.body() != null) {
+      m.member = mem;
+      Type b = typedBodyOf(u, m).result;
+      if (b.isError()) problem(m.owner.name + "." + m.name, b.error());
+      return fp(sig) + " = " + fp(b);
+    }
     if (mem == null || mem.declared() == null || mem.path() == null) return fp(sig);
     Type b = typeBody(u, m, mem.path());
     if (b.isError()) problem(m.owner.name + "." + m.name, b.error());
@@ -296,6 +310,11 @@ public final class Revisions extends Global implements Kernel {
       Sym ms = ci.decls.term(m.name());
       demand(fact("typed " + key(ms), ms.name, u, () -> typedRule(u, ms)));
       body.add(m.name());
+      switch (m.body()) {                                     // typed whole: every statement of a block, every member of a template
+        case Ast.Block b -> out.put("body " + d.name() + "." + m.name(), b.locals().stream().map(Ast.Member::name).toList());
+        case Ast.New n -> out.put("body " + d.name() + "." + m.name(), n.members().stream().map(Ast.Member::name).toList());
+        case null -> {}
+      }
     }
     out.put(d.kind() + " " + d.name(), body);
     if (d.isImplicit()) out.computeIfAbsent("<toplevel>", k -> new ArrayList<>()).add(d.name());
