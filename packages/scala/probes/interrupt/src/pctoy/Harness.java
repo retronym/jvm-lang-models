@@ -17,6 +17,7 @@ public final class Harness {
     KERNELS.put("scalac-before", s -> new Scala2Kernel("scalac-before", Global.Policy.SCALAC_BEFORE, s));
     KERNELS.put("scalac-after", s -> new Scala2Kernel("scalac-after", Global.Policy.SCALAC_AFTER, s));
     KERNELS.put("dotc-metals", s -> new Scala3Kernel("dotc-metals", false, s));
+    KERNELS.put("dotc-session", s -> new Scala3Kernel("dotc-session", false, true, s));
     KERNELS.put("dotc-interrupted", s -> new Scala3Kernel("dotc-interrupted", true, s));
     KERNELS.put("psi", s -> new PsiKernel("psi", s));
   }
@@ -107,6 +108,45 @@ public final class Harness {
     r.addAll(k.drain());
     for (Ast.Source src : sc.sources()) { k.send(new Event.Request(new Ask.LoadedTyped(src.name()))); r.addAll(k.drain()); }
     return r;
+  }
+
+  /** A request sequence on a kernel, after the background: the answers and the work. */
+  public record Replay(List<String> answers, long work) {}
+
+  public static Replay replay(Scenario sc, String kernelName, List<Event> events, boolean background) {
+    Scheduler s = new Scheduler();
+    Kernel k = KERNELS.get(kernelName).make(s);
+    s.reset(-1, null);
+    k.reload(sc.sources());
+    if (background) k.drain();
+    long w0 = k.work();
+    List<String> answers = new ArrayList<>();
+    for (Event e : events) { k.send(e); answers.addAll(k.drain()); }
+    return new Replay(answers, k.work() - w0);
+  }
+
+  /** An editing session on the scenario's first file: a completion at its first inferred member, then three times an
+   * edit at the end of the file (a class appended) followed by the same completion, then a completion at the last
+   * inferred member, then the unit. A targeted session types the prefix per edit; a whole-file run types everything. */
+  public static List<Event> sweep(Scenario sc) {
+    Ast.Source src = sc.sources().get(0);
+    Ask first = null, last = null;
+    for (Ast.Decl d : src.decls()) for (Ast.Member m : d.members()) if (m.inferred()) {
+      Ask a = new Ask.Completion(src.name(), d.name(), m.name());
+      if (first == null) first = a;
+      last = a;
+    }
+    List<Event> events = new ArrayList<>();
+    if (first == null) return List.of(new Event.Request(new Ask.LoadedTyped(src.name())));
+    events.add(new Event.Request(first));
+    String text = src.text();
+    for (int k = 1; k <= 3; k++) {
+      text = text + "\nclass Edited" + k + " {}\n";
+      events.add(new Event.Edit(src.name(), text, first));
+    }
+    events.add(new Event.Request(last));
+    events.add(new Event.Request(new Ask.LoadedTyped(src.name())));
+    return events;
   }
 
   public static String diff(List<String> reference, List<String> got) {

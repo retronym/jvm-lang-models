@@ -14,6 +14,9 @@ import pctoy.Core.*;
 public final class Scala3Kernel extends Global implements Kernel {
   private final String name;
   private final boolean interruptible;
+  /** The session: a completion types the file up to its target and a later one on the same content resumes
+   * the same run from the typed prefix (the second spike). */
+  private final boolean session;
   private final Deque<Event> queue = new ArrayDeque<>();
   private final List<String> answers = new ArrayList<>();
   private final Map<String, Ast.Source> sources = new LinkedHashMap<>();
@@ -21,8 +24,10 @@ public final class Scala3Kernel extends Global implements Kernel {
   private String lastCompiled; private String lastCompiledText;
   private boolean inJob = false, interruptPending = false;
 
-  public Scala3Kernel(String name, boolean interruptible, Scheduler scheduler) {
-    super(Policy.DOTC, scheduler); this.name = name; this.interruptible = interruptible;
+  public Scala3Kernel(String name, boolean interruptible, Scheduler scheduler) { this(name, interruptible, false, scheduler); }
+
+  public Scala3Kernel(String name, boolean interruptible, boolean session, Scheduler scheduler) {
+    super(Policy.DOTC, scheduler); this.name = name; this.interruptible = interruptible; this.session = session;
   }
 
   @Override public String name() { return name; }
@@ -50,10 +55,36 @@ public final class Scala3Kernel extends Global implements Kernel {
     if (file.equals(lastCompiled) && s.text().equals(lastCompiledText) && units.get(file) != null && units.get(file).typed) return;
     inJob = true;
     try {
-      newRun(List.of(s));
       Unit u = units.get(file);
-      typeUnit(u, null);
+      if (session && u != null && u.source.text().equals(s.text()) && u.typedUpTo > 0 && !u.typed) {
+        typeUnitUpTo(u, s.decls().size() - 1);           // finish the session's run instead of starting over
+      } else {
+        newRun(List.of(s));
+        u = units.get(file);
+        typeUnit(u, null);
+      }
       cleanup(u);
+      lastCompiled = file; lastCompiledText = s.text();
+    } finally { inJob = false; }
+  }
+
+  /** `runUpTo`: type the file up to the declaration that contains the target, resuming the session's run when
+   * the content is unchanged; without a session, the whole file. */
+  private void runUpTo(String file, String decl) {
+    if (!session) { run(file); return; }
+    Ast.Source s = sources.get(file);
+    int idx = 0;
+    for (int i = 0; i < s.decls().size(); i++) if (s.decls().get(i).name().equals(decl)) idx = i;
+    inJob = true;
+    try {
+      Unit u = units.get(file);
+      boolean unchanged = u != null && u.source.text().equals(s.text());
+      if (unchanged && u.typed && file.equals(lastCompiled)) return;   // CachingDriver: the last whole-file run serves every target
+      if (!unchanged || u.typed) {
+        newRun(List.of(s));                                 // content changed, or an older whole-file run: fresh run
+        u = units.get(file);
+      }
+      typeUnitUpTo(u, idx);                                 // resume the session's run; nothing if the prefix covers the target
       lastCompiled = file; lastCompiledText = s.text();
     } finally { inJob = false; }
   }
@@ -85,7 +116,7 @@ public final class Scala3Kernel extends Global implements Kernel {
 
   private String serve(Ask ask) {
     if (!sources.containsKey(ask.file())) return "<no such file>";
-    run(ask.file());
+    if (ask instanceof Ask.Completion c) runUpTo(c.file(), c.decl()); else run(ask.file());
     Unit u = units.get(ask.file());
     return switch (ask) {
       case Ask.Completion c -> completionAnswer(u, new Target(c.decl(), c.member()));

@@ -1,9 +1,63 @@
+== big-file: completion A:O1.w1
+   forty declarations; a completion near the top of the file, between edits at its end, is where targeted typing pays
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before            201      0/201      201/203.0
+   scalac-after             201      0/201      201/203.0
+   dotc-metals              201      0/201      201/201.0
+   dotc-session             201      0/201      201/201.0
+   dotc-interrupted         201      0/201      201/302.8
+   psi                      201      0/201      122/122.0
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              object O1: v1 w1
+              object O2: v2 w2
+              object O3: v3 w3
+              object O4: v4 w4
+              object O5: v5 w5
+              object O6: v6 w6
+              object O7: v7 w7
+              object O8: v8 w8
+              object O9: v9 w9
+              object O10: v10 w10
+              object O11: v11 w11
+              object O12: v12 w12
+              object O13: v13 w13
+              object O14: v14 w14
+              object O15: v15 w15
+              object O16: v16 w16
+              object O17: v17 w17
+              object O18: v18 w18
+              object O19: v19 w19
+              object O20: v20 w20
+              object O21: v21 w21
+              object O22: v22 w22
+              object O23: v23 w23
+              object O24: v24 w24
+              object O25: v25 w25
+              object O26: v26 w26
+              object O27: v27 w27
+              object O28: v28 w28
+              object O29: v29 w29
+              object O30: v30 w30
+              object O31: v31 w31
+              object O32: v32 w32
+              object O33: v33 w33
+              object O34: v34 w34
+              object O35: v35 w35
+              object O36: v36 w36
+              object O37: v37 w37
+              object O38: v38 w38
+              object O39: v39 w39
+              object O40: v40 w40
+
 == case-class-completion: completion A:Use.f
    scala-dev#915 dollar-completion: a completion of a case class's members served while its synthetic methods are being added
    kernel            safepoints  divergent  work ref/mean
    scalac-before             16       7/16        12/15.0
    scalac-after              16       0/16        12/15.0
    dotc-metals               16       0/16        12/12.0
+   dotc-session              16       0/16        12/12.0
    dotc-interrupted          16       0/16        12/18.3
    psi                       19       0/19        13/13.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6]
@@ -28,6 +82,7 @@
    scalac-before             16      16/16        12/15.0
    scalac-after              16      16/16        12/15.0
    dotc-metals               16       0/16        12/12.0
+   dotc-session              16       0/16        12/12.0
    dotc-interrupted          16       0/16        12/18.3
    psi                       19       0/19        12/12.4
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
@@ -64,6 +119,7 @@
    scalac-before             12       0/12        12/16.0
    scalac-after              12       0/12        12/16.0
    dotc-metals               12       0/12        12/12.0
+   dotc-session              12       0/12        12/12.0
    dotc-interrupted          12       0/12        12/19.5
    psi                       13       0/13          9/9.3
    reference:
@@ -79,6 +135,7 @@
    scalac-before             11       0/11        22/18.9
    scalac-after              11       0/11        22/18.9
    dotc-metals               11       0/11        22/22.0
+   dotc-session              11       0/11        22/22.0
    dotc-interrupted          11       5/11        22/17.7
    psi                       11       0/11        14/12.9
    dotc-interrupted diverges at k = [6, 7, 8, 9, 10]
@@ -103,6 +160,7 @@
    scalac-before             17      10/17        17/21.8
    scalac-after              17       0/17        17/21.8
    dotc-metals               17       0/17        17/17.0
+   dotc-session              17       0/17        17/17.0
    dotc-interrupted          17       0/17        17/26.7
    psi                       16       0/16        11/11.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 14, 15, 16]
@@ -124,6 +182,7 @@
    scalac-before             14      13/14        14/17.0
    scalac-after              14       0/14        14/17.0
    dotc-metals               14       0/14        14/14.0
+   dotc-session              14       0/14        14/14.0
    dotc-interrupted          14       0/14        14/22.2
    psi                       14       0/14        10/10.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -145,6 +204,7 @@
    scalac-before             18       8/18        14/17.0
    scalac-after              18       0/18        14/17.0
    dotc-metals               18       0/18        14/14.0
+   dotc-session              18       0/18        14/14.0
    dotc-interrupted          18       0/18        14/21.4
    psi                       20       0/20        14/14.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7]

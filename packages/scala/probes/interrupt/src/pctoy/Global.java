@@ -61,12 +61,14 @@ public abstract class Global {
     public boolean suppressionsKnown;
     public Map<String, List<String>> bodies = new LinkedHashMap<>();
     public boolean typed;
+    /** A session's typed prefix: the declarations typed so far by targeted runs (dotc spike). */
+    public int typedUpTo;
     public Target target;
     public List<Sym> implicitCache; public int implicitCacheRun = -1;
     public String name() { return source.name(); }
     void reset(Ast.Source s) {
       source = s; synthetics.clear(); problems.clear(); suspended.clear(); suppressions.clear();
-      suppressionsKnown = false; bodies = new LinkedHashMap<>(); typed = false; target = null; implicitCache = null;
+      suppressionsKnown = false; bodies = new LinkedHashMap<>(); typed = false; typedUpTo = 0; target = null; implicitCache = null;
     }
   }
 
@@ -364,6 +366,18 @@ public abstract class Global {
     } finally {
       u.target = savedTarget;
     }
+  }
+
+  /** Targeted typing that resumes: type the declarations from the unit's typed prefix up to `upTo` (inclusive), in
+   * the same run, extending the prefix; typing the last one finishes the unit. */
+  public void typeUnitUpTo(Unit u, int upTo) {
+    for (int i = u.typedUpTo; i <= upTo && i < u.source.decls().size(); i++) {
+      Ast.Decl d = u.source.decls().get(i);
+      typeDecl(u, d, u.bodies);
+      addSynthetics(u, d.pos(), u.bodies);
+      u.typedUpTo = i + 1;
+    }
+    if (u.typedUpTo >= u.source.decls().size() && !u.typed) { reportSuspended(u); u.typed = true; }
   }
 
   private void typeDecl(Unit u, Ast.Decl d, Map<String, List<String>> bodies) {

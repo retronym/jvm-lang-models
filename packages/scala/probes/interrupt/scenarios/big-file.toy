@@ -1,0 +1,44 @@
+// event: completion A O1.w1
+// note: forty declarations; a completion near the top of the file, between edits at its end, is where targeted typing pays
+// file: A
+class Int {}
+object O1 { def v1: Int  def w1 = v1 }
+object O2 { def v2: Int  def w2 = v2 }
+object O3 { def v3: Int  def w3 = v3 }
+object O4 { def v4: Int  def w4 = v4 }
+object O5 { def v5: Int  def w5 = v5 }
+object O6 { def v6: Int  def w6 = v6 }
+object O7 { def v7: Int  def w7 = v7 }
+object O8 { def v8: Int  def w8 = v8 }
+object O9 { def v9: Int  def w9 = v9 }
+object O10 { def v10: Int  def w10 = v10 }
+object O11 { def v11: Int  def w11 = v11 }
+object O12 { def v12: Int  def w12 = v12 }
+object O13 { def v13: Int  def w13 = v13 }
+object O14 { def v14: Int  def w14 = v14 }
+object O15 { def v15: Int  def w15 = v15 }
+object O16 { def v16: Int  def w16 = v16 }
+object O17 { def v17: Int  def w17 = v17 }
+object O18 { def v18: Int  def w18 = v18 }
+object O19 { def v19: Int  def w19 = v19 }
+object O20 { def v20: Int  def w20 = v20 }
+object O21 { def v21: Int  def w21 = v21 }
+object O22 { def v22: Int  def w22 = v22 }
+object O23 { def v23: Int  def w23 = v23 }
+object O24 { def v24: Int  def w24 = v24 }
+object O25 { def v25: Int  def w25 = v25 }
+object O26 { def v26: Int  def w26 = v26 }
+object O27 { def v27: Int  def w27 = v27 }
+object O28 { def v28: Int  def w28 = v28 }
+object O29 { def v29: Int  def w29 = v29 }
+object O30 { def v30: Int  def w30 = v30 }
+object O31 { def v31: Int  def w31 = v31 }
+object O32 { def v32: Int  def w32 = v32 }
+object O33 { def v33: Int  def w33 = v33 }
+object O34 { def v34: Int  def w34 = v34 }
+object O35 { def v35: Int  def w35 = v35 }
+object O36 { def v36: Int  def w36 = v36 }
+object O37 { def v37: Int  def w37 = v37 }
+object O38 { def v38: Int  def w38 = v38 }
+object O39 { def v39: Int  def w39 = v39 }
+object O40 { def v40: Int  def w40 = v40 }

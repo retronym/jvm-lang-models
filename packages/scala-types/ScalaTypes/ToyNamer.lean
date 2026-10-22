@@ -431,3 +431,42 @@ theorem caseToy_names :
   decide
 
 end ScalaTypes.ToyNamer
+
+namespace ScalaTypes.ToyNamer
+
+open Query Query.Lazy Query.Interrupt
+
+/-! ## Reuse across an edit: a fact is reusable iff the edit touched nothing in its trace
+
+Track I's session (track-i-scala3-cancellation.md §5, §7) keeps facts across edits and re-validates each by
+its trace, [`Query.Task.run_eq_of_trace`](../../query/Query/Task.lean#L40): two oracles that agree on the
+facts a rule asked give the same value. The namer's rules make that concrete. `implicitToy` edited at
+`Use.f` (its path changed): the trace of `Use.g`'s rule under the finished store does not contain
+`Use.f`, so `Use.g`'s value is the same before and after, with nothing recomputed; `Use.f`'s own value
+changes. The store after a full run is the oracle. -/
+
+/-- `implicitToy` with `Use.f`'s body edited: `def f = b.x` becomes `def f = b`. -/
+def implicitToyEdited : Program := [int,
+  { name := "Before", stats := [.member { name := "x", declared := some "Int" }] },
+  { isImplicit := true, name := "RichInt", params := [("i", "Int")], stats := [.member { name := "twice", declared := some "Int" }] },
+  { obj := true, name := "Use", stats := [
+      .member { name := "b", declared := some "Before" }, .member { name := "f", path := ["b"] },
+      .member { name := "three", declared := some "Int" }, .member { name := "g", path := ["three", "twice"] }] }]
+
+/-- The finished store of a full run, as the oracle a rule's trace is taken under. -/
+def oracleOf (cut : Cut) (p : Program) : Probe Fact → Value :=
+  let s := (run cut p (p.map fun d => if d.obj then obj d.name else cls d.name)).2
+  fun pr => (s (fact pr)).getD absent
+
+/-- **The edit is outside `Use.g`'s trace, so `Use.g` is reusable**: its trace under the old store does not
+mention `Use.f`, the old and new oracles agree on every fact in that trace, and its value is unchanged;
+`Use.f`'s value is not. -/
+theorem edit_outside_trace_reuses :
+    (.mem (obj "Use") "f" ∉ ((rulesOf .scalac implicitToy (.mem (obj "Use") "g")).trace (oracleOf .scalac implicitToy)).map fact) ∧
+    (((rulesOf .scalac implicitToy (.mem (obj "Use") "g")).trace (oracleOf .scalac implicitToy)).all fun pr =>
+      oracleOf .scalac implicitToy pr == oracleOf .scalac implicitToyEdited pr) = true ∧
+    oracleOf .scalac implicitToy (.force (.mem (obj "Use") "g")) = oracleOf .scalac implicitToyEdited (.force (.mem (obj "Use") "g")) ∧
+    oracleOf .scalac implicitToy (.force (.mem (obj "Use") "f")) ≠ oracleOf .scalac implicitToyEdited (.force (.mem (obj "Use") "f")) := by
+  decide
+
+end ScalaTypes.ToyNamer

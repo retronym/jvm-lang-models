@@ -1,0 +1,8 @@
+== big-file                        6 requests  work after background: fresh 609 session 216   no background: fresh 810 session 417   answers same
+== case-class-completion           6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
+== case-class-loaded               6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
+== cycle                           6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
+== edit-cross-file                 6 requests  work after background: fresh  30 session  27   no background: fresh  41 session  38   answers same
+== implicit-class                  6 requests  work after background: fresh  57 session  54   no background: fresh  74 session  71   answers same
+== nowarn                          6 requests  work after background: fresh  48 session  35   no background: fresh  62 session  49   answers same
+== targeted-consumes-synthetics    6 requests  work after background: fresh  48 session  45   no background: fresh  62 session  59   answers same
