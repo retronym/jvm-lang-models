@@ -33,6 +33,37 @@ A real system you can read the source of, and one *mechanism* of it: something w
 6. The model runs **spaces** the toy never ran, and what survives every design there is a finding about the mechanism, not about a policy.
 7. Every prediction is **projected back** as a test in the shape of the real system's own tests, and a patch where the model's obligations name one.
 
+```mermaid
+flowchart TB
+  classDef real fill:#fde8d8,stroke:#b5542a,color:#000
+  classDef toy fill:#e3eefb,stroke:#2f5f9e,color:#000
+  classDef model fill:#e6f4e6,stroke:#2e7d32,color:#000
+  classDef reg fill:#f5f0e1,stroke:#8a6d1f,color:#000
+
+  R["<b>1 Real system</b><br/>sources at a commit, the bug, the PR"]:::real
+  S["<b>2 Survey</b><br/>two or three systems, one table of axes"]:::real
+  T["<b>3 Toy of the mechanism</b><br/>state, order, invariant; the language cut to what forces them<br/>scenarios = the real tests, rewritten"]:::toy
+  K["<b>4 Kernels + harness</b><br/>each design over the same state and scenarios<br/>one oracle, exhaustive interleavings → results file"]:::toy
+  M["<b>5 Model</b><br/>theory beneath (facts, traces); definitions read off the toy<br/>theorems over every program of the toy language"]:::model
+  C{"<b>6 Conformance</b><br/>the results file is a theorem<br/>checkpoints agree by name and order"}:::model
+  SP["<b>7 Spaces</b><br/>every program of a menu, every order, every request"]:::model
+  P["<b>8 Projection</b><br/>tests in the real system's own shape, two runs each<br/>patches the model's obligations name"]:::real
+  F["<b>9 Register + dashboard</b><br/>findings rows; proved / checked / calibrated"]:::reg
+
+  R --> S --> T --> K --> M --> C --> SP --> P
+  C -. "disagreement: read the real system,<br/>fix the toy or the model" .-> K
+  SP -. "fidelity errors in the toy" .-> T
+  K -. "predictions" .-> P
+  M -. "a theorem names a line of code" .-> R
+  P -. "what the toy abstracted away" .-> F
+  S --> F
+  K --> F
+  M --> F
+  SP --> F
+```
+
+Red is the real system and what is done to it, blue the toy, green the model, parchment the register. The solid spine is the order of the rungs; the dotted edges are the two feedback loops, backward from the model to the toy's fidelity and forward from the toy and the model to tests on the real system. Every rung writes to the register.
+
 ## Why climb it
 
 * **Iteration speed.** A real compiler costs a build per experiment and minutes per test; the toy runs every interleaving of a scenario in milliseconds, and the model runs a thousand scenarios in the time one real test takes. Design questions get answered in the loop where they are asked, and the real system is touched once, with the patch already known to be complete on the toy.
