@@ -423,7 +423,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..9fd21e4f85 100644
+index 5b78dc804b..7dd4eca00d 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -473,7 +473,7 @@ index 5b78dc804b..9fd21e4f85 100644
  
    private val myInitCtx: Context = {
      val rootCtx = initCtx.fresh.addMode(Mode.ReadPositions).addMode(Mode.Interactive)
-@@ -78,37 +101,249 @@ class InteractiveDriver(
+@@ -78,37 +101,289 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -630,6 +630,36 @@ index 5b78dc804b..9fd21e4f85 100644
 +      case None =>
 +        false
 +
++  /** Complete every symbol of the skipped statements of `s`, in the run
++   *  that created their completers: the statement's own symbols, then the
++   *  members of a class after the class (whose completion indexes its
++   *  template), nested ones likewise. The typed statements completed their
++   *  symbols as they were typed, and typing consumed their `ExpandedTree`
++   *  attachments, so the untyped tree no longer leads to them; the skipped
++   *  statements keep theirs. Local definitions inside bodies are not indexed
++   *  and have no completer to run.
++   */
++  private def completeSymbolsOf(s: Session): Unit =
++    given Context = myCtx.fresh.setCompilationUnit(s.unit) // the session's run context, with root imports
++    val namer = ctx.typer
++    def walk(tree: untpd.Tree): Unit = tree match
++      case tree: untpd.DefTree if tree.hasAttachment(namer.ExpandedTree) =>
++        tree.getAttachment(namer.ExpandedTree).foreach(walk)
++      case tree: untpd.TypeDef =>
++        tree.getAttachment(namer.SymOfTree).foreach { sym =>
++          sym.ensureCompleted()
++          tree.rhs match
++            case impl: untpd.Template => impl.body.foreach(walk)
++            case _ =>
++        }
++      case tree: untpd.DefTree =>
++        tree.getAttachment(namer.SymOfTree).foreach(_.ensureCompleted())
++      case untpd.Thicket(trees) => trees.foreach(walk)
++      case untpd.PackageDef(_, stats) => stats.foreach(walk)
++      case _ =>
++    s.skipped.foreach(sk => walk(sk.stat))
++    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
++
 +  /** Insert the typed `stats` into the statements of their owner in the
 +   *  unit's typed tree (the package for a package class, the template for
 +   *  a local dummy), in source order, and update what depends on the tree.
@@ -660,6 +690,16 @@ index 5b78dc804b..9fd21e4f85 100644
  
      val previousCtx = myCtx
 +    val previousSource = myOpenedFiles.get(uri)
++    // A targeted run leaves the symbols of the statements it skipped with
++    // completers of its own run, which refuse to complete in a later run
++    // (`Namer.Completer.complete` gives `UnspecifiedErrorType`): a run on
++    // another file that refers to them would find them "not found". Before
++    // leaving a file, complete every symbol the Namer indexed in it, in its
++    // own run: the signatures, not the bodies. A whole-file run completed
++    // them all as it typed; a run on the same file re-enters them.
++    mySession match
++      case s: Session if s.uri != uri => completeSymbolsOf(s)
++      case _ =>
 +    // Any new run resets the caches of the context base: a previous targeted
 +    // run can no longer be resumed.
 +    mySession = null
@@ -727,7 +767,7 @@ index 5b78dc804b..9fd21e4f85 100644
      }
    }
  
-@@ -140,13 +375,15 @@ class InteractiveDriver(
+@@ -140,13 +415,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -745,7 +785,7 @@ index 5b78dc804b..9fd21e4f85 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +415,6 @@ class InteractiveDriver(
+@@ -178,3 +455,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1219,10 +1259,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..8fd2280b3f
+index 0000000000..121978fcef
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,259 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -1400,6 +1440,29 @@ index 0000000000..8fd2280b3f
 +    assertEquals(runId1, runId2, "the request inside the skipped member must resume the run")
 +    assertEquals(typed1, typed2, "no further top-level statement is typed")
 +    assertEquals(skipped1 - 1, skipped2, "the member is no longer skipped")
++
++  @Test def `another-file-sees-the-signatures` =
++    // A targeted run on A types only `n`; B then refers to `m`, whose completer
++    // belongs to A's run: A's symbols are completed before A is left.
++    val uriA = URI.create("file:///SessA.scala")
++    val uriB = URI.create("file:///SessB.scala")
++    val codeA =
++      """|object SessA {
++         |  def m(x: Int): Int = x
++         |  def n = 1
++         |}
++         |""".stripMargin
++    val codeB = "object SessB { val r = SessA.m }\n"
++    val (obtained, diags) = withDriver { d =>
++      d.runUpTo(uriA, SourceFile.virtual(uriA, codeA), Span(codeA.indexOf("def n") + 5))
++      val diags = d.runUpTo(uriB, SourceFile.virtual(uriB, codeB), Span(codeB.indexOf("SessA.m") + 7))
++      val unit = d.compilationUnits(uriB)
++      given dotty.tools.dotc.core.Contexts.Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      val path = dotty.tools.dotc.interactive.Interactive.pathTo(unit.tpdTree, Span(codeB.indexOf("SessA.m") + 6))
++      (path.headOption.map(t => t.tpe.widenTermRefExpr.show).getOrElse("<none>"), diags.map(_.msg.message))
++    }
++    println(s"[another-file-sees-the-signatures] SessA.m in SessB: $obtained; diagnostics: $diags")
++    org.junit.Assert.assertEquals("(x: Int): Int", obtained)
 +
 +  @Test def `edit-starts-a-new-run` =
 +    assertNoDiff(expectedAt(10), complete(bigSource("edit", 10)))
@@ -1932,10 +1995,10 @@ index 0000000000..acc2e21970
 +    sym.setFlag(Flags.Touched)
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
 new file mode 100644
-index 0000000000..f947871631
+index 0000000000..e20bb4c935
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
-@@ -0,0 +1,467 @@
+@@ -0,0 +1,471 @@
 +package dotty.tools.pc.xray
 +
 +import java.io.File
@@ -2208,19 +2271,23 @@ index 0000000000..f947871631
 +    var completions: List[Completion] = Nil
 +    var hover: Map[String, Any] | Null = null
 +    var diagnostics = 0
++    var diagnosticText: List[String] = Nil
++    def keep(ds: List[dotty.tools.dotc.reporting.Diagnostic]): Int =
++      diagnosticText = ds.take(8).map(d => s"${d.pos.line + 1}: ${d.msg.message.take(160)}")
++      ds.size
 +    try
 +      driver.withCancelChecker(checker) {
 +        kind match
 +          case "full" =>
-+            diagnostics = driver.run(uri, source).size
++            diagnostics = keep(driver.run(uri, source))
 +          case "typeAt" =>
-+            diagnostics = driver.runUpTo(uri, source, Span(offset)).size
++            diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
 +            driver.compilationUnits.get(uri).foreach { unit =>
 +              given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
 +              hover = typeAt(unit.tpdTree, offset)
 +            }
 +          case _ =>
-+            diagnostics = driver.runUpTo(uri, source, Span(offset)).size
++            diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
 +            driver.compilationUnits.get(uri).foreach { unit =>
 +              given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
 +              val pos = SourcePosition(source, Span(offset))
@@ -2290,7 +2357,7 @@ index 0000000000..f947871631
 +      "untypedSpans" -> untypedAfter.size,
 +      "ms" -> math.round(ms * 10) / 10.0,
 +      "touched" -> touched, "touchedBefore" -> touchedBefore, "completed" -> completed, "scopeSize" -> total,
-+      "diagnostics" -> diagnostics,
++      "diagnostics" -> diagnostics, "diagnosticText" -> diagnosticText,
 +      "completions" -> completions.map(c => c.label + (if c.description.nonEmpty then " " + c.description else "")).take(50),
 +      "hover" -> hover
 +    )

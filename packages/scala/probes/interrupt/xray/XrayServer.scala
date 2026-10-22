@@ -270,19 +270,23 @@ object XrayServer:
     var completions: List[Completion] = Nil
     var hover: Map[String, Any] | Null = null
     var diagnostics = 0
+    var diagnosticText: List[String] = Nil
+    def keep(ds: List[dotty.tools.dotc.reporting.Diagnostic]): Int =
+      diagnosticText = ds.take(8).map(d => s"${d.pos.line + 1}: ${d.msg.message.take(160)}")
+      ds.size
     try
       driver.withCancelChecker(checker) {
         kind match
           case "full" =>
-            diagnostics = driver.run(uri, source).size
+            diagnostics = keep(driver.run(uri, source))
           case "typeAt" =>
-            diagnostics = driver.runUpTo(uri, source, Span(offset)).size
+            diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
             driver.compilationUnits.get(uri).foreach { unit =>
               given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
               hover = typeAt(unit.tpdTree, offset)
             }
           case _ =>
-            diagnostics = driver.runUpTo(uri, source, Span(offset)).size
+            diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
             driver.compilationUnits.get(uri).foreach { unit =>
               given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
               val pos = SourcePosition(source, Span(offset))
@@ -352,7 +356,7 @@ object XrayServer:
       "untypedSpans" -> untypedAfter.size,
       "ms" -> math.round(ms * 10) / 10.0,
       "touched" -> touched, "touchedBefore" -> touchedBefore, "completed" -> completed, "scopeSize" -> total,
-      "diagnostics" -> diagnostics,
+      "diagnostics" -> diagnostics, "diagnosticText" -> diagnosticText,
       "completions" -> completions.map(c => c.label + (if c.description.nonEmpty then " " + c.description else "")).take(50),
       "hover" -> hover
     )
