@@ -506,7 +506,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..4670e046c3 100644
+index 5b78dc804b..b883b2a0f2 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,14 @@ import scala.collection.*
@@ -570,7 +570,7 @@ index 5b78dc804b..4670e046c3 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +108,570 @@ class InteractiveDriver(
+@@ -78,37 +108,579 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -666,7 +666,12 @@ index 5b78dc804b..4670e046c3 100644
 +                skipped = sk :: skipped
 +                poisoned = true
 +              case Some(ctx0) =>
-+                try typed += ((sk, ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)._1))
++                // in its own typer state, committed once typed (see `resumeIn`)
++                val ctx1 = ctx0.fresh.setNewTyperState()
++                try
++                  val stats = ctx1.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx1)._1
++                  ctx1.typerState.commit()(using ctx0)
++                  typed += ((sk, stats))
 +                catch case ex: CompilationUnit.CancelledCompilation =>
 +                  // the ones typed so far are kept; the aborted one is replaced
 +                  // or poisons the session, as in a resume
@@ -721,10 +726,14 @@ index 5b78dc804b..4670e046c3 100644
 +      run.clearTargeting()
 +      run.typingTarget = target
 +      try
-+        run.targetNextStats(sk.owner, sk.inBlock)(using ctx0)
++        // typed in its own typer state, committed into the session's only once
++        // the statement is typed: a cancellation drops its constraints with it
++        val ctx1 = ctx0.fresh.setNewTyperState()
++        run.targetNextStats(sk.owner, sk.inBlock)(using ctx1)
 +        // a resumed block statement continues the targeting of its block
-+        run.targetingTyperState = ctx0.typerState
-+        val (stats, _) = ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)
++        run.targetingTyperState = ctx1.typerState
++        val (stats, _) = ctx1.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx1)
++        ctx1.typerState.commit()(using ctx0)
 +        collectSkipped()
 +        assert(!skipped.exists(_.stat.span.contains(target)), s"target $target is still skipped in $uri after the resume of ${sk.stat.span}")
 +        spliceAll(List((sk, stats)))(using ctx0)
@@ -1145,7 +1154,7 @@ index 5b78dc804b..4670e046c3 100644
      }
    }
  
-@@ -140,13 +703,15 @@ class InteractiveDriver(
+@@ -140,13 +712,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -1163,7 +1172,7 @@ index 5b78dc804b..4670e046c3 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +743,6 @@ class InteractiveDriver(
+@@ -178,3 +752,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1854,10 +1863,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..1c6b1b65a1
+index 0000000000..ae0e485aa6
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,740 @@
+@@ -0,0 +1,848 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -2492,6 +2501,114 @@ index 0000000000..1c6b1b65a1
 +    }
 +    println(s"[a-block-in-a-method-body-is-still-targeted] skipped: $skipped")
 +    assert(skipped.exists(_.startsWith("val b")), s"a statement of the if's block is skipped: $skipped")
++
++  @Test def `a-cancelled-resume-leaves-no-constraint-behind` =
++    // A resumed statement is typed in the session's long-lived typer state
++    // (the class body's). A cancellation drops the statement's tree, and must
++    // drop what its partial typing added to the constraint with it: type
++    // variables created for trees that no longer exist, possibly instantiated.
++    // The statement is long and every line of it a polymorphic chain, so that
++    // a cancellation at an early checkpoint (one every 16 typed trees) lands
++    // with type variables already created.
++    val lines = (0 until 40).map(j => s"    val v$j = xs.map(_ + $j).foldLeft(0)(_ + _) + List(v${if j == 0 then 0 else j - 1}, $j).max").mkString("\n")
++      .replace("List(v0, 0)", "List(0, 0)")
++    val code =
++      s"""|object Leak {
++          |  def heavy(xs: List[Int]): Int = {
++          |$lines
++          |    v39
++          |  }
++          |  def light = 1
++          |}
++          |""".stripMargin
++    val uri = URI.create("file:///Leak.scala")
++    val src = SourceFile.virtual(uri, code)
++    val atLight = code.indexOf("def light") + 6
++    val atInHeavy = code.indexOf("val v30") + 6
++    def snapshot(d: dotty.tools.dotc.interactive.InteractiveDriver): (Int, Int, Int) =
++      val ts = d.currentCtx.typerState
++      (ts.ownedVars.size, ts.constraint.domainParams.size, ts.uninstVars.size)
++    val mask = dotty.tools.dotc.Run.typerCheckpointMask
++    dotty.tools.dotc.Run.typerCheckpointMask = 15
++    try
++      val (before, after, thrown, polls, sameRun, again) = withDriver { d =>
++        d.runUpTo(uri, src, Span(atLight)) // heavy is skipped
++        val run0 = d.runIdOf(uri)
++        val before = snapshot(d)
++        var polls = 0
++        val thrown =
++          try { d.withCancelChecker(() => { if inTyperCheckpoint() then polls += 1; polls >= 3 }) { d.runUpTo(uri, src, Span(atInHeavy)) }; false }
++          catch case _: CancelledCompilation => true
++        val after = snapshot(d)
++        val sameRun = d.runIdOf(uri) == run0
++        // and the request after it still answers
++        d.runUpTo(uri, src, Span(atInHeavy))
++        val unit = d.compilationUnits(uri)
++        given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++        val again = dotty.tools.dotc.interactive.Interactive.pathTo(unit.tpdTree, Span(atInHeavy)).headOption
++          .map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>")
++        (before, after, thrown, polls, sameRun, again)
++      }
++      println(s"[a-cancelled-resume-leaves-no-constraint-behind] thrown=$thrown polls=$polls same run=$sameRun; (ownedVars, domainParams, uninstVars) before=$before after=$after; then at v30: $again")
++      assert(thrown, "the cancellation must land inside the resume")
++      assert(sameRun, "a cancelled resume keeps the run")
++      org.junit.Assert.assertEquals("the session's typer state is as it was before the cancelled resume", before, after)
++      assert(again.exists(_.contains("Int")), s"the request after the cancellation answers: $again")
++    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
++
++  @Test def `a-cancelled-completing-run-leaves-no-constraint-behind` =
++    // A resumed statement is typed in the session's long-lived typer state
++    // (the class body's). A cancellation drops the statement's tree, and must
++    // drop what its partial typing added to the constraint with it: type
++    // variables created for trees that no longer exist, possibly instantiated.
++    // The statement is long and every line of it a polymorphic chain, so that
++    // a cancellation at an early checkpoint (one every 16 typed trees) lands
++    // with type variables already created.
++    val lines = (0 until 40).map(j => s"    val v$j = xs.map(_ + $j).foldLeft(0)(_ + _) + List(v${if j == 0 then 0 else j - 1}, $j).max").mkString("\n")
++      .replace("List(v0, 0)", "List(0, 0)")
++    val code =
++      s"""|object Leak {
++          |  def heavy(xs: List[Int]): Int = {
++          |$lines
++          |    v39
++          |  }
++          |  def light = 1
++          |}
++          |""".stripMargin
++    val uri = URI.create("file:///Leak2.scala")
++    val src = SourceFile.virtual(uri, code)
++    val atLight = code.indexOf("def light") + 6
++    val atInHeavy = code.indexOf("val v30") + 6
++    def snapshot(d: dotty.tools.dotc.interactive.InteractiveDriver): (Int, Int, Int) =
++      val ts = d.currentCtx.typerState
++      (ts.ownedVars.size, ts.constraint.domainParams.size, ts.uninstVars.size)
++    val mask = dotty.tools.dotc.Run.typerCheckpointMask
++    dotty.tools.dotc.Run.typerCheckpointMask = 15
++    try
++      val (before, after, thrown, polls, sameRun, again) = withDriver { d =>
++        d.runUpTo(uri, src, Span(atLight)) // heavy is skipped
++        val run0 = d.runIdOf(uri)
++        val before = snapshot(d)
++        var polls = 0
++        val thrown =
++          try { d.withCancelChecker(() => { if inTyperCheckpoint() then polls += 1; polls >= 3 }) { d.run(uri, src) }; false }
++          catch case _: CancelledCompilation => true
++        val after = snapshot(d)
++        val sameRun = d.runIdOf(uri) == run0
++        // and the request after it still answers
++        d.runUpTo(uri, src, Span(atInHeavy))
++        val unit = d.compilationUnits(uri)
++        given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++        val again = dotty.tools.dotc.interactive.Interactive.pathTo(unit.tpdTree, Span(atInHeavy)).headOption
++          .map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>")
++        (before, after, thrown, polls, sameRun, again)
++      }
++      println(s"[a-cancelled-completing-run-leaves-no-constraint-behind] thrown=$thrown polls=$polls same run=$sameRun; (ownedVars, domainParams, uninstVars) before=$before after=$after; then at v30: $again")
++      assert(thrown, "the cancellation must land inside the completing run")
++      assert(sameRun, "a cancelled completing run keeps the run")
++      org.junit.Assert.assertEquals("the session's typer state is as it was before the cancelled completing run", before, after)
++      assert(again.exists(_.contains("Int")), s"the request after the cancellation answers: $again")
++    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
 +
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
