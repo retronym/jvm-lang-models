@@ -8,6 +8,8 @@ Start from a real system and a real bug. Read the system's source for the mechan
 
 ## 1. The ladder
 
+What the climb buys, before the rungs. Speed: every interleaving of a scenario runs in milliseconds on the toy, a thousand scenarios in minutes on the model, where the real compiler costs a build per experiment; the real system is touched once, with a patch whose completeness the toy has already shown. Attention: the toy fits in one head and one context window, so a reviewer and an agent read it whole, and its policy bits and kernels table become the vocabulary of the discussion in place of file and line numbers in three codebases. Exhaustion: a test suite samples the order where its author imagined, the harness tries every point, the space every program of a menu. Cheap hypotheticals: a design nobody has built is one more kernel, and its obligations are theorems before a patch exists. And durability: the toy's output is a committed file and a theorem, so a change on either side that breaks the agreement fails the build, and every finding carries the scenario, theorem and test it can be re-derived from.
+
 Each rung: what it is for, what it costs, what it finds and cannot find, and the artefact it leaves. Track I is the example at every rung.
 
 ### 1.1 The real system: sources, a PR, a bug
@@ -177,7 +179,7 @@ A fifth, smaller: the taint theorem for ranked rules that §5 of the track note 
 
 ## 5. A reusable skill
 
-The method as a Claude Code skill is drafted at [`skills/distil-and-model/SKILL.md`](skills/distil-and-model/SKILL.md), with [a README](skills/distil-and-model/README.md) on when not to use it. It lives under `docs/` because `.claude/` is ignored by this repository's `.gitignore`; to enable it, copy or symlink the folder to `.claude/skills/distil-and-model`. It is a draft: it has not been exercised on a track other than the one it was written from, and it should be read beside this page first. Its shape:
+The method as a Claude Code skill is drafted at [`skills/distil-and-model/SKILL.md`](skills/distil-and-model/SKILL.md), with [a README](skills/distil-and-model/README.md) on when not to use it and [a worked example](skills/distil-and-model/example.md), this track retold from the bug to the patches with the code shapes inline. The folder is self-contained: it does not refer to this page or to this repository, so it can be copied into any project's skills directory. It lives under `docs/` because `.claude/` is ignored by this repository's `.gitignore`; to enable it here, copy or symlink the folder to `.claude/skills/distil-and-model`. It is a draft, exercised on one mechanism only. Its shape:
 
 * **Trigger.** A real system (a compiler, a build tool, an IDE) and a bug, PR or design question about one *mechanism* of it: something with state, an order and an invariant, that a test suite exercises at a few points and a design review argues about.
 * **Rungs**, each with the questions to answer before moving on, and the artefact that answers them: the survey note; the toy with its harness; the kernels table; the Lean modules; the conformance theorem; the space; the findings rows; the dashboard rows.

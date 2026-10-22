@@ -1,49 +1,74 @@
 ---
 name: distil-and-model
-description: Take a real system and a bug, PR or design question about one of its mechanisms up the ladder of docs/method.md - survey across systems, a toy of the mechanism with the designs as kernels under one harness, a Lean model derived from the toy with the toy's results as a conformance theorem, a space of scenarios, and tests and patches projected back - leaving findings rows and dashboard rows at every rung. Use when the user brings a compiler, build tool or IDE and a mechanism (state, an order, an invariant) to understand, fix or redesign, and wants more than one system's answer.
+description: Understand, fix or redesign one mechanism of a real system (a compiler, build tool or IDE) by distilling it into a toy implementation small enough to enumerate, putting the competing designs side by side as kernels of that toy under one harness, lifting the toy into a formal model whose conformance to the toy is a theorem, running the model over spaces the toy never ran, and projecting tests and patches back onto the real system. Use when a user brings a system and a bug, PR or design question about a mechanism with mutable state, an order of operations and an invariant, and a test suite that only samples it.
 ---
 
 # distil-and-model
 
-The method is [`docs/method.md`](../../method.md); Track I ([`packages/scala/docs/track-i.md`](../../../packages/scala/docs/track-i.md)) is the worked example and the shape to imitate. Read both before starting. Climb one rung at a time, commit after each, push to main after each round, and write the findings as they appear, not at the end. Write in the repository's voice: mechanism first, numbers in tables, every file, Lean name and GitHub reference linked (`python3 -I scripts/lint_links.py --fix`).
+A method for questions of the form "is this fix complete?", "which of these designs is right?" or "what does this mechanism guarantee?" about a system whose mechanism has no specification, only code. It climbs from the real system to a formal model and back, and its product is a register of findings, each with evidence on the real system. [example.md](example.md) is one complete climb (a presentation compiler servicing requests in the middle of a type check); read it first, it is the shape to imitate.
 
 ## Trigger
 
-A real system (a compiler, a build tool, an IDE) and one *mechanism* of it: something with mutable state, an order of operations and an invariant that a bug, a PR or a design question is about. Not a whole language feature, not a performance question, not a system you cannot read the source of.
+A real system you can read the source of, and one *mechanism* of it: something with mutable state, an order of operations and an invariant, where a bug, a PR or a design question is about whether the invariant holds at every point the order allows. Interruption, cancellation, laziness and cycles, caching and invalidation, incremental rebuilds, phase ordering. Not a language feature's output (that is calibration against the real tool), not a performance number (that is a profiler), not a one-line fix with a test (the ladder costs days).
+
+## The idea
+
+1. A test suite samples a mechanism at a few points of its order. Enumeration samples all of them, but only on something small.
+2. A **toy of the mechanism** keeps the state, the order and the invariant and drops the language around them. Its fidelity is a set of claims about the real system, each checkable by reading.
+3. Competing designs become **kernels** over the same toy state and the same scenarios, with one harness and one oracle, so they are compared on equal terms, and a hypothetical design costs one more kernel.
+4. A **model** is the toy ported into a proof assistant, definitions read off the toy, so that the toy's recorded results are a theorem about the model and the model's theorems quantify over every program of the toy's language.
+5. **Conformance** between toy and model runs both ways beneath the real system, which stays the only reference: a disagreement is settled by reading the real system, never by editing one side to match the other.
+6. The model runs **spaces** the toy never ran, and what survives every design there is a finding about the mechanism, not about a policy.
+7. Every prediction is **projected back** as a test in the shape of the real system's own tests, and a patch where the model's obligations name one.
+
+## Why climb it
+
+* **Iteration speed.** A real compiler costs a build per experiment and minutes per test; the toy runs every interleaving of a scenario in milliseconds, and the model runs a thousand scenarios in the time one real test takes. Design questions get answered in the loop where they are asked, and the real system is touched once, with the patch already known to be complete on the toy.
+* **Abstraction focuses attention, human and agent.** The toy is small enough to hold in one head and in one context window: a reviewer reads it whole, an agent reads it whole, and neither has to carry the real system's incidental complexity. The kernels table and the policy bits become the shared vocabulary of the discussion: "the burst", "the consumed map", "safepoint 3", instead of file and line numbers in three codebases.
+* **Exhaustive rather than sampled.** A test suite samples the order at the points its author imagined; the harness tries every point, and the space tries every program of a menu. What survives is a property of the mechanism, not of the imagined cases.
+* **Hypotheticals are cheap.** A design nobody has built costs one more kernel or one more mode, and its obligations come out as theorems before anyone writes a patch.
+* **Fidelity is checked, not assumed.** The toy's claims about the real system are listed and the space tests them indirectly: a result that contradicts a design's intent points at the claim that is wrong. Two systems written from one reading can be wrong together; the method is built to catch that.
+* **The results do not rot.** The toy's output is a committed file and a theorem about the model; a change to either side that breaks the agreement fails the build. A finding carries its scenario, its theorem and its test, so it can be re-derived.
+* **Honesty about scope.** Writing the toy forces the list of what was left out, and that list is where the real system's own tests go looking afterwards.
 
 ## Rungs
 
-Answer the questions before moving on; the artefact is the answer.
+Each rung has questions to answer before moving on; the artefact is the answer. Commit after each rung; write a findings row the moment a finding appears.
 
-**1. The real system.** Which identifiers name the mechanism? Which test, PR or issue is the bug, and at which commit? What invariant did it break, over which state? Artefact: a section of the track note with the mechanism in one paragraph and a table of the fix's parts against the kind of state each repairs, with file and line references at a named commit.
+**1. The real system.** Which identifiers name the mechanism, at which commit? Which test, PR or issue is the bug? Which invariant broke, over which state, at which point of the order? Artefact: a note with the mechanism in one paragraph and a table of the fix's parts against the kind of state each repairs, with file and line references.
 
-**2. The survey.** Which other systems have the same mechanism, and what position does each take on each axis (where the work runs, what is cached and under what key, what the guard is and whether an unwind resets it, how cancellation or invalidation arrives)? Read sources at named commits; do not guess from documentation. Artefact: one subsection per system and a one-line comparison. A finding that reading alone settles is written now.
+**2. The survey.** Which other systems have the same mechanism, and where does each stand on each axis: where the work runs, what is cached and under what key, what the guard against re-entry is and whether an unwind resets it, how cancellation or invalidation arrives? Read sources at named commits, not documentation. Artefact: a subsection per system and a one-line comparison. A finding that reading alone settles is written now and the ladder may stop here.
 
-**3. The toy.** What is the smallest language that forces the mechanism's state? Keep only what the bug's fix touches; drop expressions, positions and anything the mechanism does not read. Which scenarios are the real system's tests, rewritten in the toy? Artefact: `probes/<name>/` with `src/`, `scenarios/`, `run.sh`, and a note on every design choice that is a claim about the real system.
+**3. The toy.** What is the smallest language whose evaluation forces the mechanism's state? Keep only what the bug's fix touches. Which of the real system's tests become scenarios? Artefact: a toy in a plain language (one file per concept: syntax, the shared state, the scheduler, scenarios as text files, a run script), and a list of every design choice that is a claim about the real system.
 
-**4. Kernels and the harness.** Can each surveyed design be a kernel over the same state and scenarios? What is the oracle (for Track I: the answer with the request served after the background)? What does the harness enumerate exhaustively (every safepoint, every order)? Artefact: a kernels table (kernel, where the work runs, what it models), the harness, and a committed `results.txt` regenerated by `run.sh`. A hypothetical design is one more kernel.
+**4. Kernels and the harness.** Can each surveyed design be written over the same state and scenarios? What is the oracle? (For an interleaving question: the answer when the event arrives after the work is done.) What does the harness enumerate exhaustively? Artefact: a kernels table (kernel, where the work runs, what it models), the harness, and a committed results file regenerated by the run script and never edited.
 
-**5. The model.** Which existing Lean layer is the theory ([`Query.Task`](../../../packages/query/Query/Task.lean#L12), `Query.Lazy`, `Query.Freeze`)? Which definitions are read off the toy (the facts of any program; the kernel as a state machine over them)? What is proved for every program, and what only by `decide` on a scenario? No Mathlib, no `native_decide` where `decide +kernel` can run. Artefact: the modules, rows in [`docs/theorems.md`](../../theorems.md), and a claim-to-theorem table in the note.
+**5. The model.** Which existing theory does the mechanism sit on (a task with a trace, lazy facts with a black hole, a pushed fact with a freeze)? Which definitions are read off the toy: the facts of any program of the toy language as rules, and the kernel as a state machine over them? What is proved for every program, and what only by evaluation on a scenario? Prefer a kernel-checkable `decide` over native evaluation where it can run. Artefact: the modules, a claim-to-theorem table in the note.
 
-**6. Conformance.** Is the toy's `results.txt` a theorem about the model, number for number, and are the safepoints the same by name and order? Artefact: the theorem, checked by `decide +kernel`, restated whenever either side changes. A disagreement is resolved by reading the real system, never by editing one side to match the other.
+**6. Conformance.** Is the toy's results file a theorem about the model, number for number, and are the toy's checkpoints the model's by name and in order? Artefact: that theorem, checked after every change to either side, and the results file regenerated beside it.
 
-**7. Spaces.** What menu of declarations and requests covers the interactions the mechanism has? Run the harness over every program and order of the menu under every policy. Which shapes survive every policy? Artefact: the space module, the counts in the note, and a findings row per surviving shape. The first run usually debugs the toy: treat a result that contradicts a design's intent as a fidelity question first.
+**7. Spaces.** What menu of declarations and requests covers the interactions the mechanism has? Run the harness over every program and order of the menu under every design. Which shapes survive every design? Artefact: the space module, the counts, a findings row per surviving shape. The first run usually debugs the toy: a result that contradicts a design's stated intent is a fidelity question first, answered by reading the real system for that program.
 
-**8. Projection.** Which predictions have a test on the real system in the shape of its own tests? Run each twice, failing without the fix and passing with it, on a named commit and a clean tree. Which patch does the model's obligations name, and does it pass the system's suites? Artefact: tests and patches under [`docs/upstream/`](../../upstream), issues or PRs on the real tracker, findings rows moved from `triage` to `draft` to `filed`.
+**8. Projection.** Which predictions have a test on the real system in the shape of its own tests? Run each twice, failing without the fix and passing with it, on a named commit in a clean tree. Which patch do the model's obligations name, and does it pass the system's suites? Artefact: tests and patches, issues or PRs on the real tracker, findings rows moved from triage to draft to filed.
 
-**9. Register and dashboard.** Every rung writes rows: [`docs/findings.md`](../../findings.md) (what, where, evidence, status, next step), [`docs/theorems.md`](../../theorems.md), [`docs/status.md`](../../status.md) (proved for every program against checked on a space), [`docs/stats.md`](../../stats.md) (regenerated), the package READMEs, and the track note's future-work boxes.
+**9. Register and dashboard.** A findings register (id, what, where, evidence, status, next step); a theorems page stating each theorem once with where its hypotheses bite; a status page separating "proved for every program" from "checked on a space" from "calibrated against the real tool"; the note's future-work list with boxes ticked as they close.
 
 ## Checks
 
-* `python3 -I scripts/lint_links.py` passes; `lake build` of the touched packages is green; the axiom check lists only standard axioms.
-* The conformance theorem is checked by `decide +kernel` after every change to the toy or the model, and `results.txt` is regenerated by `run.sh`, not edited.
-* A result only the compiled evaluator produces is recorded as an observation with the stall, not as a theorem.
-* A confirmation on the real system names the commit and the tree state and consists of two runs.
-* Every finding has a row before the commit that found it is pushed.
+* Every file, declaration and tracker reference named in a note is a link, and a lint enforces it, so a renamed theorem breaks the note that cites it.
+* The conformance theorem is re-checked after every change to the toy or the model; the results file is regenerated by the run script.
+* A result that only the compiled evaluator produces, and the kernel checker does not return on, is recorded as an observation with the stall, never as a theorem; the status page's "proved" column is the kernel's alone.
+* A confirmation on the real system names the commit and the tree state and consists of two runs. One passing or failing run confirms nothing; a run from a tree that still had a patch applied is the classic false confirmation.
+* A disagreement between the toy and the model is settled by reading the real system for the specific case. Agreement between two things written from one reading is not evidence.
+* A planned theorem that turns out vacuous is kept and reported as such; it is a finding about the question.
 
 ## Stop conditions
 
-* A rung's question is answered by reading alone: write the finding and stop; the ladder is not a quota.
-* The toy cannot hold the mechanism without a feature it left out: stop, say what the next toy needs in the note's future work, and do not stretch the current one.
-* A prediction has no test the real system can run: it stays in `triage`, and the note says why.
-* The model and the toy disagree and the real system cannot be read for the case: record the disagreement as open; do not pick a side.
+* A rung's question is answered by reading alone: write the finding and stop. The ladder is not a quota.
+* The toy cannot hold the mechanism without a feature it left out: stop, record what the next toy needs, and do not stretch this one.
+* A prediction has no test the real system can run: it stays in triage, and the note says why.
+* The toy and the model disagree and the real system cannot be read for the case: record the disagreement as open; do not pick a side.
+
+## What it cannot do
+
+The toy abstracts, and the abstraction is the claim: anything the toy left out (trees with positions, edits inside a body, identity across runs, consumed attachments, a search the request runs after the mechanism) is where the real system's own tests will find what the toy could not. The model sees less than the toy, and its executable semantics decides small scenarios, not the space. Neither measures cost; a work counter ranks designs. And the real system is the only reference, because toy and model share their author's reading.
