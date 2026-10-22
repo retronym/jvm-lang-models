@@ -1,0 +1,1056 @@
+diff --git a/compiler/src/dotty/tools/dotc/CompilationUnit.scala b/compiler/src/dotty/tools/dotc/CompilationUnit.scala
+index db34dbc88e..d196455401 100644
+--- a/compiler/src/dotty/tools/dotc/CompilationUnit.scala
++++ b/compiler/src/dotty/tools/dotc/CompilationUnit.scala
+@@ -15,7 +15,7 @@ import typer.Nullables
+ import core.Decorators.*
+ import config.{SourceVersion, Feature}
+ import scala.annotation.internal.sharable
+-import scala.util.control.NoStackTrace
++import scala.util.control.{ControlThrowable, NoStackTrace}
+ import transform.MacroAnnotations.isMacroAnnotation
+ import scala.io.Codec
+ 
+@@ -157,6 +157,18 @@ object CompilationUnit {
+ 
+   class SuspendException extends Exception with NoStackTrace
+ 
++  /** Thrown from `Run.checkCancelledTyping` to abort an interactive run whose
++   *  progress callback reports cancellation. The run's partial results are
++   *  discarded by the catcher (`InteractiveDriver.run`); lazy state that was
++   *  being computed when the exception unwinds (symbol completions, lazy
++   *  annotations, symbol loaders) is reset so that the next run recomputes it.
++   *  The cause is a `CancellationException` so that clients which classify
++   *  exceptions by their cause chain (e.g. Metals) treat it as a cancellation.
++   */
++  class CancelledCompilation extends ControlThrowable:
++    private val myCause = new java.util.concurrent.CancellationException("compilation cancelled")
++    override def getCause: Throwable = myCause
++
+   /** Make a compilation unit for top class `clsd` with the contents of the `unpickled` tree */
+   def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
+     val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
+diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
+index 2fdf622325..31008b9b51 100644
+--- a/compiler/src/dotty/tools/dotc/Run.scala
++++ b/compiler/src/dotty/tools/dotc/Run.scala
+@@ -231,6 +231,33 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+   def canProgress()(using Context): Boolean =
+     foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
+ 
++  /** Targeted typing (interactive mode, see `InteractiveDriver.runUpTo`).
++   *  When `typingTarget` exists, `Typer.typedStats` types the statements of
++   *  the unit's outermost package only up to the one whose span contains the
++   *  target; the statements after it, with the context they are to be typed
++   *  in, are left in `untypedStats` for the driver to resume later in this
++   *  same run. `typingOwner` is the package class whose statements are
++   *  subject to this, set by `Typer.typedPackageDef` on the unit's tree.
++   */
++  var typingTarget: Span = Spans.NoSpan
++  var typingOwner: Symbol = NoSymbol
++  var untypedStats: (List[ast.untpd.Tree], Context) | Null = null
++
++  private var typedTreeCount = 0
++
++  /** Called by `Typer.typed` for every tree. Every 1024 trees, in interactive
++   *  mode, polls the progress callback and aborts the run with a
++   *  `CancelledCompilation` if it reports cancellation. Batch compilation is
++   *  unaffected: there cancellation keeps skipping the remaining units instead
++   *  (see `didEnterUnit`), so that sbt sees a run that ends normally.
++   */
++  def checkCancelledTyping()(using Context): Unit =
++    typedTreeCount += 1
++    if (typedTreeCount & 1023) == 0
++       && ctx.mode.is(Mode.Interactive)
++       && !canProgress()
++    then throw CompilationUnit.CancelledCompilation()
++
+   def doAdvanceUnit()(using Context): Unit =
+     trackProgress: progress =>
+       progress.currentUnitCount += 1 // trace that we completed a unit in the current (sub)phase
+diff --git a/compiler/src/dotty/tools/dotc/core/Annotations.scala b/compiler/src/dotty/tools/dotc/core/Annotations.scala
+index 36c16d9769..addd278b98 100644
+--- a/compiler/src/dotty/tools/dotc/core/Annotations.scala
++++ b/compiler/src/dotty/tools/dotc/core/Annotations.scala
+@@ -232,7 +232,10 @@ object Annotations {
+       mySym match {
+         case symFn: (Context ?=> Symbol) @unchecked =>
+           mySym = null
+-          mySym = atPhaseBeforeTransforms(symFn)
++          try mySym = atPhaseBeforeTransforms(symFn)
++          catch case ex: CompilationUnit.CancelledCompilation =>
++            mySym = ctx ?=> symFn(using ctx) // the next run evaluates the thunk again
++            throw ex
+             // We should always produce the same annotation tree, no matter when the
+             // annotation is evaluated. Setting the phase to a pre-transformation phase
+             // seems to be enough to ensure this (note that after erasure, `ctx.typer`
+@@ -250,7 +253,10 @@ object Annotations {
+       myTree match {
+         case treeFn: (Context ?=> Tree) @unchecked =>
+           myTree = null
+-          myTree = atPhaseBeforeTransforms(treeFn)
++          try myTree = atPhaseBeforeTransforms(treeFn)
++          catch case ex: CompilationUnit.CancelledCompilation =>
++            myTree = ctx ?=> treeFn(using ctx) // the next run evaluates the thunk again
++            throw ex
+         case _ =>
+       }
+       myTree.asInstanceOf[Tree]
+@@ -289,7 +295,10 @@ object Annotations {
+       myTree match {
+         case treeFn: (Context ?=> Tree) @unchecked =>
+           myTree = null
+-          myTree = atPhaseBeforeTransforms(treeFn)
++          try myTree = atPhaseBeforeTransforms(treeFn)
++          catch case ex: CompilationUnit.CancelledCompilation =>
++            myTree = ctx ?=> treeFn(using ctx) // the next run evaluates the thunk again
++            throw ex
+         case _ =>
+       }
+       myTree.asInstanceOf[Tree]
+diff --git a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
+index 4d2fa848c2..2a5ad24be8 100644
+--- a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
++++ b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
+@@ -163,6 +163,9 @@ object SymDenotations {
+             case ex: CyclicReference =>
+               println(s"error while completing ${this.debugString}")
+               throw ex
++            case ex: CompilationUnit.CancelledCompilation =>
++              untouchIfIncomplete()
++              throw ex
+           }
+           finally {
+             indent -= 1
+@@ -174,7 +177,18 @@ object SymDenotations {
+             if myFlags.is(Touched) then
+               throw CyclicReference(this)(using ctx.withOwner(symbol))
+             myFlags |= Touched
+-            atPhase(validFor.firstPhaseId)(completer.complete(this))
++            try atPhase(validFor.firstPhaseId)(completer.complete(this))
++            catch case ex: CompilationUnit.CancelledCompilation =>
++              untouchIfIncomplete()
++              throw ex
++
++    /** A cancelled run unwound through this completion before it finished:
++     *  clear `Touched` so that the next run can complete the symbol instead of
++     *  reporting a cyclic reference. Only for `CancelledCompilation`; any other
++     *  exception leaves the flag set, as before.
++     */
++    private def untouchIfIncomplete(): Unit =
++      if !isCompleted then myFlags &~= Touched
+ 
+     protected[dotc] def info_=(tp: Type): Unit = {
+       /* // DEBUG
+diff --git a/compiler/src/dotty/tools/dotc/core/SymbolLoaders.scala b/compiler/src/dotty/tools/dotc/core/SymbolLoaders.scala
+index bec515aa79..4734fe8b4b 100644
+--- a/compiler/src/dotty/tools/dotc/core/SymbolLoaders.scala
++++ b/compiler/src/dotty/tools/dotc/core/SymbolLoaders.scala
+@@ -422,6 +422,7 @@ abstract class SymbolLoader extends LazyType { self =>
+                |$msg"""
+     }
+     var failure: Option[Diagnostic.LoadingFailure] = None
++    var cancelled = false
+     try {
+       val start = System.currentTimeMillis
+       trace.onDebug("loading") {
+@@ -445,10 +446,14 @@ abstract class SymbolLoader extends LazyType { self =>
+       case ex: Exception =>
+         println(s"exception caught when loading $root: $ex")
+         throw ex
++      case ex: CompilationUnit.CancelledCompilation =>
++        // Leave the root to be loaded again by the next run
++        cancelled = true
++        throw ex
+     }
+     finally {
+       def postProcess(denot: SymDenotation, other: Symbol) =
+-        if !denot.isCompleted &&
++        if !cancelled && !denot.isCompleted &&
+            !denot.completer.isInstanceOf[SymbolLoaders.SecondCompleter] then
+           failure match
+             case Some(failure) => denot.markLoadFailed(failure)
+diff --git a/compiler/src/dotty/tools/dotc/interactive/Completion.scala b/compiler/src/dotty/tools/dotc/interactive/Completion.scala
+index da6d02b5ad..c67d7b8b0a 100644
+--- a/compiler/src/dotty/tools/dotc/interactive/Completion.scala
++++ b/compiler/src/dotty/tools/dotc/interactive/Completion.scala
+@@ -26,6 +26,7 @@ import dotty.tools.dotc.util.Chars
+ import dotty.tools.dotc.util.SourcePosition
+ 
+ import scala.collection.mutable
++import scala.util.control.NonFatal
+ import dotty.tools.dotc.core.ContextOps.localContext
+ import dotty.tools.dotc.core.Names
+ import dotty.tools.dotc.core.Types
+@@ -583,7 +584,7 @@ object Completion:
+             val convertedTree = ctx.typer.typedAheadExpr(untpd.Apply(untpd.TypedSplice(methodRefTree), untpd.TypedSplice(qual) :: Nil))
+             Inferencing.fullyDefinedType(convertedTree.tpe, "", pos)
+         catch
+-          case error => conversionTarget.tree.tpe // fallback to not fully defined type
++          case NonFatal(_) => conversionTarget.tree.tpe // fallback to not fully defined type
+ 
+       if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
+         Map.empty
+diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
+index 5b78dc804b..adf0873c6e 100644
+--- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
++++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
+@@ -7,12 +7,13 @@ import scala.collection.*
+ 
+ import dotty.tools.dotc.sbt.interfaces.ProgressCallback
+ 
+-import ast.{Trees, tpd}
++import ast.{Trees, tpd, untpd}
+ import config.*
+ import core.*, core.Decorators.*
+ import Contexts.*, Names.*, NameOps.*, Symbols.*, SymDenotations.*, Trees.*, Types.*
+ import reporting.*
+ import util.*
++import Spans.{Span, NoSpan}
+ 
+ private class InteractiveContextBase(sourcePackage: CachedLogicalPackage) extends ContextBase {
+ 
+@@ -45,8 +46,30 @@ class InteractiveDriver(
+ 
+   override def sourcesRequired: Boolean = false
+ 
++  /** Cancellation of the current request. `myCancelled` is set by `cancel()`
++   *  (which `Run.Progress` calls when it notices a thread interrupt) and stays
++   *  set until the next run starts. `myCancelChecker` is the client's own
++   *  cancellation test, installed for the duration of a request by
++   *  `withCancelChecker`. `isCancelled` does not consume the interrupt flag
++   *  itself: `Run.Progress.checkCancellation` already does, and it would hide
++   *  the interrupt from `cancel()`.
++   */
++  @volatile private var myCancelled = false
++  @volatile private var myCancelChecker: () => Boolean = InteractiveDriver.neverCancelled
++
+   private val myProgressCallback: ProgressCallback = new ProgressCallback:
+-    override def isCancelled(): Boolean = Thread.interrupted()
++    override def isCancelled(): Boolean = myCancelled || myCancelChecker()
++    override def cancel(): Unit = myCancelled = true
++
++  /** Run `body` with `check` as the cancellation test polled by the typer
++   *  (see `Run.checkCancelledTyping`). A run started inside `body` is aborted
++   *  with `CompilationUnit.CancelledCompilation` once `check` returns true.
++   */
++  def withCancelChecker[T](check: () => Boolean)(body: => T): T =
++    val previous = myCancelChecker
++    myCancelChecker = check
++    try body
++    finally myCancelChecker = previous
+ 
+   private val myInitCtx: Context = {
+     val rootCtx = initCtx.fresh.addMode(Mode.ReadPositions).addMode(Mode.Interactive)
+@@ -78,14 +101,150 @@ class InteractiveDriver(
+ 
+   def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
+ 
+-  def run(uri: URI, source: SourceFile): List[Diagnostic] = {
++  def run(uri: URI, source: SourceFile): List[Diagnostic] = run(uri, source, NoSpan)
++
++  /** The typed prefix of a targeted run (see `runUpTo`): the run, the
++   *  statements of the unit's outermost package typed so far, the untyped
++   *  rest with the context to type it in, and the diagnostics so far.
++   */
++  private class Session(val uri: URI, val source: SourceFile, val run: Run, val reporter: StoreReporter,
++      val unit: CompilationUnit, val pkgDef: PackageDef):
++    var prefix: List[Tree] = pkgDef.stats
++    var rest: List[untpd.Tree] = Nil
++    var restCtx: Context | Null = null
++    var diagnostics: List[Diagnostic] = Nil
++    /** Set when a resume was aborted while typing the head of `rest`: typing
++     *  consumes the attachments of untyped trees (`SymOfTree`, `TypedAhead`,
++     *  `ExpandedTree`), so that statement can not be typed a second time.
++     */
++    var poisoned: Boolean = false
++    def hasRest: Boolean = rest.nonEmpty && restCtx != null
++    def restContains(target: Span): Boolean = rest.exists(_.span.contains(target))
++
++  private var mySession: Session | Null = null
++
++  /** The number of statements of the outermost package typed by the targeted
++   *  run of `uri`, or -1 if `uri` is not the subject of a targeted run.
++   */
++  def typedPrefixLength(uri: URI): Int = mySession match
++    case s: Session if s.uri == uri => s.prefix.length
++    case _ => -1
++
++  /** Has the targeted run of `uri` typed all of its statements? */
++  def isFullyTyped(uri: URI): Boolean = mySession match
++    case s: Session if s.uri == uri => !s.hasRest
++    case _ => false
++
++  /** The id of the run that typed `uri`, or -1. */
++  def runIdOf(uri: URI): Int = mySession match
++    case s: Session if s.uri == uri => s.run.runContext.runId
++    case _ => -1
++
++  /** Type `source` only as far as the statement of its outermost package that
++   *  contains `target`, or resume the previous targeted run of `uri` if it was
++   *  on the same content: a target within the typed prefix is served from it
++   *  without typing anything, a target beyond it extends the prefix in the
++   *  same run, so that the denotations and completers of the earlier
++   *  statements stay valid. Any other content starts a fresh targeted run.
++   *  The compilation unit of `uri` then holds a prefix of the typed tree;
++   *  providers that need the whole tree use `run` instead.
++   */
++  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
++    mySession match
++      case s: Session if s.uri == uri && s.source.textContent() == source.textContent() =>
++        if !s.hasRest || !s.restContains(target) then s.diagnostics
++        else if s.poisoned then run(uri, source, target)
++        else resume(s, target)
++      case _ =>
++        run(uri, source, target)
++
++  /** Type the statements of `s.rest` one at a time, in the run and context
++   *  the targeted run stopped in, until the one containing `target` is done.
++   *  Each statement is typed by `Typer.typedStats` as the stopped traversal
++   *  would have (its expansion, e.g. a class and its companion, together).
++   */
++  private def resume(s: Session, target: Span): List[Diagnostic] =
++    myCancelled = false
++    var done = false
++    try
++      while !done && s.rest.nonEmpty do
++        val stat = s.rest.head
++        val ctx0 = s.restCtx.nn
++        val (stats, ctx1) = ctx0.typer.typedStats(stat :: Nil, s.run.typingOwner)(using ctx0)
++        s.rest = s.rest.tail
++        s.restCtx = ctx1
++        extendPrefix(s, stats)
++        done = stat.span.contains(target)
++      s.diagnostics
++    catch case ex: CompilationUnit.CancelledCompilation =>
++      // The prefix covers the statements typed completely before the abort.
++      // The one that was being typed can not be typed a second time: typing
++      // consumes the attachments of the untyped trees (`SymOfTree`,
++      // `TypedAhead`, `ExpandedTree`) and the nested typers of the methods.
++      s.reporter.removeBufferedMessages(using s.restCtx.nn)
++      if !replacePoisoned(s) then s.poisoned = true
++      throw ex
++
++  /** Replace the statement at the head of `s.rest`, whose typing was aborted,
++   *  by a fresh parse of its source range, indexed afresh in the same run:
++   *  its symbols are unlinked from the package and re-created. References
++   *  to the old symbols typed earlier keep them. Only classes and objects
++   *  are replaced (not the synthetic `<file>$package` object of top-level
++   *  definitions, nor a nested package clause).
++   */
++  private def replacePoisoned(s: Session): Boolean =
++    given Context = s.restCtx.nn
++    val head = s.rest.head
++    val replaceable = head match
++      case mdef: untpd.ModuleDef => !mdef.rawMods.is(Flags.Synthetic)
++      case _: untpd.TypeDef => true
++      case _ => false
++    if !replaceable then return false
++    val fresh = new parsing.Parsers.Parser(s.source).parse() match
++      case untpd.PackageDef(_, stats) =>
++        stats.find(stat => stat.span == head.span && stat.getClass == head.getClass)
++      case _ => None
++    fresh match
++      case Some(stat) =>
++        val pkg = s.run.typingOwner.asClass.classDenot
++        val file = s.unit.source.file
++        for sym <- pkg.info.decls.toList do
++          if sym.span.exists && stat.span.contains(sym.span) && sym.associatedFile == file then
++            pkg.delete(sym)
++        ctx.typer.index(stat :: Nil)
++        s.rest = stat :: s.rest.tail
++        true
++      case None =>
++        false
++
++  private def extendPrefix(s: Session, stats: List[Tree]): Unit =
++    given Context = s.restCtx.nn
++    s.prefix = s.prefix ++ stats
++    val t = cpy.PackageDef(s.pkgDef)(s.pkgDef.pid, s.prefix)
++    s.unit.tpdTree = t
++    // What `SetRootTree` would have done had the statements been typed in the phase
++    for case tdef: TypeDef <- stats if tdef.symbol.isClass do
++      val sym = tdef.symbol.asClass
++      sliceTopLevel(t, sym) match
++        case (pkg: PackageDef) :: Nil => sym.rootTreeOrProvider = pkg
++        case _ => sym.rootTreeOrProvider = tdef
++    stats.foreach(cleanup(_, errorOutCompleters = false))
++    myOpenedTrees(s.uri) = topLevelTrees(t, s.source)
++    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
++
++  private def run(uri: URI, source: SourceFile, target: Span): List[Diagnostic] = {
+     import typer.ImportInfo.*
+ 
+     val previousCtx = myCtx
++    val previousSource = myOpenedFiles.get(uri)
++    // Any new run resets the caches of the context base: a previous targeted
++    // run can no longer be resumed.
++    mySession = null
+     try {
+       val reporter =
+         new StoreReporter(null) with UniqueMessagePositions with HideNonSensicalMessages
+ 
++      myCancelled = false
+       val run = compiler.newRun(using myInitCtx.fresh.setReporter(reporter).setProgressCallback(myProgressCallback))
+       myCtx = run.runContext.withRootImports
+ 
+@@ -93,22 +252,50 @@ class InteractiveDriver(
+ 
+       myOpenedFiles(uri) = source
+ 
+-      run.compileSources(List(source))
++      run.typingTarget = target
++      try run.compileSources(List(source))
++      finally run.typingTarget = NoSpan
++      // A cancellation noticed before the typer skips the units instead of
++      // unwinding (see `Run.didEnterUnit`); discard that run too.
++      if myProgressCallback.isCancelled() then throw CompilationUnit.CancelledCompilation()
+       run.printSummary()
+       val ctxRun = ctx.run.nn
+       val unit = if ctxRun.units.nonEmpty then ctxRun.units.head else ctxRun.suspendedUnits.head
+       val t = unit.tpdTree
+-      cleanup(t)
++      val partial = target.exists && run.untypedStats != null
++      cleanup(t, errorOutCompleters = !partial)
+       myOpenedTrees(uri) = topLevelTrees(t, source)
+       myCompilationUnits(uri) = unit
+       myCtx = myCtx.fresh.setPhase(myInitCtx.base.typerPhase)
+ 
+-      reporter.removeBufferedMessages
++      val diagnostics = reporter.removeBufferedMessages
++      if target.exists then
++        t match
++          case pkgDef: PackageDef =>
++            val s = Session(uri, source, run, reporter, unit, pkgDef)
++            s.diagnostics = diagnostics
++            run.untypedStats match
++              case null =>
++              case (rest, restCtx) =>
++                s.rest = rest
++                s.restCtx = restCtx
++            run.untypedStats = null
++            mySession = s
++          case _ =>
++      diagnostics
+     } catch {
+       case ex: FatalError  =>
+         myCtx = previousCtx
+         close(uri)
+         Nil
++      case ex: CompilationUnit.CancelledCompilation =>
++        // The aborted run leaves no trace: the previous run's context, trees
++        // and units stay current, and the caller decides what to answer.
++        myCtx = previousCtx
++        previousSource match
++          case Some(s) => myOpenedFiles(uri) = s
++          case None => myOpenedFiles.remove(uri)
++        throw ex
+     }
+   }
+ 
+@@ -140,13 +327,15 @@ class InteractiveDriver(
+    *  of a previous run. Note that typed trees can have untyped or partially
+    *  typed children if the source contains errors.
+    */
+-  private def cleanup(tree: tpd.Tree)(using Context): Unit = {
++  private def cleanup(tree: tpd.Tree, errorOutCompleters: Boolean = true)(using Context): Unit = {
+     val seen = mutable.Set.empty[tpd.Tree]
+     def cleanupTree(tree: tpd.Tree): Unit = {
+       seen += tree
+       tree.foreachSubTree { t =>
+         if (t.symbol.exists && t.hasType) {
+-          if (!t.symbol.isCompleted) t.symbol.info = UnspecifiedErrorType
++          // Not for the prefix of a targeted run: its run stays current, and
++          // the symbols of the untyped rest are still to be completed in it.
++          if (errorOutCompleters && !t.symbol.isCompleted) t.symbol.info = UnspecifiedErrorType
+           t.symbol.annotations.foreach { annot =>
+             /* In some cases annotations are used on themself (possibly larger cycles).
+             *  This is the case with the java.lang.annotation.Target annotation, would end
+@@ -178,3 +367,6 @@ class InteractiveDriver(
+     run.compileUnits(Nil, myCtx)
+   }
+ }
++
++object InteractiveDriver:
++  private val neverCancelled: () => Boolean = () => false
+diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
+index d85b5bcc1b..0ef4b6e012 100644
+--- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
++++ b/compiler/src/dotty/tools/dotc/typer/Typer.scala
+@@ -3739,6 +3739,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+                   if !pobj.symbol.isCompleting then
+                     pobj.symbol.ensureCompleted()
+               case _ =>
++          val run = ctx.run.nn
++          if run.typingTarget.exists && (tree eq expanded(ctx.compilationUnit.untpdTree)) then
++            run.typingOwner = pkg.moduleClass
+           var stats1 = typedStats(tree.stats, pkg.moduleClass)._1
+           if (!ctx.isAfterTyper)
+             stats1 = stats1 ++ typedBlockStats(MainProxies.proxies(stats1))._1
+@@ -4150,6 +4153,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+       record("typed total")
+       if ctx.phase.isTyper then
+         assertPositioned(tree)
++      ctx.run.nn.checkCancelledTyping()
+       if tree.source != ctx.source && tree.source.exists then
+         typed(tree, pt, locked)(using ctx.withSource(tree.source))
+       else if ctx.run.nn.isCancelled then
+@@ -4169,6 +4173,18 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+     var enumContexts: SimpleIdentityMap[Symbol, Context] = SimpleIdentityMap.empty
+     val initialNotNullInfos = ctx.notNullInfos
+       // A map from `enum` symbols to the contexts enclosing their definitions
++    val run = ctx.run.nn
++    val targeted = run.typingTarget.exists && exprOwner == run.typingOwner && run.untypedStats == null
++    /** Targeted typing: stop after `stat` if it is the last of the statements
++     *  containing the target (a class and its synthetic companion share the
++     *  span). The untyped `rest` and the context it would be typed in are
++     *  recorded on the run for `InteractiveDriver.runUpTo` to resume.
++     */
++    def stopAfter(stat: untpd.Tree, rest: List[untpd.Tree])(using Context): Boolean =
++      targeted
++      && stat.span.contains(run.typingTarget)
++      && !rest.headOption.exists(_.span.contains(run.typingTarget))
++      && { run.untypedStats = (rest, ctx); true }
+     @tailrec def traverse(stats: List[untpd.Tree])(using Context): (List[Tree], Context) = stats match {
+       case (imp: untpd.Import) :: rest =>
+         val imp1 = typed(imp)
+@@ -4195,7 +4211,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+               case mdef1 =>
+                 buf += mdef1
+             }
+-            traverse(rest)
++            if stopAfter(mdef, rest) then (buf.toList, ctx) else traverse(rest)
+         }
+       case Thicket(stats) :: rest =>
+         traverse(stats ::: rest)
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala b/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
+index b941b4cf7c..6695a188f6 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
+@@ -5,11 +5,11 @@ import java.net.URI
+ import java.nio.file.Path
+ import java.util as ju
+ 
+-import scala.compiletime.uninitialized
+ import scala.jdk.CollectionConverters.*
+ import scala.meta.pc.SemanticdbFileManager
+ import scala.meta.pc.SourcePathMode
+ 
++import dotty.tools.dotc.CompilationUnit
+ import dotty.tools.dotc.core.Contexts.Context
+ import dotty.tools.dotc.interactive.{
+   CachedLogicalPackage,
+@@ -19,6 +19,7 @@ import dotty.tools.dotc.interactive.{
+ }
+ import dotty.tools.dotc.reporting.Diagnostic
+ import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
+ 
+ /** CachingDriver is a wrapper class that provides a compilation cache for
+  *  InteractiveDriver. CachingDriver skips running compilation if
+@@ -43,17 +44,36 @@ class CachingDriver private (
+     sourcePackage: CachedLogicalPackage
+ ) extends InteractiveDriver(settings, sourcePackage):
+ 
+-  private var lastCompiledURI: URI = uninitialized
++  private var lastCompiledURI: URI | Null = null
+   private var previousDiags = List.empty[Diagnostic]
+ 
+   private def alreadyCompiled(uri: URI, content: String): Boolean =
+     lastCompiledURI == uri && compilationUnits.get(uri).forall(_.source.textContent() == content)
+ 
+   override def run(uri: URI, source: SourceFile): List[Diagnostic] =
+-    if !alreadyCompiled(uri, source.textContent()) then previousDiags = super.run(uri, source)
++    if !alreadyCompiled(uri, source.textContent()) then
++      try previousDiags = super.run(uri, source)
++      catch case ex: CompilationUnit.CancelledCompilation =>
++        // The aborted run's `newRun` already reset the caches of the context
++        // base (`ContextBase.reset`), so the previous run's trees can no longer
++        // be served from the cache: the next request compiles the file again.
++        lastCompiledURI = null
++        throw ex
+     lastCompiledURI = uri
+     previousDiags
+ 
++  /** A targeted run leaves a prefix of the typed tree in the compilation unit
++   *  of `uri`: it is served as the result of `run` only once it covers the
++   *  whole file.
++   */
++  override def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
++    lastCompiledURI = null
++    val diags = super.runUpTo(uri, source, target)
++    if isFullyTyped(uri) then
++      lastCompiledURI = uri
++      previousDiags = diags
++    diags
++
+   def freshDriver(): InteractiveDriver =
+     new InteractiveDriver(settings, sourcePackage)
+ 
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala b/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
+index aa6237a99e..bc3f98d6da 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
+@@ -1,9 +1,13 @@
+ package dotty.tools.pc
+ 
++import java.util.concurrent.CompletableFuture
+ import java.util.concurrent.ScheduledExecutorService
+ 
+ import scala.concurrent.ExecutionContextExecutor
++import scala.meta.internal.metals.PcQueryContext
+ import scala.meta.internal.pc.CompilerAccess
++import scala.meta.internal.pc.CompilerWrapper
++import scala.meta.pc.CancelToken
+ import scala.meta.pc.PresentationCompilerConfig
+ 
+ import dotty.tools.dotc.reporting.StoreReporter
+@@ -25,6 +29,25 @@ class Scala3CompilerAccess(
+ 
+   def newReporter = new StoreReporter(null)
+ 
++  /** Interruptable requests abort their compilation when the token is
++   *  cancelled: the driver polls the token from the typer (see
++   *  `InteractiveDriver.withCancelChecker`) and unwinds with a
++   *  `CancelledCompilation`, which `withSharedCompiler` maps to `default`
++   *  while keeping the compiler instance.
++   */
++  override def withInterruptableCompiler[T](
++      default: T,
++      token: CancelToken
++  )(
++      thunk: CompilerWrapper[StoreReporter, CachingDriver] => T
++  )(implicit queryInfo: PcQueryContext): CompletableFuture[T] =
++    val cancelled = token.onCancel().toCompletableFuture
++    val isCancelled: () => Boolean =
++      () => cancelled.isDone && cancelled.getNow(false)
++    super.withInterruptableCompiler(default, token) { access =>
++      access.compiler().withCancelChecker(isCancelled)(thunk(access))
++    }
++
+   /** Handle the exception in order to make sure that we retry immediately.
+    *  Otherwise, we will wait until the end of the timeout, which is 20s by
+    *  default.
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
+index 93316cc544..ce003c0b87 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
+@@ -23,6 +23,7 @@ import dotty.tools.dotc.interactive.Interactive
+ import dotty.tools.dotc.parsing.Tokens
+ import dotty.tools.dotc.profile.Profiler
+ import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
+ import dotty.tools.pc.AutoImports.AutoImportEdits
+ import dotty.tools.pc.AutoImports.AutoImportsGenerator
+ import dotty.tools.pc.printer.ShortenedTypePrinter
+@@ -70,7 +71,8 @@ class CompletionProvider(
+      */
+ 
+     val driver = if wasCursorApplied then cachingDriver.freshDriver() else cachingDriver
+-    driver.run(uri, sourceFile)
++    // Only the statements up to the one containing the offset are typed
++    driver.runUpTo(uri, sourceFile, Span(params.offset()))
+ 
+     given ctx: Context = driver.currentCtx
+     val pos = driver.sourcePosition(params)
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/completions/Completions.scala b/presentation-compiler/src/main/dotty/tools/pc/completions/Completions.scala
+index d197cc0f4f..3e6eb3cc91 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/completions/Completions.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/completions/Completions.scala
+@@ -834,7 +834,7 @@ class Completions(
+         // isField returns true for some classes
+         def isJavaClass = sym.is(JavaDefined) && isModuleOrClass
+         (sym.isField && !isJavaClass && !isModuleOrClass) || sym.getter != NoSymbol
+-      catch case _ => false
++      catch case NonFatal(_) => false
+ 
+     def isInheritedFromScalaLibrary(sym: Symbol) =
+       sym.owner == defn.AnyClass ||
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionAbortSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionAbortSuite.scala
+new file mode 100644
+index 0000000000..4d5735e33a
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionAbortSuite.scala
+@@ -0,0 +1,207 @@
++package dotty.tools.pc.tests.completion
++
++import java.lang
++import java.net.URI
++import java.nio.charset.StandardCharsets
++import java.nio.file.{Files, Path}
++import java.util.concurrent.{CancellationException, CompletableFuture, CompletionStage}
++import java.util.concurrent.atomic.AtomicBoolean
++
++import scala.concurrent.duration.*
++import scala.language.unsafeNulls
++import scala.meta.internal.jdk.CollectionConverters.*
++import scala.meta.internal.metals.{CompilerOffsetParams, EmptyCancelToken, PcQueryContext}
++import scala.meta.internal.pc.{InterruptException, PresentationCompilerConfigImpl}
++import scala.meta.pc.{CancelToken, SourcePathMode}
++import scala.meta.pc.reports.EmptyReportContext
++
++import dotty.tools.dotc.CompilationUnit.CancelledCompilation
++import dotty.tools.pc.{CachingDriver, ScalaPresentationCompiler}
++import dotty.tools.pc.base.BaseCompletionSuite
++
++import org.junit.Test
++
++/** Cancellation that aborts the compilation in progress (as opposed to
++ *  `CompletionCancelSuite`, which only checks that the request's future is
++ *  cancelled): the driver's run is unwound from the typer, its partial results
++ *  are discarded, the driver instance survives, and the next request on the
++ *  same file is answered in full.
++ */
++class CompletionAbortSuite extends BaseCompletionSuite:
++
++  private val timeout = 30.seconds
++
++  private val sourcepathDir: Path = Files.createDirectories(tmp.resolve("sourcepath"))
++
++  locally:
++    val pkg1Dir = Files.createDirectories(sourcepathDir.resolve("pkg1"))
++    // `greetAlpha` has no result type: completing its info types the whole
++    // right-hand side (well over 1024 trees), so a run that is cancelled while
++    // typing a reference to it unwinds through the completion of a symbol that
++    // outlives the run.
++    val body = (0 until 400).map(i => s"    val a$i = x + $i").mkString("\n")
++    Files.write(
++      pkg1Dir.resolve("Alpha.scala"),
++      s"""|package pkg1
++          |
++          |class Alpha:
++          |  def greetAlpha =
++          |    val x = 1
++          |$body
++          |    a0 + a399
++          |""".stripMargin.getBytes(StandardCharsets.UTF_8)
++    )
++
++  override protected def config: PresentationCompilerConfigImpl =
++    // The cold first compilation of `bigQuery` must not hit the job timeout
++    super.config.copy(sourcePathMode = SourcePathMode.PRUNED, timeoutDelay = 120)
++  override protected val sourcePath: Seq[Path] = Seq(sourcepathDir)
++  override protected def scalacOptions(classpath: Seq[Path]): Seq[String] =
++    Seq("-Ylogical-package-loading")
++
++  private val uri = URI.create("file:///A.scala")
++
++  /** A source whose typing takes long enough for a cancellation to land in it.
++   *  `tag` makes each request's content distinct, so that `CachingDriver`
++   *  compiles it rather than serving the previous request's result.
++   */
++  private def bigQuery(tag: String) =
++    val methods = (0 until 400).map(i => s"  def m$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum").mkString("\n")
++    s"""|object A { // $tag
++        |$methods
++        |  val x = asser@@
++        |}
++        |""".stripMargin
++
++  private val expected =
++    """|assert(inline assertion: Boolean): Unit
++       |assert(inline assertion: Boolean, inline message: => Any): Unit
++       |""".stripMargin
++
++  private def pc = presentationCompiler.asInstanceOf[ScalaPresentationCompiler]
++  private given PcQueryContext = PcQueryContext(None, () => "")(using EmptyReportContext())
++
++  private def withDriver[T](f: CachingDriver => T): T =
++    pc.compilerAccess.withNonInterruptableCompiler(null.asInstanceOf[T], EmptyCancelToken) { access =>
++      f(access.compiler())
++    }.get(timeout.length, timeout.unit)
++
++  private def runId(): Int = withDriver(_.currentCtx.runId)
++  private def driver(): CachingDriver = withDriver(identity)
++
++  private def complete(query: String, token: CancelToken = EmptyCancelToken): String =
++    val (code, offset) = params(query)
++    presentationCompiler
++      .complete(CompilerOffsetParams(uri, code, offset, token))
++      .get(timeout.length, timeout.unit)
++      .getItems.asScala.map(_.getLabel).sorted.mkString("\n")
++
++  /** Cancels `delayMs` after the job queue starts the request (that is, in
++   *  `checkCanceled`, which mtags calls right before running the thunk).
++   */
++  class DelayedCancelToken(delayMs: Long) extends CancelToken:
++    val cancel = new CompletableFuture[lang.Boolean]()
++    val started = new AtomicBoolean(false)
++    override def onCancel(): CompletionStage[lang.Boolean] = cancel
++    override def checkCanceled(): Unit =
++      if started.compareAndSet(false, true) then
++        val t = new Thread((() => { Thread.sleep(delayMs); cancel.complete(true) }): Runnable)
++        t.setDaemon(true)
++        t.start()
++
++  private def inTyperCheckpoint(): Boolean =
++    Thread.currentThread.getStackTrace.exists(_.getMethodName == "checkCancelledTyping")
++
++  private def inCompletion(): Boolean =
++    Thread.currentThread.getStackTrace.exists(_.getMethodName == "completeFrom")
++
++  @Test def `abort-via-token` =
++    assertNoDiff(expected, complete(bigQuery("first")))
++    val driverBefore = driver()
++    val runIdBefore = runId()
++    println(s"[abort-via-token] runId before cancelled request: $runIdBefore")
++
++    val token = DelayedCancelToken(20)
++    try
++      complete(bigQuery("cancelled"), token)
++      fail("Expected completion request to be cancelled")
++    catch case InterruptException() => ()
++
++    // Queued behind the cancelled job: it sees the driver after the abort
++    val runIdAfterAbort = runId()
++    println(s"[abort-via-token] runId after cancelled request: $runIdAfterAbort")
++    assertEquals(runIdBefore, runIdAfterAbort, "the aborted run must restore the previous context")
++    assert(driver() eq driverBefore, "the driver must not be recreated")
++
++    assertNoDiff(expected, complete(bigQuery("following")))
++    val runIdAfter = runId()
++    println(s"[abort-via-token] runId after following request: $runIdAfter")
++    // The aborted run consumed one run id, the successful one another
++    assertEquals(runIdBefore + 2, runIdAfter, "the following request must compile on the same driver")
++    assert(driver() eq driverBefore, "the driver must not be recreated")
++
++  @Test def `abort-from-typer` =
++    assertNoDiff(expected, complete(bigQuery("first")))
++    val (code, _) = params(bigQuery("first"))
++    val (thrown, typerPolls, runIdBefore, runIdAfter, openedAfter, unitsAfter) = withDriver { driver =>
++      val runIdBefore = driver.currentCtx.runId
++      val unitBefore = driver.compilationUnits(uri)
++      var typerPolls = 0
++      val thrown =
++        try
++          driver.withCancelChecker(() => { if inTyperCheckpoint() then typerPolls += 1; typerPolls >= 2 }) {
++            driver.run(uri, code + "\n// changed")
++          }
++          false
++        catch case _: CancelledCompilation => true
++      (thrown, typerPolls, runIdBefore, driver.currentCtx.runId,
++        driver.openedFiles(uri).textContent(), driver.compilationUnits(uri) eq unitBefore)
++    }
++    println(s"[abort-from-typer] thrown=$thrown typerPolls=$typerPolls runId $runIdBefore -> $runIdAfter")
++    assert(thrown, "the run must be aborted with CancelledCompilation")
++    assertEquals(2, typerPolls, "cancelled at the second typer checkpoint")
++    assertEquals(runIdBefore, runIdAfter, "the aborted run must restore the previous context")
++    assertEquals(code, openedAfter, "the previous source must stay open")
++    assert(unitsAfter, "the previous compilation unit must stay current")
++    // Same content as before the abort, but the aborted run invalidated the
++    // driver's cache, so this compiles again
++    assertNoDiff(expected, complete(bigQuery("first")))
++    val runIdFinal = runId()
++    println(s"[abort-from-typer] runId after following request: $runIdFinal")
++    assertEquals(runIdBefore + 2, runIdFinal, "the following request must compile on the same driver")
++
++  @Test def `abort-inside-completion-of-sourcepath-symbol` =
++    val query =
++      """|import pkg1.Alpha
++         |object Main:
++         |  val a = new Alpha
++         |  val g = a.greetAlpha
++         |  a.greetA@@
++         |""".stripMargin
++    val (code, _) = params(query)
++    // Cancel at the first typer checkpoint that is reached from inside a
++    // symbol completion: the first 1024 trees of this run are typed while
++    // completing `greetAlpha` (via `g`), whose symbol belongs to the sourcepath
++    // and outlives the run. This must be the first run that enters `Alpha`,
++    // otherwise `greetAlpha` is already completed.
++    val (thrown, polls) = withDriver { driver =>
++      var polls = 0
++      val thrown =
++        try
++          driver.withCancelChecker(() => { if inTyperCheckpoint() && inCompletion() then polls += 1; polls >= 1 }) {
++            driver.run(uri, code)
++          }
++          false
++        catch case _: CancelledCompilation => true
++      (thrown, polls)
++    }
++    println(s"[abort-inside-completion] thrown=$thrown polls=$polls")
++    assert(thrown, "the run must be aborted with CancelledCompilation")
++    // `greetAlpha` is completable again (no CyclicReference), but its Namer
++    // completer was created in the aborted run and refuses to complete in a
++    // later one (`Namer.Completer.complete` gives it `UnspecifiedErrorType`):
++    // the item is listed with an error type. Re-entering the sourcepath file
++    // in the next run would be needed for `greetAlpha: Int`.
++    val obtained = complete(query + "\n// changed")
++    println(s"[abort-inside-completion] completion after abort: $obtained")
++    assertNoDiff("greetAlpha: Any", obtained)
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
+new file mode 100644
+index 0000000000..c7f48ee938
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
+@@ -0,0 +1,169 @@
++package dotty.tools.pc.tests.completion
++
++import java.net.URI
++
++import scala.concurrent.duration.*
++import scala.language.unsafeNulls
++import scala.meta.internal.jdk.CollectionConverters.*
++import scala.meta.internal.metals.{CompilerOffsetParams, EmptyCancelToken, PcQueryContext}
++import scala.meta.internal.pc.PresentationCompilerConfigImpl
++import scala.meta.pc.CancelToken
++import scala.meta.pc.reports.EmptyReportContext
++
++import dotty.tools.dotc.CompilationUnit.CancelledCompilation
++import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
++import dotty.tools.pc.{CachingDriver, ScalaPresentationCompiler}
++import dotty.tools.pc.base.BaseCompletionSuite
++
++import org.junit.Test
++
++/** Successive completions on the same content elaborate the typed tree
++ *  incrementally within one run (`InteractiveDriver.runUpTo`): the first
++ *  request types the top-level statements up to the one containing the
++ *  offset, a later request within that prefix types nothing, and one beyond
++ *  it resumes typing in the same run.
++ */
++class CompletionSessionSuite extends BaseCompletionSuite:
++
++  private val timeout = 60.seconds
++
++  override protected def config: PresentationCompilerConfigImpl =
++    super.config.copy(timeoutDelay = 120)
++
++  private val uri = URI.create("file:///A.scala")
++
++  /** 400 top-level objects, each with a method and an incomplete reference
++   *  to it; `at` is the index of the object with the completion marker, the
++   *  content (without the marker) is the same for every `at`. `tag` makes
++   *  each test's content distinct.
++   */
++  private def bigSource(tag: String, at: Int) =
++    val objects = (0 until 400).map { i =>
++      val completion = if i == at then s"this.meth@@" else s"this.meth"
++      s"""|object M$i {
++          |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum
++          |  val r = $completion
++          |}""".stripMargin
++    }.mkString("\n")
++    s"""|// $tag
++        |$objects
++        |""".stripMargin
++
++  private def expectedAt(at: Int) = s"method$at(xs: List[Int]): Int"
++
++  private def pc = presentationCompiler.asInstanceOf[ScalaPresentationCompiler]
++  private given PcQueryContext = PcQueryContext(None, () => "")(using EmptyReportContext())
++
++  private def withDriver[T](f: CachingDriver => T): T =
++    pc.compilerAccess.withNonInterruptableCompiler(null.asInstanceOf[T], EmptyCancelToken) { access =>
++      f(access.compiler())
++    }.get(timeout.length, timeout.unit)
++
++  private def state(): (Int, Int) = withDriver(d => (d.runIdOf(uri), d.typedPrefixLength(uri)))
++
++  private def complete(query: String, token: CancelToken = EmptyCancelToken): String =
++    val (code, offset) = params(query)
++    presentationCompiler
++      .complete(CompilerOffsetParams(uri, code, offset, token))
++      .get(timeout.length, timeout.unit)
++      .getItems.asScala.map(_.getLabel).sorted.mkString("\n")
++
++  private def timed[T](body: => T): (T, Long) =
++    val start = System.nanoTime()
++    val result = body
++    (result, (System.nanoTime() - start) / 1000000)
++
++  private def inTyperCheckpoint(): Boolean =
++    Thread.currentThread.getStackTrace.exists(_.getMethodName == "checkCancelledTyping")
++
++  @Test def `targeted-prefix-and-timing` =
++    // Warm up the compiler on other content
++    assertNoDiff(expectedAt(10), complete(bigSource("warmup", 10)))
++    val (obtained, targetedMs) = timed(complete(bigSource("timing", 10)))
++    assertNoDiff(expectedAt(10), obtained)
++    val (runId, prefix) = state()
++    println(s"[targeted-prefix-and-timing] runId=$runId typedPrefixLength=$prefix (statements of the outermost package, an object counts as its module val and class)")
++    assert(prefix >= 0 && prefix < 40, s"the prefix must stop at the object containing the offset, was $prefix")
++    // The same content typed in full
++    val (code, _) = params(bigSource("timing", 10))
++    val (_, fullMs) = timed(withDriver(_.run(uri, SourceFile.virtual(uri, code))))
++    val (code2, _) = params(bigSource("timing-2", 10))
++    val (_, fullMs2) = timed(withDriver(_.run(uri, SourceFile.virtual(uri, code2))))
++    println(s"[targeted-prefix-and-timing] targeted completion at object 10: ${targetedMs}ms; full run of the same content: ${fullMs}ms; full run of other content: ${fullMs2}ms")
++    // The driver alone, without the completion machinery
++    val (code3, offset3) = params(bigSource("timing-3", 10))
++    val source3 = SourceFile.virtual(uri, code3)
++    val (_, targetedMs3) = timed(withDriver(_.runUpTo(uri, source3, Span(offset3))))
++    val (_, withinMs3) = timed(withDriver(_.runUpTo(uri, source3, Span(offset3 - 100))))
++    val (_, resumeMs3) = timed(withDriver(_.runUpTo(uri, source3, Span(code3.indexOf("object M200")))))
++    val (_, prefix3) = state()
++    val (code4, _) = params(bigSource("timing-4", 10))
++    val (_, fullMs4) = timed(withDriver(_.run(uri, SourceFile.virtual(uri, code4))))
++    println(s"[targeted-prefix-and-timing] driver only: runUpTo(object 10)=${targetedMs3}ms, runUpTo within prefix=${withinMs3}ms, resume to object 200=${resumeMs3}ms (typedPrefixLength=$prefix3); full run=${fullMs4}ms")
++    val (tiny, tinyMs) = timed(complete("object T { val x = this.toStr@@ }"))
++    println(s"[targeted-prefix-and-timing] completion request on a one-object file: ${tinyMs}ms ($tiny)")
++
++  @Test def `resume-in-the-same-run` =
++    assertNoDiff(expectedAt(10), complete(bigSource("resume", 10)))
++    val (runId1, prefix1) = state()
++    println(s"[resume-in-the-same-run] after object 10:  runId=$runId1 typedPrefixLength=$prefix1")
++    // Same content (the `@@` marker is not part of it), offset beyond the prefix
++    val (obtained2, ms2) = timed(complete(bigSource("resume", 200)))
++    assertNoDiff(expectedAt(200), obtained2)
++    val (runId2, prefix2) = state()
++    println(s"[resume-in-the-same-run] after object 200: runId=$runId2 typedPrefixLength=$prefix2 (${ms2}ms)")
++    // Within the prefix: nothing is typed
++    val (obtained3, ms3) = timed(complete(bigSource("resume", 50)))
++    assertNoDiff(expectedAt(50), obtained3)
++    val (runId3, prefix3) = state()
++    println(s"[resume-in-the-same-run] after object 50:  runId=$runId3 typedPrefixLength=$prefix3 (${ms3}ms)")
++    assertEquals(runId1, runId2, "the second request must resume the first run")
++    assertEquals(runId2, runId3, "the third request must be served by the same run")
++    assert(prefix2 >= 200, s"the prefix must cover object 200, was $prefix2")
++    assertEquals(prefix2, prefix3, "a request within the prefix must not type anything")
++
++  @Test def `edit-starts-a-new-run` =
++    assertNoDiff(expectedAt(10), complete(bigSource("edit", 10)))
++    val (runId1, prefix1) = state()
++    println(s"[edit-starts-a-new-run] runId=$runId1 typedPrefixLength=$prefix1")
++    assertNoDiff(expectedAt(10), complete(bigSource("edit-changed", 10)))
++    val (runId2, prefix2) = state()
++    println(s"[edit-starts-a-new-run] after edit: runId=$runId2 typedPrefixLength=$prefix2")
++    assert(runId2 > runId1, "changed content must start a new run")
++
++  @Test def `cancel-during-resume` =
++    assertNoDiff(expectedAt(10), complete(bigSource("cancel", 10)))
++    val (runId1, prefix1) = state()
++    println(s"[cancel-during-resume] after object 10: runId=$runId1 typedPrefixLength=$prefix1")
++    val (code, offset) = params(bigSource("cancel", 300))
++    // Cancel at the second typer checkpoint reached while resuming
++    val (thrown, polls) = withDriver { driver =>
++      var polls = 0
++      val thrown =
++        try
++          driver.withCancelChecker(() => { if inTyperCheckpoint() then polls += 1; polls >= 2 }) {
++            driver.runUpTo(uri, SourceFile.virtual(uri, code), Span(offset))
++          }
++          false
++        catch case _: CancelledCompilation => true
++      (thrown, polls)
++    }
++    val (runId2, prefix2) = state()
++    println(s"[cancel-during-resume] thrown=$thrown polls=$polls; after the abort: runId=$runId2 typedPrefixLength=$prefix2")
++    assert(thrown, "the resume must be aborted with CancelledCompilation")
++    assertEquals(runId1, runId2, "the aborted resume must keep the run")
++    // The statements typed completely before the abort stay in the prefix
++    // (the driver types them one at a time); the one being typed does not.
++    assert(prefix2 >= prefix1 && prefix2 < 600, s"the aborted resume must keep a consistent prefix, was $prefix1 -> $prefix2")
++    // Within the prefix, still served by the same run
++    assertNoDiff(expectedAt(5), complete(bigSource("cancel", 5)))
++    val (runId3, prefix3) = state()
++    println(s"[cancel-during-resume] after object 5 (within the prefix): runId=$runId3 typedPrefixLength=$prefix3")
++    assertEquals(runId1, runId3, "a request within the prefix is served by the same run")
++    // Beyond the prefix again
++    assertNoDiff(expectedAt(300), complete(bigSource("cancel", 300)))
++    val (runId4, prefix4) = state()
++    println(s"[cancel-during-resume] after object 300 (resumed again): runId=$runId4 typedPrefixLength=$prefix4")
++    assertEquals(runId1, runId4, "the resume after the abort must continue the same run")
++    assert(prefix4 >= 300, s"the prefix must cover object 300, was $prefix4")
