@@ -451,7 +451,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..8d79401ecc 100644
+index 5b78dc804b..36a6ff913f 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -514,7 +514,7 @@ index 5b78dc804b..8d79401ecc 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,450 @@ class InteractiveDriver(
+@@ -78,37 +107,448 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -637,7 +637,7 @@ index 5b78dc804b..8d79401ecc 100644
 +  /** `-Yinteractive-log`: one line per request on stderr (the Metals log), with
 +   *  what the run did, so that the session can be observed from an editor.
 +   */
-+  private val logRequests: Boolean = myInitCtx.settings.YinteractiveLog.value(using myInitCtx)
++  val logRequests: Boolean = myInitCtx.settings.YinteractiveLog.value(using myInitCtx)
 +
 +  /** The last segment of `uri`, for the log; a `jar:` URI (a source in a
 +   *  sources jar, opened by a jump into the library) has no path.
@@ -854,11 +854,10 @@ index 5b78dc804b..8d79401ecc 100644
 +        // a skipped block definition's stub has an untyped type tree: not entered
 +        case t if !t.hasType => t
 +        case t: PackageDef if t.symbol.moduleClass.is(Flags.PackageClass) && ofOwner.contains(t.symbol.moduleClass) =>
-+          val t1 = tpd.cpy.PackageDef(t)(t.pid, insert(t.stats, ofOwner(t.symbol.moduleClass).flatMap(_._2)))
-+          if inBlocks.isEmpty then t1 else super.transform(t1)
++          // and on into the classes and blocks it holds: their entries are theirs
++          super.transform(tpd.cpy.PackageDef(t)(t.pid, insert(t.stats, ofOwner(t.symbol.moduleClass).flatMap(_._2))))
 +        case t: Template if ofOwner.contains(t.symbol) =>
-+          val t1 = tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body, ofOwner(t.symbol).flatMap(_._2)))
-+          if inBlocks.isEmpty then t1 else super.transform(t1)
++          super.transform(tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body, ofOwner(t.symbol).flatMap(_._2))))
 +        // the innermost typed block containing a statement's span: its stubs
 +        // (a definition's) go, the typed statement is inserted in order (an
 +        // expression statement left no stub); a block nested in one of the
@@ -870,8 +869,7 @@ index 5b78dc804b..8d79401ecc 100644
 +          if here.isEmpty then super.transform(b)
 +          else
 +            val stubs = here.map(_._1)
-+            val b1 = tpd.cpy.Block(b)(insert(b.stats.filterNot(t => stubs.exists(sk => isStubOf(sk)(t))), here.flatMap(_._2)), b.expr)
-+            if inBlocks.size == here.size then b1 else super.transform(b1)
++            super.transform(tpd.cpy.Block(b)(insert(b.stats.filterNot(t => stubs.exists(sk => isStubOf(sk)(t))), here.flatMap(_._2)), b.expr))
 +        case _ => super.transform(tree)
 +    val t = mapper.transform(s.unit.tpdTree)
 +    s.unit.tpdTree = t
@@ -969,7 +967,7 @@ index 5b78dc804b..8d79401ecc 100644
      }
    }
  
-@@ -140,13 +582,15 @@ class InteractiveDriver(
+@@ -140,13 +580,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -987,7 +985,7 @@ index 5b78dc804b..8d79401ecc 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +622,6 @@ class InteractiveDriver(
+@@ -178,3 +620,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1396,6 +1394,65 @@ index aa6237a99e..bc3f98d6da 100644
    /** Handle the exception in order to make sure that we retry immediately.
     *  Otherwise, we will wait until the end of the timeout, which is 20s by
     *  default.
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/ScalaPresentationCompiler.scala b/presentation-compiler/src/main/dotty/tools/pc/ScalaPresentationCompiler.scala
+index 72b9ba7efb..05b9038012 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/ScalaPresentationCompiler.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/ScalaPresentationCompiler.scala
+@@ -45,6 +45,18 @@ import org.eclipse.lsp4j.DocumentHighlight
+ import org.eclipse.lsp4j.TextEdit
+ import org.eclipse.lsp4j as l
+ 
++/** Under `-Yinteractive-log`, the time a whole request took inside the
++ *  presentation compiler, the driver included: what the editor waits for
++ *  once Metals has handed the request over.
++ */
++private object PcTiming:
++  def timed[T](driver: dotty.tools.dotc.interactive.InteractiveDriver, what: String)(body: => T): T =
++    if !driver.logRequests then body
++    else
++      val t0 = System.nanoTime()
++      try body
++      finally System.err.println(f"[dotc-session] $what: whole request ${(System.nanoTime() - t0) / 1e6}%.1f ms in the presentation compiler")
++
+ case class ScalaPresentationCompiler(
+     buildTargetIdentifier: String = "",
+     buildTargetName: Option[String] = None,
+@@ -223,7 +235,7 @@ case class ScalaPresentationCompiler(
+       params.token()
+     ) { access =>
+       val driver = access.compiler()
+-      PcDefinitionProvider(driver, params, search).definitions()
++      PcTiming.timed(driver, "definition")(PcDefinitionProvider(driver, params, search).definitions())
+     }(using params.toQueryContext)
+ 
+   override def typeDefinition(
+@@ -234,7 +246,7 @@ case class ScalaPresentationCompiler(
+       params.token()
+     ) { access =>
+       val driver = access.compiler()
+-      PcDefinitionProvider(driver, params, search).typeDefinitions()
++      PcTiming.timed(driver, "typeDefinition")(PcDefinitionProvider(driver, params, search).typeDefinitions())
+     }(using params.toQueryContext)
+ 
+   def documentHighlight(
+@@ -524,7 +536,7 @@ case class ScalaPresentationCompiler(
+       params.token()
+     ) { access =>
+       val driver = access.compiler()
+-      HoverProvider.hover(params, driver, search, config.hoverContentType())
++      PcTiming.timed(driver, "hover")(HoverProvider.hover(params, driver, search, config.hoverContentType()))
+     }(using params.toQueryContext)
+   end hover
+ 
+@@ -584,7 +596,7 @@ case class ScalaPresentationCompiler(
+       params.token()
+     ) { access =>
+       val driver = access.compiler()
+-      SignatureHelpProvider.signatureHelp(driver, params, search)
++      PcTiming.timed(driver, "signatureHelp")(SignatureHelpProvider.signatureHelp(driver, params, search))
+     }(using params.toQueryContext)
+ 
+   override def didChange(
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
 index b58ca32981..b3423e9fb6 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
@@ -2692,10 +2749,10 @@ index 0000000000..32a2652754
 +          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
 new file mode 100644
-index 0000000000..39ea1e05fc
+index 0000000000..9dc0967908
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,177 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2820,6 +2877,10 @@ index 0000000000..39ea1e05fc
 +          // which completes the session; the answers after it must still match
 +          driver.runUpTo(uri, source, Span(o)); driver.run(uri, source)
 +          log += s"$step run (whole file) run=${driver.runIdOf(uri)} fully=${driver.isFullyTyped(uri)}"
++          // the completed tree must hold every statement: identifiers never asked before
++          for _ <- 1 to 5 do
++            val (p, pn) = idents(rng.nextInt(idents.size))
++            check(step, "after-run", p, pn)
 +        if step % cancelEvery == 0 then
 +          val k = 1 + rng.nextInt(3)
 +          var p = 0
