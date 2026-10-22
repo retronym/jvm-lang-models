@@ -175,6 +175,15 @@ The method's value is in its error correction. Four cases from Track I.
 
 A fifth, smaller: the taint theorem for ranked rules that §5 of the track note asked for turned out to be empty ([`forcePeek_ok`](../packages/query/Query/Interrupt.lean#L467): under ranked rules no peek sees a fact in progress), and the useful statement was the unranked one. *Rule: when a planned theorem is vacuous, say so in the note and keep the theorem; a vacuous theorem is a finding about the question.*
 
+## 5. A reusable skill
+
+The method as a Claude Code skill is drafted at [`skills/distil-and-model/SKILL.md`](skills/distil-and-model/SKILL.md), with [a README](skills/distil-and-model/README.md) on when not to use it. It lives under `docs/` because `.claude/` is ignored by this repository's `.gitignore`; to enable it, copy or symlink the folder to `.claude/skills/distil-and-model`. It is a draft: it has not been exercised on a track other than the one it was written from, and it should be read beside this page first. Its shape:
+
+* **Trigger.** A real system (a compiler, a build tool, an IDE) and a bug, PR or design question about one *mechanism* of it: something with state, an order and an invariant, that a test suite exercises at a few points and a design review argues about.
+* **Rungs**, each with the questions to answer before moving on, and the artefact that answers them: the survey note; the toy with its harness; the kernels table; the Lean modules; the conformance theorem; the space; the findings rows; the dashboard rows.
+* **Checks.** `lint_links.py`; the conformance theorem by `decide +kernel`; "results are a theorem" after every change to either side; a confirmation on the real system is two runs on a named commit.
+* **Stop conditions.** When a rung's question is answered by reading alone, stop there and write the finding. When the toy cannot hold the mechanism without the feature it left out, stop and say what the next toy needs. When the real system's test cannot be written, the prediction stays in triage.
+
 ## 6. What the method cannot do
 
 The toy abstracts, and the abstraction is the claim. Track I's toy has no expressions, no trees with positions, no edits inside a body, no runs with identity, no attachments on untyped trees and no import search; the three findings the dotc spikes added (I7, I8, I9) are each in one of those gaps, and the toy could not have made them. The model sees less than the toy: it keys facts by name where scalac reuses symbols, it has only the scalac kernel, and its executable semantics decides the seven scenarios and not the one the space cares about. Neither sees cost: the work column ranks designs and measures nothing. And both are written by the same hands from the same reading, so their agreement is not evidence; only the real system's tests are, and a prediction without one is a row in triage.
