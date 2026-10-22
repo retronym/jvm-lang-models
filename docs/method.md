@@ -109,14 +109,14 @@ flowchart TB
   classDef model fill:#e6f4e6,stroke:#2e7d32,color:#000
   classDef reg fill:#f5f0e1,stroke:#8a6d1f,color:#000
 
-  R["<b>Real system</b><br/>scalac src/interactive, scala/scala#11328<br/>dotc InteractiveDriver, Metals CompilerAccess<br/>IntelliJ RecursionManager"]:::real
+  R["<b>Real system</b><br/>scalac src/interactive, scala/scala PR 11328<br/>dotc InteractiveDriver, Metals CompilerAccess<br/>IntelliJ RecursionManager"]:::real
   S["<b>Survey</b><br/>track-i.md §2: three designs, one table"]:::real
   T["<b>Toy of the mechanism</b><br/>probes/interrupt: Ast, Global, scenarios/*.toy"]:::toy
   K["<b>Kernels + harness</b><br/>Scala2Kernel, Scala3Kernel, PsiKernel<br/>Harness.java → results.txt"]:::toy
   M["<b>Model</b><br/>Query/Interrupt.lean (theory)<br/>ToyNamer.lean, ToyKernel.lean (the toy, ported)"]:::model
   C{"<b>Conformance</b><br/>results_before_after_proposed<br/>caseClassCompletion_trace"}:::model
   SP["<b>Spaces</b><br/>ToySpace.lean: 1,372 scenarios"]:::model
-  P["<b>Projection</b><br/>tests on the PR's head, #12's patch<br/>dotc-cancellation.patch, dotc-session.patch"]:::real
+  P["<b>Projection</b><br/>tests on the PR's head, the scalac patch<br/>dotc-cancellation.patch, dotc-session.patch"]:::real
   F["<b>Register and dashboard</b><br/>findings.md I1–I9, theorems.md, status.md"]:::reg
 
   R --> S --> T --> K --> M --> C --> SP --> P
