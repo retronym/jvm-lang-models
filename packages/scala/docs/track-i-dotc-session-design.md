@@ -179,7 +179,24 @@ What is already wired, and what a real session with VS Code needs.
 - Kotlin's `LazyResolveToken`/`ResolveSession` in the K1 frontend: resolve per declaration on demand with a session per module, no typed-tree splicing (bodies are resolved into a `BindingContext` keyed by element).
 - The Lean model: [`Interrupt.lean`](../../query/Query/Interrupt.lean) for abort and `Touched` ([`abort_touched`](../../query/Query/Interrupt.lean#L269), [`touched_stays_cyclic`](../../query/Query/Interrupt.lean#L287)), its `psi` mode for rule 3, finding I4 for what bending rule 2 costs; [`Revision.lean`](../../query/Query/Revision.lean) for the facts-that-outlive-runs step this session is the precursor of.
 
-## 9. Open questions
+## 9. Which findings are general
+
+Not all of the register's rows are about this spike. Sorted by what they affect before any of it:
+
+Checked on an unmodified checkout at the base commit with [`StockFindingsSuite`](../probes/interrupt/xray/StockFindingsSuite.scala) (copied beside the x-ray; it runs in `presentation-compiler/test` of a stock worktree): the two candidates that looked general were not.
+
+**The stock compiler and Metals today.**
+- I7, *not* as first described: a sourcepath member first completed in a run later than the one that entered it is typed correctly on stock (`greetAlpha: Int`; the loader re-enters the file per run). The `UnspecifiedErrorType` is reached only when an abort unwinds through the entering run, which leaves the file's Namer completers behind. Stock mechanism, reached by the spike.
+- I10: the run id is 16 bits and nothing guards it; a long-lived driver overflows it into the phase bits.
+- I11: nothing polls for cancellation inside implicit search; before the spike nothing polled anywhere in the typer, so this is one instance of the general one (the stock driver's cancellation consumes the interrupt bit and never unwinds, §4).
+- I12: a completion through mtags costs 115–176 ms on the 400-object file however little the compiler does; whole-file runs hide it behind the compile.
+- I15: an empty completion prefix uses `freshDriver()`, so the most common member completion never benefits from the caching driver.
+- I16, the leak half, *not* reproduced on stock: after a `1.` completion no member or type parameter of `List`, `IterableOnceOps`, `IterableOnce`, `IterableOps`, `RichInt`, `StringOps`, `StepperShape` or `Stepper` is left `isCompleting`, and a second completion lists the same 184 items. The 172 preventions the patched suite counts may be of the patched build's own making, or on symbols that scan does not reach; open.
+- I4 (IntelliJ) and I1, I2 (scalac) are general to their compilers, from the earlier phases of Track I.
+
+**Consequences of targeting, resumption or abort, which a whole-file run per request never meets:** I8 (an untyped tree is consumed by typing), I13 (four facts obtained from typing a sibling), I14 (the restored context older than the symbol table after an abort), I17 (skipped statements' completers in a later run), I19 (spans compared across sources). Each is a design constraint on any resumable or targeted typer rather than a bug in the current one; I18 is open and may belong to either list.
+
+## 10. Open questions
 
 - The suite found three services that read the typed tree's shape rather than symbols: the scaladoc template of the following definition (handled by scalac's whole-list rule), the auto-import insertion point (handled by never skipping package clauses), and whatever the remaining failures of the wider completion suites turn out to be (the register has the current state). Each is a place where "the typed tree is a value" is less true than it looks: the tree's *shape* is consulted as state.
 - A resume types a statement whose siblings were typed in the same run but earlier: the `TyperState` and constraint state are not threaded between top-level statements today either, but a nested statement's `NotNullInfo` is; the rule excludes blocks for that reason, and whether any template-level state is threaded in a way a later resume would miss is checked only by the suites.
