@@ -333,7 +333,9 @@
     lineMarks = []; if (!loadFile.keepXray) $('xray').innerHTML = file
       ? emptyState(`${file.split('/').pop()} is open`, `${esc(file)} (${cm.lineCount()} lines). Place the cursor inside a method body and press Complete: only the path to the cursor is typed, against the compiler's own classes; the rest of the file stays untyped (grey).`)
       : emptyState('The generated file is open', 'Place the cursor inside a method and press Complete, or run a demo.');
-    if (file) gotoFirstMethodBody(); else gotoObject(10);
+    if (loadFile.at) { const at = loadFile.at; loadFile.at = null; cm.setCursor(at); cm.scrollIntoView(null, 120); cm.focus(); showCursor(); }
+    else if (file) gotoFirstMethodBody(); else gotoObject(10);
+    syncUrl();
   }
   try {
     const fl = await (await fetch('/files')).json();
@@ -361,6 +363,26 @@
   const offsetOf = () => cm.indexFromPos(cm.getCursor());
   const showCursor = () => { const p = cm.getCursor(); $('cur').textContent = `${p.line + 1}:${p.ch + 1} (offset ${offsetOf()})`; };
   cm.on('cursorActivity', showCursor); showCursor();
+  // ---- the open file and the cursor in the URL (?file=<path>&at=<line>:<col>), so that a place is bookmarkable
+  function syncUrl() {
+    const p = cm.getCursor(), q = new URLSearchParams();
+    if (currentFile) q.set('file', currentFile);
+    q.set('at', `${p.line + 1}:${p.ch + 1}`);
+    history.replaceState(null, '', location.pathname + '?' + q.toString());
+  }
+  let urlTimer = null;
+  cm.on('cursorActivity', () => { clearTimeout(urlTimer); urlTimer = setTimeout(syncUrl, 300); });
+  async function openFromUrl() {
+    const q = new URLSearchParams(location.search), file = q.get('file') || '', m = /^(\d+)(?::(\d+))?$/.exec(q.get('at') || '');
+    const at = m ? { line: Math.max(0, +m[1] - 1), ch: m[2] ? Math.max(0, +m[2] - 1) : 0 } : null;
+    const row = file ? document.querySelector(`#tree .file[data-file="${CSS.escape(file)}"]`) : null;
+    if (file && !row) return;
+    if (row) { for (let d = row.parentElement; d; d = d.parentElement) if (d.classList && d.classList.contains('dir')) d.classList.add('open'); }
+    if (at) loadFile.at = at;
+    if (file) { nav.moving = true; try { await loadFile(file); } finally { nav.moving = false; } if (row) row.scrollIntoView({ block: 'center' }); }
+    else if (at) { cm.setCursor(at); cm.scrollIntoView(null, 120); showCursor(); syncUrl(); }
+  }
+  await openFromUrl();
 
   function gotoObject(i) {
     const text = cm.getValue(), at = text.indexOf(`object M${i} {`);
