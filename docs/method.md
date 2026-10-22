@@ -132,3 +132,60 @@ flowchart TB
 ```
 
 Red is the real system and what is done to it, blue the Java toy, green the Lean model, the register in parchment. The solid spine is the order the rungs were climbed. The dotted edges are the two feedback loops: from the model back to the toy (a conformance disagreement or a space result that reveals a wrong claim about the real system) and from the toy and the model forward to the real system (a prediction that becomes a test, a theorem that names a line of platform code). Every rung writes to the register.
+
+## 3. Established terms, and where this differs
+
+Each rung is a known technique; the combination and two reversals are what is particular here.
+
+**Differential testing** [McKeeman 1998; Yang et al. 2011]. Several implementations of one specification are run on the same inputs and their disagreements are the bugs. The kernels under one harness (§1.4) are differential testing of *designs*, with the toy's reference answer, the request served after the background, as a fourth implementation. The reversal: the implementations are not independent systems but kernels written by one person from a survey, so a disagreement among them is informative and an agreement is not, which is why the real system is kept as the reference above them.
+
+**Bounded exhaustive testing** [Runciman et al. 2008; Boyapati et al. 2002]. Every input up to a size bound, rather than random inputs [Claessen and Hughes 2000]. The space (§1.7) is SmallCheck's method on the menu, and the harness's injection at every safepoint is the same method over interleavings. Metamorphic testing [Chen et al. 1998] names the oracle the harness uses: the answer must not change when the request moves from after the background to a safepoint inside it, a relation between runs rather than an expected output.
+
+**Golden models and co-simulation.** In hardware verification a reference model of the design, usually behavioural and untimed, runs beside the register-transfer design on the same stimulus, and a scoreboard compares them transaction by transaction. The conformance theorem (§1.6) is that scoreboard with the Lean kernel as the golden model, run once over the committed `results.txt`. The difference: here neither side is golden. The hardware flow trusts the reference model and debugs the design; this method debugs both, and the reversal has already paid, since three of the four disagreements were the toy's.
+
+**Executable semantics and runnable specifications** [Roşu and Şerbănuţă 2010; Fuchs 1992; Hayes and Jones 1989]. The K framework's position is that a semantics should be executable so that it can be tested; Hayes and Jones's is that an executable specification is biased towards one implementation. Both apply. `rulesOf` and `ToyKernel` are executable, so `decide` and `#eval` test them against the toy, and they are biased towards scalac's kernel, which is why the dotc and PSI kernels are a future-work item and not a theorem.
+
+**Lightweight formal methods** [Jackson 2012; Newcombe et al. 2015]. A partial model, analysed exhaustively within a small scope, on the bet that most bugs have small witnesses. The scope here is the menu and the safepoint budget; I5's witness is two declarations and one completion. Amazon's experience that engineers find TLA+ worth its cost once it finds a bug a test suite missed is the experience of §1.7: the targeting gap had passed every test in the PR. Model checking proper [Clarke et al. 1999] is what `decide +kernel` over the harness amounts to: a finite state space explored exhaustively, with the theorem prover as the checker.
+
+**Refinement** [Abrial 2010; Back and von Wright 1998; Spivey 1992]. A chain of models, each more concrete, with a proof that each refines the last. The ladder is a refinement chain climbed from the wrong end: the real system is the most concrete, the toy abstracts it, the model abstracts the toy, and the theory of [`Query/Interrupt.lean`](../packages/query/Query/Interrupt.lean) abstracts the model. The reversal is that the definitions are *derived from the toy*, not from a specification; the method is for a system that has no specification of the mechanism, which is the usual case for a compiler's internals. Mechanised metatheory [Aydemir et al. 2005] is the version of this for a language with a specification, and its lesson, that the binding structure costs more than the theorems, has its counterpart here in the port's choice to key facts by name.
+
+**Reference models of a computation** [Mokhov et al. 2018]. Build Systems à la Carte models seven build systems as instances of one `Task` type and compares them on the same axis. Track L's facts are its `Task`, and the kernels are its instances; the method is what that paper does, with a harness and a space added.
+
+**Minimal reproductions** [Zeller and Hildebrandt 2002]. A bug report wants the smallest input that shows the failure. Delta debugging finds it by shrinking; the toy finds it by construction, since the language has nothing to remove, and the space finds the smallest scenario of each shape by enumerating from small to large. I1's test on scalac is the toy's scenario rewritten in Scala, which is what a toy is for.
+
+**Programming as theory building** [Naur 1985]. The knowledge that matters about a program is the theory its builders hold, not the text. The survey (§1.2) recovers a theory from the text of three systems; the toy is that theory made executable; the model is the theory stated so that it can be wrong. Brooks's advice to plan to throw one away [Brooks 1995, ch. 11] is about the pilot system; the toy is a pilot system that is kept, because its job is to be held to the real one, not to grow into it. Steele and Sussman's interpreters [Steele and Sussman 1978; Abelson and Sussman 1996] are the precedent for a toy of a mechanism: an evaluator a page long that exhibits the design choice under study and nothing else.
+
+**Ladders of abstraction, sketches.** Victor's essay [Victor 2011] on moving up and down between a concrete run and the space of all runs is the experience of §1.7 against §1.4: one scenario, then every scenario, then the one that matters. Buxton's distinction between a sketch and a prototype [Buxton 2007], that a sketch is cheap, disposable and asks a question, is the toy's relation to the real system; the model is where the sketch stops being disposable.
+
+**Parallels that are exact.** Scale models in a wind tunnel are valid where the dimensionless groups match [Buckingham 1914]; the toy is valid where the invariants over mutable state match, which is why its symbol table and `signalDone` are copied and its expressions are not. A compartment model of an epidemic [Kermack and McKendrick 1927] against an agent-based simulation is the model against the toy: the first is solvable and says what holds for every population of its kind, the second runs one population and says what happened. A toy model in physics is kept because it is exactly solvable and shares the mechanism, not the detail, which is the sense in which `ToyKernel` is a toy.
+
+**Where the method differs, in four lines.** The toy is of the *mechanism*, not the language, so it stays small enough to enumerate and the language is cut to what the mechanism touches. The model is *derived from the toy*, not from a specification, because the mechanism has none. Conformance runs in *both directions*: the real system is the reference, and the toy and the model check each other beneath it. The *findings are the product*: a theorem that names no finding, and a finding with no test on the real system, are both unfinished.
+
+## References
+
+* Abelson, H., Sussman, G. J., with Sussman, J. (1996). *Structure and Interpretation of Computer Programs*, 2nd ed. MIT Press. The metacircular evaluator: a page-long interpreter that exhibits one design choice.
+* Abrial, J.-R. (2010). *Modeling in Event-B: System and Software Engineering*. Cambridge University Press. Refinement as a chain of models with proof obligations between them.
+* Aydemir, B. E., Bohannon, A., Fairbairn, M., Foster, J. N., Pierce, B. C., Sewell, P., Vytiniotis, D., Washburn, G., Weirich, S., Zdancewic, S. (2005). Mechanized metatheory for the masses: the POPLmark challenge. *TPHOLs 2005*.
+* Back, R.-J., von Wright, J. (1998). *Refinement Calculus: A Systematic Introduction*. Springer.
+* Boyapati, C., Khurshid, S., Marinov, D. (2002). Korat: automated testing based on Java predicates. *ISSTA 2002*. Bounded exhaustive generation of structures from a predicate.
+* Brooks, F. P. (1995). *The Mythical Man-Month*, anniversary ed. Addison-Wesley. Chapter 11, "Plan to throw one away".
+* Buckingham, E. (1914). On physically similar systems: illustrations of the use of dimensional equations. *Physical Review* 4(4). Similitude: when a scale model is valid.
+* Buxton, B. (2007). *Sketching User Experiences: Getting the Design Right and the Right Design*. Morgan Kaufmann. Sketches against prototypes.
+* Chen, T. Y., Cheung, S. C., Yiu, S. M. (1998). Metamorphic testing: a new approach for generating next test cases. Technical report HKUST-CS98-01, Hong Kong University of Science and Technology.
+* Claessen, K., Hughes, J. (2000). QuickCheck: a lightweight tool for random testing of Haskell programs. *ICFP 2000*.
+* Clarke, E. M., Grumberg, O., Peled, D. A. (1999). *Model Checking*. MIT Press.
+* Fuchs, N. E. (1992). Specifications are (preferably) executable. *Software Engineering Journal* 7(5).
+* Hayes, I. J., Jones, C. B. (1989). Specifications are not (necessarily) executable. *Software Engineering Journal* 4(6).
+* Jackson, D. (2012). *Software Abstractions: Logic, Language, and Analysis*, revised ed. MIT Press. Alloy and the small-scope hypothesis.
+* Kermack, W. O., McKendrick, A. G. (1927). A contribution to the mathematical theory of epidemics. *Proceedings of the Royal Society A* 115(772). The compartment model.
+* McKeeman, W. M. (1998). Differential testing for software. *Digital Technical Journal* 10(1).
+* Mokhov, A., Mitchell, N., Peyton Jones, S. (2018). Build systems à la carte. *ICFP 2018*; journal version *JFP* 30, 2020.
+* Naur, P. (1985). Programming as theory building. *Microprocessing and Microprogramming* 15(5).
+* Newcombe, C., Rath, T., Zhang, F., Munteanu, B., Brooker, M., Deardeuff, M. (2015). How Amazon Web Services uses formal methods. *Communications of the ACM* 58(4).
+* Roşu, G., Şerbănuţă, T. F. (2010). An overview of the K semantic framework. *Journal of Logic and Algebraic Programming* 79(6).
+* Runciman, C., Naylor, M., Lindblad, F. (2008). SmallCheck and Lazy SmallCheck: automatic exhaustive testing for small values. *Haskell Symposium 2008*.
+* Spivey, J. M. (1992). *The Z Notation: A Reference Manual*, 2nd ed. Prentice Hall.
+* Steele, G. L., Sussman, G. J. (1978). The art of the interpreter, or, the modularity complex (parts zero, one, and two). MIT AI Memo 453.
+* Victor, B. (2011). Up and down the ladder of abstraction. Essay, worrydream.com.
+* Yang, X., Chen, Y., Eide, E., Regehr, J. (2011). Finding and understanding bugs in C compilers. *PLDI 2011*. Csmith: differential testing of compilers with generated programs.
+* Zeller, A., Hildebrandt, R. (2002). Simplifying and isolating failure-inducing input. *IEEE Transactions on Software Engineering* 28(2). Delta debugging.
