@@ -31,7 +31,7 @@ index db34dbc88e..d196455401 100644
    def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
      val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
 diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
-index 2fdf622325..ac6937e61a 100644
+index 2fdf622325..585e81212f 100644
 --- a/compiler/src/dotty/tools/dotc/Run.scala
 +++ b/compiler/src/dotty/tools/dotc/Run.scala
 @@ -32,6 +32,7 @@ import java.io.{BufferedWriter, OutputStreamWriter}
@@ -42,7 +42,7 @@ index 2fdf622325..ac6937e61a 100644
  import scala.io.Codec
  
  import Run.Progress
-@@ -231,6 +232,92 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -231,6 +232,104 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
    def canProgress()(using Context): Boolean =
      foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
  
@@ -85,6 +85,18 @@ index 2fdf622325..ac6937e61a 100644
 +  val cyclesPrevented: ListBuffer[Symbol] = ListBuffer.empty
 +  val completionsUnwound: ListBuffer[(Symbol, Throwable)] = ListBuffer.empty
 +  val leaksHealed: ListBuffer[Symbol] = ListBuffer.empty
++
++  /** The symbols whose completion a `CancelledCompilation` unwound through
++   *  (recorded by `SymDenotation.completeFrom`), innermost first. A Namer
++   *  completer that was unwound can not be run again: a method's completer
++   *  had entered its parameters in the nested typer's scope and typed some
++   *  ahead (a retry enters `T$1` next to `T` and the signature mixes the
++   *  two); a class completer had set the class's temporary info, so the
++   *  class is `isCompleted` without parents and is never retried. The
++   *  driver replaces the statement that defines each one in the session, or
++   *  poisons the session (`InteractiveDriver.replaceUnwound`).
++   */
++  val cancelledCompletions: ListBuffer[Symbol] = ListBuffer.empty
 +
 +  /** The symbols whose completion is in progress (interactive mode only): a
 +   *  `Touched` flag on a symbol not in this set is a leak from an earlier
@@ -135,7 +147,7 @@ index 2fdf622325..ac6937e61a 100644
    def doAdvanceUnit()(using Context): Unit =
      trackProgress: progress =>
        progress.currentUnitCount += 1 // trace that we completed a unit in the current (sub)phase
-@@ -636,6 +723,44 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -636,6 +735,44 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
  }
  
  object Run {
@@ -234,10 +246,10 @@ index 36c16d9769..addd278b98 100644
        }
        myTree.asInstanceOf[Tree]
 diff --git a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
-index 4d2fa848c2..6dc3eabece 100644
+index 4d2fa848c2..180fbcfe5b 100644
 --- a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
 +++ b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
-@@ -153,28 +153,108 @@ object SymDenotations {
+@@ -153,28 +153,113 @@ object SymDenotations {
            println(i"${"  " * indent}completing ${if (isType) "type" else "val"} $name")
            indent += 1
  
@@ -333,6 +345,11 @@ index 4d2fa848c2..6dc3eabece 100644
 +      ex match
 +        case _: CompilationUnit.CancelledCompilation =>
 +          untouchIfIncomplete()
++          // whether complete or not: a class completer sets the temporary
++          // info before it types the parents, and the class is then
++          // `isCompleted` with that info (see `Run.cancelledCompletions`)
++          val run = ctx.run
++          if run != null then run.cancelledCompletions += symbol
 +          true
 +        case _: CyclicReference =>
 +          if ctx.mode.is(Mode.Interactive) then untouchIfIncomplete()
@@ -349,7 +366,7 @@ index 4d2fa848c2..6dc3eabece 100644
  
      protected[dotc] def info_=(tp: Type): Unit = {
        /* // DEBUG
-@@ -1845,6 +1925,43 @@ object SymDenotations {
+@@ -1845,6 +1930,43 @@ object SymDenotations {
              c.ensureCompleted()
        end completeChildrenIn
  
@@ -393,7 +410,7 @@ index 4d2fa848c2..6dc3eabece 100644
        if is(Sealed) || isAllOf(JavaEnum) && isClass then
          if !is(ChildrenQueried) then
            // Make sure all visible children are completed, so that
-@@ -1852,6 +1969,7 @@ object SymDenotations {
+@@ -1852,6 +1974,7 @@ object SymDenotations {
            // is defined in the same scope as `cls` or in the companion object of `cls`.
            completeChildrenIn(owner)
            completeChildrenIn(companionClass)
@@ -451,7 +468,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..36a6ff913f 100644
+index 5b78dc804b..c170a66cb5 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -514,7 +531,7 @@ index 5b78dc804b..36a6ff913f 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,448 @@ class InteractiveDriver(
+@@ -78,37 +107,498 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -537,6 +554,7 @@ index 5b78dc804b..36a6ff913f 100644
 +  private def completeSession(s: Session): List[Diagnostic] =
 +    logged(s"run ${fileNameOf(s.uri)} (completes the session)")({
 +      myCancelled = false
++      s.run.cancelledCompletions.clear()
 +      while s.skipped.nonEmpty do
 +        val batch = s.skipped.sortBy(_.stat.span.start)
 +        s.skipped = Nil
@@ -554,7 +572,7 @@ index 5b78dc804b..36a6ff913f 100644
 +              // or poisons the session, as in a resume
 +              s.reporter.removeBufferedMessages(using sk.ctx)
 +              s.skipped = s.skipped ++ batch.dropWhile(_ ne sk).drop(1)
-+              if !replacePoisoned(s, sk) then s.poisoned = true
++              if !replacePoisoned(s, sk) || !replaceUnwound(s, sk.stat.span)(using sk.ctx) then s.poisoned = true
 +              throw ex
 +        finally
 +          val entries = typed.result()
@@ -721,6 +739,7 @@ index 5b78dc804b..36a6ff913f 100644
 +   */
 +  private def resume(s: Session, sk: Run.SkippedStat, target: Span): List[Diagnostic] =
 +    myCancelled = false
++    s.run.cancelledCompletions.clear()
 +    s.skipped = s.skipped.filterNot(_ eq sk)
 +    s.run.skippedStats.clear()
 +    s.run.typingTarget = target
@@ -739,7 +758,7 @@ index 5b78dc804b..36a6ff913f 100644
 +      // Whatever was typed before the abort stays typed; the statements
 +      // skipped inside the aborted one are its own and go with it.
 +      s.reporter.removeBufferedMessages(using sk.ctx)
-+      if !replacePoisoned(s, sk) then s.poisoned = true
++      if !replacePoisoned(s, sk) || !replaceUnwound(s, sk.stat.span)(using sk.ctx) then s.poisoned = true
 +      throw ex
 +    finally
 +      s.run.typingTarget = NoSpan
@@ -789,14 +808,56 @@ index 5b78dc804b..36a6ff913f 100644
 +      case Some(stat) =>
 +        val cls = (if sk.owner.isClass then sk.owner else sk.owner.owner).asClass.classDenot
 +        val file = s.unit.source.file
-+        for sym <- cls.info.decls.toList do
-+          if sym.span.exists && stat.span.contains(sym.span) && sym.associatedFile == file then
-+            cls.delete(sym)
++        val old = cls.info.decls.toList.filter(sym => sym.span.exists && stat.span.contains(sym.span) && sym.associatedFile == file)
++        // A given or implicit is held by the `ContextualImplicits` cached on
++        // the session's contexts (and by the run's implicit scopes), by
++        // symbol: a fresh symbol would not be found, and the old one is
++        // what is being replaced. The session is poisoned instead.
++        if old.exists(definesImplicit) then return false
++        old.foreach(cls.delete)
 +        ctx.typer.index(stat :: Nil)
 +        s.skipped = Run.SkippedStat(stat, sk.ctx, sk.owner) :: s.skipped
 +        true
 +      case None =>
 +        false
++
++  /** Is `sym` a given or implicit, or a class or object whose indexed
++   *  members (nested ones included) hold one.
++   */
++  private def definesImplicit(sym: Symbol)(using Context): Boolean =
++    sym.isOneOf(Flags.GivenOrImplicit)
++    || sym.is(Flags.ModuleClass) && sym.sourceModule.isOneOf(Flags.GivenOrImplicit)
++    || sym.isClass && sym.asClass.unforcedDecls.exists(definesImplicit)
++
++  /** The symbols whose completion the cancellation unwound through
++   *  (`Run.cancelledCompletions`): a Namer completer that was unwound can
++   *  not be run again (a method's had entered its parameters in the nested
++   *  typer's scope; a class's had set the temporary info, and the class is
++   *  `isCompleted` without parents), and the statement that defines each
++   *  one is replaced like the aborted statement itself (`replacePoisoned`),
++   *  or the session is poisoned: a symbol of this file in no skipped
++   *  statement (a local of a block, a member of a companion). The symbols
++   *  of other files (the classpath's loaders leave their roots loadable
++   *  again; a sourcepath file's completers are finding I7) are left alone.
++   *  `replaced` is the span of the aborted statement, replaced already.
++   *  Returns false when the session is to be poisoned.
++   */
++  private def replaceUnwound(s: Session, replaced: Span)(using Context): Boolean =
++    val syms = s.run.cancelledCompletions.toList
++    s.run.cancelledCompletions.clear()
++    val file = s.unit.source.file
++    var done = List(replaced)
++    var ok = true
++    for sym <- syms if ok && sym.exists && sym.associatedFile == file do
++      if !sym.span.exists then ok = false
++      else if !done.exists(_.contains(sym.span)) then
++        s.skipped.find(_.stat.span.contains(sym.span)) match
++          case Some(sk) =>
++            s.skipped = s.skipped.filterNot(_ eq sk)
++            if replacePoisoned(s, sk) then done = sk.stat.span :: done
++            else ok = false
++          case None => ok = false
++    ok
 +
 +  /** Complete every symbol of the skipped statements of `s`, in the run
 +   *  that created their completers: the statement's own symbols, then the
@@ -831,8 +892,14 @@ index 5b78dc804b..36a6ff913f 100644
 +        }
 +      case _ =>
 +        tree.getAttachment(namer.SymOfTree).foreach(_.ensureCompleted())
-+    s.skipped.foreach(sk => walk(sk.stat))
-+    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
++    s.run.cancelledCompletions.clear()
++    try s.skipped.foreach(sk => walk(sk.stat))
++    catch case ex: CompilationUnit.CancelledCompilation =>
++      // the session is kept (the walk runs again when a file is next left),
++      // with the statements of the unwound completers replaced
++      if !replaceUnwound(s, NoSpan) then s.poisoned = true
++      throw ex
++    finally s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
 +
 +  /** Insert the typed `stats` into the statements of their owner in the
 +   *  unit's typed tree (the package for a package class, the template for
@@ -967,7 +1034,7 @@ index 5b78dc804b..36a6ff913f 100644
      }
    }
  
-@@ -140,13 +580,15 @@ class InteractiveDriver(
+@@ -140,13 +630,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -985,7 +1052,7 @@ index 5b78dc804b..36a6ff913f 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +620,6 @@ class InteractiveDriver(
+@@ -178,3 +670,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1762,10 +1829,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..fde95817e6
+index 0000000000..dd3df53a8b
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,596 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -2157,6 +2224,106 @@ index 0000000000..fde95817e6
 +    assert(skippedInInline == 0, "no statement of an inline method's body is skipped")
 +    assert(usedOk, "the request in the caller of the inline method is answered")
 +
++  /** Completions at `at` from the session, and from a fresh whole-file run of a new driver. */
++  private def completionsVsOracle(d: CachingDriver, uri: URI, src: SourceFile, at: Int): (List[String], List[String]) =
++    def labelsOf(driver: dotty.tools.dotc.interactive.InteractiveDriver): List[String] =
++      val unit = driver.compilationUnits(uri)
++      given dotty.tools.dotc.core.Contexts.Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(dotty.tools.dotc.core.Phases.typerPhase(using driver.currentCtx))
++      dotty.tools.dotc.interactive.Completion.completions(dotty.tools.dotc.util.SourcePosition(src, Span(at)))._2.map(_.label).sorted.distinct
++    d.runUpTo(uri, src, Span(at))
++    val session = labelsOf(d)
++    val fresh = new dotty.tools.dotc.interactive.InteractiveDriver(dotty.tools.pc.utils.TestingWorkspaceSearch(dotty.tools.pc.base.TestResources.classpath.map(_.toString)).settings, dotty.tools.dotc.interactive.CachedLogicalPackage.none)
++    fresh.run(uri, src)
++    (session, labelsOf(fresh))
++
++  @Test def `cancel-inside-a-sibling-completer` =
++    // The oracle's sequence on Contexts.scala (seed 1, step 14): a resume into
++    // `def set` forces the completer of its skipped sibling `update[T]`, and
++    // the cancellation lands inside that completer (its long signature). The
++    // resumed statement is replaced; the sibling must be too: its completer,
++    // retried, had entered `T$1` next to the `T` it entered before the abort
++    // ("T is already defined as type T"), and `update(...)` then failed to
++    // type against the mixed signature.
++    val params = (1 to 40).map(i => s"p$i: List[Map[T, T]]").mkString(", ")
++    val args = (1 to 40).map(_ => "Nil").mkString(", ")
++    val code =
++      s"""|object Store:
++          |  class Loc[T]
++          |  def set(x: Int): Int = update(new Loc[Int], x, $args).to
++          |  def update[T](loc: Loc[T], value: T, $params): Int = 1
++          |""".stripMargin
++    val uri = URI.create("file:///Sibling.scala")
++    val src = SourceFile.virtual(uri, code)
++    val atSet = code.indexOf("update(new") + 3
++    val atTo = code.indexOf(".to\n") + 3
++    val mask = dotty.tools.dotc.Run.typerCheckpointMask
++    dotty.tools.dotc.Run.typerCheckpointMask = 15
++    try
++      val (thrown, polls, run1, run2, skippedBefore, skippedAfter, session, oracle) = withDriver { d =>
++        d.runUpTo(uri, src, Span(code.indexOf("class Loc") + 8)) // set and update skipped
++        val run1 = d.runIdOf(uri)
++        val skippedBefore = d.untypedSpans(uri).size
++        var polls = 0
++        val thrown =
++          try { d.withCancelChecker(() => { if inTyperCheckpoint() then polls += 1; polls >= 2 }) { d.runUpTo(uri, src, Span(atSet)) }; false }
++          catch case _: CancelledCompilation => true
++        val skippedAfter = d.untypedSpans(uri).size
++        val (session, oracle) = completionsVsOracle(d, uri, src, atTo)
++        (thrown, polls, run1, d.runIdOf(uri), skippedBefore, skippedAfter, session, oracle)
++      }
++      println(s"[cancel-inside-a-sibling-completer] thrown=$thrown polls=$polls run=$run1->$run2 skipped=$skippedBefore->$skippedAfter; session: ${session.take(6)}; whole-file: ${oracle.take(6)}")
++      assert(thrown, "the cancellation must land")
++      assertEquals(run1, run2, "the session is kept: both statements are replaced")
++      assertEquals(skippedBefore, skippedAfter, "the aborted statement and the sibling are skipped again")
++      org.junit.Assert.assertEquals(oracle.mkString("\n"), session.mkString("\n"))
++    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
++
++  @Test def `cancel-inside-a-given-class-completer` =
++    // The shape of finding I18 (a given not found after a cancellation, in
++    // the same run): a cancellation lands inside the class completer of a
++    // given (its parents being typed) that an implicit search forced. The
++    // completer had set the class's temporary info, so the class is
++    // `isCompleted` without parents and is never retried, and
++    // `summon[Show[Int]]` finds no given for the rest of the run. A given is
++    // not replaced (the contexts' implicit caches hold it by symbol): the
++    // session is poisoned and the next request starts fresh. (A top-level
++    // given is a member of the synthetic package object, which is typed
++    // whole by the first request; one in an object is completed lazily.)
++    val markers = (1 to 40).map(i => s"trait M$i").mkString("\n")
++    val withs = (1 to 40).map(i => s"M$i").mkString(" with ")
++    val code =
++      s"""|trait Show[T]:
++          |  def show(t: T): String
++          |$markers
++          |object Givens:
++          |  given Show[Int] with $withs with
++          |    def show(t: Int) = t.toString
++          |object Infer:
++          |  import Givens.given
++          |  val d = summon[Show[Int]].sh
++          |  val e = 1
++          |""".stripMargin
++    val uri = URI.create("file:///GivenCompleter.scala")
++    val src = SourceFile.virtual(uri, code)
++    val atD = code.indexOf(".sh\n") + 3
++    val mask = dotty.tools.dotc.Run.typerCheckpointMask
++    dotty.tools.dotc.Run.typerCheckpointMask = 15
++    try
++      val (thrown, polls, run1, run2, session, oracle) = withDriver { d =>
++        d.runUpTo(uri, src, Span(code.indexOf("val e = 1") + 4)) // val d and Givens skipped
++        val run1 = d.runIdOf(uri)
++        var polls = 0
++        val thrown =
++          try { d.withCancelChecker(() => { if inTyperCheckpoint() then polls += 1; polls >= 2 }) { d.runUpTo(uri, src, Span(atD)) }; false }
++          catch case _: CancelledCompilation => true
++        val (session, oracle) = completionsVsOracle(d, uri, src, atD)
++        (thrown, polls, run1, d.runIdOf(uri), session, oracle)
++      }
++      println(s"[cancel-inside-a-given-class-completer] thrown=$thrown polls=$polls run=$run1->$run2; session: $session; whole-file: $oracle")
++      assert(thrown, "the cancellation must land")
++      org.junit.Assert.assertEquals(oracle.mkString("\n"), session.mkString("\n"))
++    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
++
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
 +    val heavy = Set(300)
@@ -2291,10 +2458,10 @@ index 0000000000..f6058c2407
 +    '{ 0 }
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSoakSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSoakSuite.scala
 new file mode 100644
-index 0000000000..ba796d121f
+index 0000000000..0a9ce23d74
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSoakSuite.scala
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,256 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2543,9 +2710,12 @@ index 0000000000..ba796d121f
 +   *  that match type shapes.Show[Int]") in the session's run, while the same
 +   *  request in a fresh run of the same driver finds `show`. Per-run state left
 +   *  by the earlier cancellations (steps 262 and 265); the givens' symbols are
-+   *  complete and whole. Kept as the reproduction; ignored until it is understood.
++   *  complete and whole. Not reproduced since (the landings shift between JVMs);
++   *  the completers the cancellations unwind in this file (`class Plain`'s, the
++   *  `apply`s', `val d`'s) are replaced or poison the session now
++   *  (`InteractiveDriver.replaceUnwound`), see
++   *  `CompletionSessionSuite.cancel-inside-a-given-class-completer`.
 +   */
-+  @org.junit.Ignore("finding I18: a given not found after cancellations and a replacement in the same run")
 +  @Test def `shapes-seed-2` = soak("shapes", shapesFile, 2, 300)
 +  @Test def `shapes-seed-3` = soak("shapes", shapesFile, 3, 300)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionDegradeSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionDegradeSuite.scala
@@ -2749,10 +2919,10 @@ index 0000000000..32a2652754
 +          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
 new file mode 100644
-index 0000000000..9dc0967908
+index 0000000000..f2f6e01e83
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
-@@ -0,0 +1,177 @@
+@@ -0,0 +1,180 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2924,9 +3094,12 @@ index 0000000000..9dc0967908
 +   *  hovered on. Finding I29: at step 169, after a cancellation at step 168
 +   *  landed in a resume (k=3) and the statement was replaced, a recheck of
 +   *  `commit(result)(using nestedCtx)` answers `<error unspecified error>`
-+   *  where the whole-file run has `Boolean`. Kept as the reproduction.
++   *  where the whole-file run has `Boolean`. The sequence of landings is not
++   *  reproducible across JVMs (the checkpoint counts typed trees, and the
++   *  classpath loading order shifts the count); the family of the failure
++   *  (a sibling's Namer completer unwound by the cancellation and retried)
++   *  is `CompletionSessionSuite.cancel-inside-a-sibling-completer`.
 +   */
-+  @org.junit.Ignore("finding I29: an unspecified error type after a cancellation and a replacement in Contexts.scala")
 +  @Test def `Contexts-seed-1` = oracle("core/Contexts.scala", 1, 300)
 +  @Test def `Contexts-seed-2` = oracle("core/Contexts.scala", 2, 160)
 +  @Test def `SimpleIdentityMap-seed-1` = oracle("util/SimpleIdentityMap.scala", 1, 300)
