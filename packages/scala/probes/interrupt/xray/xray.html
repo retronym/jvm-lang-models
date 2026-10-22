@@ -9,38 +9,74 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
 <style>
   /* palette and editor theme borrowed from greffier's viewer (retronym/greffier, viewer/index.html) */
-  :root { --bg:#f6f7f9; --panel:#fff; --fg:#1b1f24; --dim:#7a828e; --line:#dde1e7; --acc:#1c7ed6; --new:#d9f2d9; --newu:#2f9e44; --cur:#f08c00; --code:#f1f3f5;
-          --typed:#c7e9ff; --typednow:#b2f2bb; --untyped:#f1f3f5; --cancel:#ffe3e3; --cancelu:#e03131; --warn:#fff3bf; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --panel:#1c2027; --fg:#e4e7ec; --dim:#8b94a3; --line:#2c323c; --new:#1d3a22; --code:#252a33; --newu:#51cf66;
-          --typed:#1c3a52; --typednow:#1d4a2a; --untyped:#252a33; --cancel:#4a1d1d; --warn:#4a3a10; } }
+  :root { --bg:#f3f4f6; --panel:#fff; --fg:#1f2328; --dim:#6b7280; --line:#e2e5ea; --acc:#1c7ed6; --accsoft:#e7f1fc; --hover:#f0f2f5; --new:#d9f2d9; --newu:#2f9e44; --cur:#e8590c; --code:#f3f4f6;
+          --typed:#dbe9f8; --typednow:#d9f0dd; --untyped:#eceef2; --cancel:#fbe3e3; --cancelu:#d23b3b; --warn:#fdf0c7; --warnu:#8a5a00;
+          --r:6px; --font: 12.5px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --panel:#1b1f26; --fg:#e4e7ec; --dim:#8f98a6; --line:#2a303a; --accsoft:#1d3350; --hover:#242a34; --new:#1d3a22; --code:#232830; --newu:#51cf66;
+          --typed:#1f3a56; --typednow:#1f4630; --untyped:#2a2f38; --cancel:#4a2222; --warn:#4a3b14; --warnu:#f0c354; } }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
-  body { background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; display: flex; flex-direction: column; }
+  body { background: var(--bg); color: var(--fg); font: var(--font); display: flex; flex-direction: column; }
   code, pre, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 14px; margin: 0; }
+  code { font-size: 11.5px; }
   .dim { color: var(--dim); }
-  main { flex: 1; display: grid; grid-template-columns: 200px 5px minmax(380px, 1.1fr) 5px minmax(360px, 1fr) 5px minmax(320px, 0.9fr); min-height: 0; min-width: 0; }
+  svg.i { width: 16px; height: 16px; flex: none; vertical-align: -3px; }
+  button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); color: var(--fg); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; line-height: 18px; }
+  button:hover { background: var(--hover); border-color: var(--line); } button.primary { background: var(--acc); color: #fff; border-color: var(--acc); } button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.icon { padding: 4px 6px; } button.ghost { border-color: transparent; background: transparent; } button.ghost:hover { background: var(--hover); }
+  input[type=number] { width: 60px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); color: var(--fg); }
+  /* ---- frame: title bar, activity bar + three columns, bottom panel, status bar */
+  #titlebar { display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+  #titlebar h1 { font-size: 13px; font-weight: 600; margin: 0; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+  #titlebar .tagline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #busy { color: var(--cur); font-weight: 600; white-space: nowrap; }
+  #shell { flex: 1; display: flex; min-height: 0; }
+  #activity { width: 44px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 6px; border-right: 1px solid var(--line); background: var(--panel); }
+  #activity button { width: 34px; height: 34px; padding: 0; justify-content: center; border: 0; border-radius: var(--r); background: transparent; color: var(--dim); }
+  #activity button:hover { background: var(--hover); color: var(--fg); } #activity button.on { color: var(--acc); background: var(--accsoft); }
+  #activity .sp { flex: 1; }
+  main { flex: 1; display: grid; grid-template-columns: 230px 5px minmax(360px, 1.2fr) 5px minmax(320px, 1fr); min-height: 0; min-width: 0; }
+  body.sidebarHidden #explorer, body.sidebarHidden .gutter[data-i="0"] { display: none; }
   .gutter { cursor: col-resize; background: var(--line); touch-action: none; }
+  .gutter.h { cursor: row-resize; height: 5px; flex: none; }
   .gutter:hover, .gutter.active { background: var(--acc); }
-  main.logCollapsed > #logsec, main.logCollapsed > .gutter[data-i="2"] { display: none; }
-  footer#status { display: flex; gap: 18px; align-items: center; padding: 3px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 11px; white-space: nowrap; overflow: hidden; min-height: 24px; }
-  footer#status > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; } footer#status #stLast { flex: 1; } footer#status button { padding: 0 6px; font-size: 11px; }
-  footer#status #hoverState { max-width: 40%; }
-  #logToggle { float: right; padding: 0 6px; font-size: 11px; text-transform: none; letter-spacing: 0; }
-  #explorer { font-size: 12px; } #tree { padding: 4px 8px; }
-  #nav { margin-left: 10px; text-transform: none; letter-spacing: 0; } #nav button { padding: 0 7px; font-size: 11px; }
-  #tree .dir > .name { cursor: pointer; padding: 2px 4px; color: var(--fg); font-weight: 600; } #tree .dir > .name::before { content: '▸ '; color: var(--dim); } #tree .dir.open > .name::before { content: '▾ '; }
-  #tree .dir > .kids { display: none; padding-left: 12px; } #tree .dir.open > .kids { display: block; }
-  #tree .file { cursor: pointer; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; } #tree .file:hover { background: var(--code); } #tree .file.sel { background: var(--typed); }
-  section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
-  section:last-child { border-right: 0; }
-  section > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 0; padding: 8px 12px 4px; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); align-items: center; }
-  button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); cursor: pointer; }
-  button:hover { border-color: var(--acc); } button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
-  button:disabled { opacity: .5; cursor: default; }
-  input[type=number] { width: 64px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+  body.logCollapsed #logsec, body.logCollapsed .gutter[data-i="2"] { display: none; }
+  section { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--panel); }
+  section > h2, .ph { font-size: 12px; font-weight: 600; color: var(--fg); margin: 0; padding: 0 12px; height: 34px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); flex: none; }
+  .ph .sp { flex: 1; }
+  #xraysec { border-left: 0; }
+  /* ---- sidebar views */
+  #explorer .view { flex: 1; overflow: auto; min-height: 0; } #explorer .view[hidden] { display: none; }
+  #tree { padding: 6px 8px; font-size: 12px; }
+  #tree .row { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: var(--fg); }
+  #tree .row:hover { background: var(--hover); } #tree .row svg { color: var(--dim); }
+  #tree .dir > .name svg.chev { transition: transform .1s; } #tree .dir.open > .name svg.chev { transform: rotate(90deg); }
+  #tree .dir > .kids { display: none; padding-left: 14px; } #tree .dir.open > .kids { display: block; }
+  #tree .file.sel { background: var(--accsoft); color: var(--acc); } #tree .file.sel svg { color: var(--acc); }
+  #tree .snap { padding: 4px 6px 2px; }
+  #demos { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #demos p { margin: 0 4px 6px; }
+  #demos button.card { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 8px 10px; }
+  #demos button.card svg { margin-top: 1px; color: var(--acc); } #demos button.card b { display: block; font-weight: 600; } #demos button.card small { color: var(--dim); font-size: 11.5px; line-height: 1.35; display: block; }
+  /* ---- editor column: tab strip, command bar, notices, transcript, editor */
+  #tabs { display: flex; align-items: center; height: 34px; border-bottom: 1px solid var(--line); background: var(--bg); flex: none; padding-right: 6px; }
+  #tabs .tab { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 14px; background: var(--panel); border-right: 1px solid var(--line); border-top: 2px solid var(--acc); font-size: 12.5px; }
+  #tabs .tab svg { color: var(--dim); }
+  #tabs .sp { flex: 1; } #nav { display: flex; align-items: center; gap: 2px; } #navpos { margin: 0 6px; font-size: 11px; }
+  .cmdbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+  .cmdbar .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+  .cmdbar .sp { flex: 1; }
+  #advanced { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 6px 8px 2px; border-top: 1px dashed var(--line); margin-top: 2px; }
+  #advanced[hidden] { display: none; } #advanced label { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); }
+  #advToggle[aria-expanded="true"] { background: var(--hover); }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; padding: 0 4px; }
+  .toggle input { appearance: none; width: 28px; height: 16px; border-radius: 8px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+  .toggle input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .toggle input:checked { background: var(--acc); } .toggle input:checked::after { left: 14px; }
+  #latch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; background: var(--warn); color: var(--fg); border-bottom: 1px solid var(--line); flex: none; }
+  #latch[hidden] { display: none; }
   #ed { flex: 1; min-height: 0; }
   #ed .CodeMirror { height: 100%; background: #0f1520; color: #d4deef; font: 12px/17px ui-monospace, Menlo, monospace; }
   #ed .CodeMirror-gutters { background: #0f1520; border-right: 1px solid #222e43; } #ed .CodeMirror-linenumber { color: #4a586f; }
@@ -48,97 +84,130 @@
   #ed .cm-keyword { color: #c792ea; } #ed .cm-def { color: #82aaff; } #ed .cm-string { color: #c3e88d; } #ed .cm-number { color: #f78c6c; } #ed .cm-comment { color: #637088; }
   #ed .cm-type, #ed .cm-variable-3 { color: #82aaff; } #ed .cm-atom, #ed .cm-builtin { color: #f78c6c; }
   .line-typed { background: rgba(28,126,214,.18); } .line-typednow { background: rgba(47,158,68,.25); } .line-cancel { background: rgba(224,49,49,.25); }
-  .pad { padding: 8px 12px; overflow: auto; }
+  /* ---- the inspector */
+  .pad { padding: 10px 12px; overflow: auto; }
   #xray { flex: 1; overflow: auto; }
-  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; align-items: baseline; margin: 0 0 8px; }
-  .kv dt { color: var(--dim); } .kv dd { margin: 0; }
-  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
-  .o-served { background: var(--typed); } .o-resumed { background: var(--typednow); } .o-fresh { background: var(--warn); }
-  .o-full { background: var(--warn); } .o-cancelled-resume, .o-cancelled-fresh, .o-error { background: var(--cancel); color: var(--cancelu); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--dim); } .empty svg { width: 28px; height: 28px; color: var(--line); margin-bottom: 6px; }
+  .empty h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--fg); } .empty p { margin: 0; }
+  .outcome { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 10px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+  .o-served { background: var(--typed); } .o-resumed { background: var(--typednow); } .o-fresh, .o-full { background: var(--warn); color: var(--warnu); }
+  .o-cancelled-resume, .o-cancelled-fresh, .o-error { background: var(--cancel); color: var(--cancelu); }
   .same { color: var(--newu); font-weight: 600; } .changed { color: var(--cur); font-weight: 600; }
-  #stats { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 10px; }
-  .st { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--untyped); border: 1px solid transparent; cursor: pointer; }
+  .req { margin: 0 0 10px; padding: 6px 10px; background: var(--code); border-radius: var(--r); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 0 0 12px; }
+  .tile { padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+  .tile .v { font-size: 15px; font-weight: 600; line-height: 1.25; } .tile .l { color: var(--dim); font-size: 11px; margin-top: 1px; } .tile .d { color: var(--dim); font-size: 11px; margin-top: 3px; line-height: 1.35; }
+  .tile.wide { grid-column: 1 / -1; }
+  h4.sec { font-size: 12px; font-weight: 600; margin: 12px 0 4px; }
+  #stats { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 4px; }
+  .st { font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--untyped); border: 1px solid transparent; cursor: pointer; }
   .st.typed { background: var(--typed); } .st.partial { border-style: dashed; border-color: var(--dim); } .st sup { font-size: 9px; color: var(--dim); } .st.typed-now { background: var(--typednow); } .st.cursor { border-color: var(--cur); } .st.aborted { background: var(--cancel); color: var(--cancelu); }
-  .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin: 0 3px 0 8px; }
-  #log { flex: 1; overflow: auto; font-size: 12px; }
-  #log table { border-collapse: collapse; width: 100%; } #log td, #log th { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+  .legend { font-size: 11px; } .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin: 0 3px 0 8px; }
+  ul.compl { margin: 2px 0 8px; padding-left: 18px; max-height: 110px; overflow: auto; }
+  pre.hljs { margin: 4px 0 8px; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--line); font-size: 11px; max-height: 160px; overflow: auto; }
+  /* ---- bottom panel: request log and demo transcript as tabs */
+  #logsec { height: 220px; flex: none; border-top: 0; }
+  #logsec .ph { background: var(--panel); gap: 2px; padding-left: 8px; }
+  #logsec .ptab { border: 0; background: transparent; color: var(--dim); padding: 4px 10px; border-radius: var(--r); font-weight: 500; }
+  #logsec .ptab.on { color: var(--fg); background: var(--hover); } #logsec .ptab:disabled { opacity: .4; }
+  #log { flex: 1; overflow: auto; font-size: 12px; } #log[hidden] { display: none; }
+  #log table { border-collapse: collapse; width: 100%; } #log td, #log th { padding: 4px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
   #log th { color: var(--dim); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
   #log tr.cancelled td { color: var(--cancelu); } #log tr:first-child td { font-weight: 600; }
-  pre.hljs { margin: 4px 0 8px; padding: 6px 8px; border-radius: 6px; font-size: 11px; max-height: 120px; overflow: auto; }
-  #busy { color: var(--cur); font-weight: 600; }
+  #log .none { padding: 16px; }
+  #story { flex: 1; overflow: auto; padding: 8px 14px; } #story[hidden] { display: none; }
+  #story h3 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; } #story ol { margin: 0; padding-left: 22px; } #story li { margin: 0 0 6px; padding-left: 2px; }
+  #story .do { font-weight: 500; } #story .exp { color: var(--dim); } #story .res { margin-top: 1px; }
+  #story .ok { color: var(--newu); font-weight: 600; } #story .no { color: var(--cancelu); font-weight: 600; }
+  footer#status { display: flex; gap: 16px; align-items: center; padding: 0 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 11px; white-space: nowrap; overflow: hidden; height: 24px; flex: none; }
+  footer#status > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; } footer#status #stLast { flex: 1; } footer#status button { padding: 0 6px; font-size: 11px; line-height: 16px; }
+  footer#status #hoverState { max-width: 40%; }
+  /* ---- popups */
   #popup { position: fixed; z-index: 10; max-width: 560px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 8px 10px; font-size: 12px; pointer-events: none; }
   #popup .t { font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; } #popup .x { color: var(--dim); margin-top: 4px; }
   #popup.pending { border-color: var(--cur); } #popup.cancelled { border-color: var(--cancelu); }
   #menu { position: fixed; z-index: 11; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 4px; font-size: 12px; }
-  #menu div { padding: 4px 10px; border-radius: 4px; cursor: pointer; } #menu div:hover { background: var(--code); }
+  #menu div { padding: 4px 10px; border-radius: 4px; cursor: pointer; } #menu div:hover { background: var(--hover); }
   .CodeMirror .cm-deflink { text-decoration: underline; cursor: pointer; }
   .defhit { background: rgba(240,140,0,.35); }
-  #latch { background: var(--warn); padding: 3px 8px; border-radius: 6px; }
-  #story { border-bottom: 1px solid var(--line); background: var(--panel); padding: 6px 12px; font-size: 12px; max-height: 190px; overflow: auto; }
-  #story h3 { margin: 0 0 4px; font-size: 12px; } #story ol { margin: 0; padding-left: 20px; } #story li { margin: 2px 0; }
-  #story .ok { color: var(--newu); font-weight: 600; } #story .no { color: var(--cancelu); font-weight: 600; } #story .exp { color: var(--dim); }
-  ul.compl { margin: 2px 0 8px; padding-left: 18px; max-height: 110px; overflow: auto; }
 </style>
 </head>
 <body>
-<header>
-  <h1>dotc session x-ray</h1>
-  <span class="dim">the patched <code>InteractiveDriver</code>: typing only the path to the cursor (<code>runUpTo</code>: of each statement list, the statement containing it), resumable runs, cancellation that unwinds. Every number below is read from the driver.</span>
+<div id="titlebar">
+  <h1><span data-icon="logo"></span>dotc session x-ray</h1>
+  <span class="dim tagline" title="the patched InteractiveDriver: typing only the path to the cursor (runUpTo: of each statement list, the statement containing it), resumable runs, cancellation that unwinds. Every number on this page is read from the driver.">the patched <code>InteractiveDriver</code>: only the path to the cursor is typed, runs resume, cancellation unwinds. Every number on this page is read from the driver.</span>
   <span id="busy"></span>
-</header>
-<main>
-  <section id="explorer">
-    <h2>Project</h2>
-    <div class="pad" id="tree"><div class="file sel" data-file="">A.scala <span class="dim">(generated)</span></div><div id="treeroot" class="dim">no snapshot of the compiler sources found</div></div>
-  </section>
-  <div class="gutter" data-i="0" title="drag to resize"></div>
-  <section id="edsec">
-    <h2>Editor:<span id="fname">A.scala</span> <span id="nav"><button id="back" title="back (Alt+←)" disabled>◀</button><button id="fwd" title="forward (Alt+→)" disabled>▶</button> <span id="navpos" class="dim"></span></span></h2>
-    <div class="toolbar">
-      <button id="complete" class="primary" title="runUpTo at the cursor, then Completion.completions">Complete at cursor</button>
-      <button id="full" title="driver.run: type the whole file">Type whole file</button>
-      <label>Cancel next request after <input id="cancelms" type="number" min="0" step="5" placeholder="off"> ms</label>
-      <label title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> hover: type at the pointer, cancel on move</label>
-    </div>
-    <div id="popup" hidden></div>
-    <div id="menu" hidden><div data-act="definition">Go to definition <span class="dim">⌘/Ctrl-click</span></div><div data-act="typeAt">Type at the pointer</div><div data-act="complete">Complete at the pointer <span class="dim">(prefix up to it)</span></div></div>
-    <div class="toolbar">
-      <span class="dim">Go to object</span>
-      <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
-    </div>
-    <div class="toolbar">
-      <button id="latchGo" title="complete inside giant of object 59: the typer blocks at the Latch.await macro until you release or cancel">Complete at the latch (giant of M59)</button>
-      <span id="latch" hidden>⏳ <b>typer blocked</b> at <code>tests.macros.Latch.await</code> inside <code>giant</code> of M59, <span id="latchTrees">0</span> trees typed so far, <span id="latchMs">0</span> ms
-        <button id="release" class="primary">Release: let it finish</button> <button id="cancelNow">Cancel this request</button></span>
-    </div>
-    <div class="toolbar">
-      <span class="dim">Demos</span>
-      <button id="demoSession" title="complete at object 10, then 40, then 10 again, then inside method20">Session</button>
-      <button id="demoCancel" title="complete at the latch, cancel while the typer is blocked, then complete there again">Cancel, deterministically</button>
-      <button id="demoEdit" title="type a character into object 0, then complete at object 10">Edit</button>
-      <button id="demoFull" title="type the whole file, then complete: no session, everything typed">Whole file</button>
-      <button id="clear" title="clear the demo transcript, the request log and the x-ray panel">Clear</button>
-    </div>
-    <div id="story" hidden></div>
-    <div id="ed"></div>
-  </section>
-  <div class="gutter" data-i="1" title="drag to resize"></div>
-  <section id="xraysec">
-    <h2>X-ray of the last request</h2>
-    <div id="xray" class="pad"><p class="dim">No request yet. Place the cursor after a <code>this.meth</code> and press <b>Complete at cursor</b>.</p></div>
-  </section>
-  <div class="gutter" data-i="2" title="drag to resize"></div>
-  <section id="logsec">
-    <h2>Request log (newest first) <button id="logToggle" title="hide the request log; the status bar keeps the latest entry">hide</button></h2>
-    <div id="log"><table><thead><tr><th>#</th><th>request</th><th>outcome</th><th>run</th><th>prefix</th><th>trees</th><th>touched</th><th>ms</th></tr></thead><tbody id="logbody"></tbody></table></div>
-  </section>
-</main>
+</div>
+<div id="shell">
+  <nav id="activity">
+    <button class="chrome on" data-view="explorer" data-icon="files" title="Explorer"></button>
+    <button class="chrome" data-view="demos" data-icon="play" title="Demos"></button>
+    <span class="sp"></span>
+    <button class="chrome" id="actLog" data-icon="panel" title="Request log and demo transcript"></button>
+  </nav>
+  <main>
+    <section id="explorer">
+      <h2 id="sideTitle">Explorer</h2>
+      <div class="view" id="viewExplorer">
+        <div id="tree"><div class="row file sel" data-file="" data-icon="file">A.scala <span class="dim">(generated)</span></div><div id="treeroot" class="dim snap">no snapshot of the compiler sources found</div></div>
+      </div>
+      <div class="view" id="viewDemos" hidden>
+        <div id="demos">
+          <p class="dim">Each demo runs a short sequence of real requests and narrates what the driver reports, step by step.</p>
+          <button id="demoSession" class="card" data-icon="session" title="complete at object 10, then 40, then 10 again, then inside method20"><span><b>Session</b><small>One run serves several completions: fresh, resumed, served.</small></span></button>
+          <button id="demoCancel" class="card" data-icon="cancel" title="complete at the latch, cancel while the typer is blocked, then complete there again"><span><b>Cancel, deterministically</b><small>Block the typer at a macro, cancel it, then complete there again. About 20 s.</small></span></button>
+          <button id="demoEdit" class="card" data-icon="edit" title="type a character into object 0, then complete at object 10"><span><b>Edit</b><small>An edit starts a fresh run; only the path to the cursor is typed.</small></span></button>
+          <button id="demoFull" class="card" data-icon="doc" title="type the whole file, then complete: no session, everything typed"><span><b>Whole file</b><small>Type everything with driver.run, for comparison.</small></span></button>
+          <button id="clear" class="ghost" data-icon="trash" title="clear the demo transcript, the request log and the x-ray panel">Clear transcript and log</button>
+        </div>
+      </div>
+    </section>
+    <div class="gutter" data-i="0" title="drag to resize"></div>
+    <section id="edsec">
+      <div id="tabs">
+        <div class="tab"><span data-icon="file"></span><span id="fname">A.scala</span></div>
+        <span class="sp"></span>
+        <span id="nav"><button id="back" class="icon ghost chrome" data-icon="left" title="back (Alt+←)" disabled></button><button id="fwd" class="icon ghost chrome" data-icon="right" title="forward (Alt+→)" disabled></button><span id="navpos" class="dim"></span></span>
+      </div>
+      <div class="cmdbar">
+        <button id="complete" class="primary" data-icon="complete" title="runUpTo at the cursor, then Completion.completions (Ctrl/Cmd-Space)">Complete</button>
+        <button id="full" class="icon" data-icon="doc" title="Type whole file: driver.run, no session is left"></button>
+        <span class="sep"></span>
+        <label class="toggle" title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> Hover types</label>
+        <span class="sp"></span>
+        <button id="advToggle" class="ghost chrome" data-icon="sliders" aria-expanded="false" title="cancel-after, go to object, the latch">Advanced</button>
+        <div id="advanced" hidden>
+          <label>Cancel next request after <input id="cancelms" type="number" min="0" step="5" placeholder="off"> ms</label>
+          <label>Go to object <input id="goto" type="number" min="0" max="59" value="10"> <button id="go" title="place the cursor after this.meth in that object">Go</button></label>
+          <button id="latchGo" data-icon="latch" title="complete inside giant of object 59: the typer blocks at the Latch.await macro until you release or cancel">Complete at the latch</button>
+        </div>
+      </div>
+      <div id="popup" hidden></div>
+      <div id="menu" hidden><div data-act="definition">Go to definition <span class="dim">⌘/Ctrl-click</span></div><div data-act="typeAt">Type at the pointer</div><div data-act="complete">Complete at the pointer <span class="dim">(prefix up to it)</span></div></div>
+      <div id="latch" hidden><span data-icon="latch"></span><span><b>Typer blocked</b> at <code>tests.macros.Latch.await</code> inside <code>giant</code> of M59: <span id="latchTrees">0</span> trees typed so far, <span id="latchMs">0</span> ms</span>
+        <button id="release" class="primary" title="let it finish">Release</button> <button id="cancelNow" title="cancel this request">Cancel</button></div>
+      <div id="ed"></div>
+    </section>
+    <div class="gutter" data-i="1" title="drag to resize"></div>
+    <section id="xraysec">
+      <h2>X-ray of the last request</h2>
+      <div id="xray" class="pad"><div class="empty"><span data-icon="xray"></span><h3>Ready when you are</h3><p>Place the cursor inside a method and press Complete, or run a demo.</p></div></div>
+    </section>
+  </main>
+</div>
+<div class="gutter h" data-i="2" title="drag to resize"></div>
+<section id="logsec">
+  <div class="ph"><button class="ptab chrome on" data-ptab="log">Request log</button><button class="ptab chrome" data-ptab="story" disabled>Demo transcript</button><span class="sp"></span><button id="logToggle" class="icon ghost chrome" data-icon="close" title="hide the panel; the status bar keeps the latest entry"></button></div>
+  <div id="log"><table><thead><tr><th>#</th><th>request</th><th>outcome</th><th>run</th><th>prefix</th><th>trees</th><th>touched</th><th>ms</th></tr></thead><tbody id="logbody"></tbody></table><div class="none dim">Requests appear here, newest first.</div></div>
+  <div id="story" hidden></div>
+</section>
 <footer id="status">
   <span id="stLast" class="mono dim" title="latest request log entry">no request yet</span>
   <span><span id="stFile">A.scala</span> <span id="cur" class="mono">–</span></span>
   <span id="stSession" class="mono dim" title="session state from the last result"></span>
   <span id="hoverState" class="dim"></span>
-  <button id="logShow" hidden title="show the request log panel">show log</button>
+  <button id="logShow" class="ghost chrome" data-icon="panel" hidden title="show the request log panel">Log</button>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
@@ -148,44 +217,93 @@
 (async function () {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // ---- icons: a small inline set, 16px, currentColor
+  const svg = (body, cls) => `<svg class="i${cls ? ' ' + cls : ''}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  const I = {
+    logo: svg('<circle cx="8" cy="8" r="6.25"/><path d="M5 8h6M8 5v6"/>'),
+    files: svg('<path d="M3.5 2.5h5l3 3v8h-8z"/><path d="M8.5 2.5v3h3"/><path d="M5.5 8.5h4M5.5 11h4"/>'),
+    play: svg('<path d="M4.5 3.2v9.6l8-4.8z"/>'),
+    panel: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 9.5h12"/>'),
+    file: svg('<path d="M4 1.75h5l3 3v9.5H4z"/><path d="M9 1.75v3h3"/>'),
+    folder: svg('<path d="M1.75 4.25a1 1 0 0 1 1-1h3.4l1.5 1.5h5.6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/>'),
+    chev: svg('<path d="M6 3.5 10.5 8 6 12.5"/>', 'chev'),
+    left: svg('<path d="M10 3 5 8l5 5"/>'),
+    right: svg('<path d="M6 3l5 5-5 5"/>'),
+    complete: svg('<path d="M3 3.5l9.5 4.5L3 12.5l1.8-4.5z"/>'),
+    doc: svg('<path d="M4 1.75h5l3 3v9.5H4z"/><path d="M9 1.75v3h3"/><path d="M6 8h4M6 10.5h4"/>'),
+    sliders: svg('<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/><circle cx="6" cy="4.5" r="1.4" fill="var(--panel)"/><circle cx="10.5" cy="8" r="1.4" fill="var(--panel)"/><circle cx="5" cy="11.5" r="1.4" fill="var(--panel)"/>'),
+    latch: svg('<path d="M4 2.5h8M4 13.5h8"/><path d="M5 2.5c0 4 6 4 6 8v3M11 2.5c0 4-6 4-6 8v3"/>'),
+    session: svg('<path d="M9 1.5 3.5 9h4L7 14.5 12.5 7h-4z"/>'),
+    cancel: svg('<circle cx="8" cy="8" r="6.25"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/>'),
+    edit: svg('<path d="M11 2.5l2.5 2.5-8 8H3v-2.5z"/><path d="M9.5 4l2.5 2.5"/>'),
+    trash: svg('<path d="M3 4.5h10M6.5 4.5v-2h3v2M4.5 4.5l.7 9h5.6l.7-9"/>'),
+    close: svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+    xray: svg('<rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 5.5h6M5 8h4M5 10.5h2"/>'),
+  };
+  document.querySelectorAll('[data-icon]').forEach((el) => el.insertAdjacentHTML('afterbegin', I[el.dataset.icon] || ''));
   const src = await (await fetch('/source')).json();
   const cm = CodeMirror($('ed'), { value: src.source, mode: 'text/x-scala', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
     extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') }, configureMouse: () => ({ addNew: false }) });
   cm.setSize('100%', '100%');
-  // ---- layout: the vertical borders between the panels are drag handles; widths are kept in localStorage (xray.cols), the log panel can be collapsed (xray.logCollapsed)
+  // ---- layout: the borders between the panels are drag handles; widths are kept in localStorage (xray.cols2), the log panel's height (xray.logh), it can be collapsed (xray.logCollapsed)
   const store = { get: (k) => { try { return localStorage.getItem('xray.' + k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem('xray.' + k, v); } catch (e) { /* ignore */ } } };
-  const mainEl = document.querySelector('main'), panels = ['explorer', 'edsec', 'xraysec', 'logsec'].map($);
+  const mainEl = document.querySelector('main'), panels = ['explorer', 'edsec', 'xraysec'].map($);
   const GUT = 5;
-  let cols = null; // px widths of explorer, editor, x-ray; the last visible panel takes the rest
-  try { const c = JSON.parse(store.get('cols') || 'null'); if (Array.isArray(c) && c.length === 3 && c.every((n) => n > 40)) cols = c; } catch (e) { /* ignore */ }
+  let cols = null; // px widths of explorer and editor; the x-ray takes the rest
+  try { const c = JSON.parse(store.get('cols2') || 'null'); if (Array.isArray(c) && c.length === 2 && c.every((n) => n > 40)) cols = c; } catch (e) { /* ignore */ }
+  let logh = +store.get('logh') || 220;
   function applyCols() {
-    const collapsed = mainEl.classList.contains('logCollapsed');
-    if (!cols) { mainEl.style.gridTemplateColumns = collapsed ? `200px ${GUT}px minmax(380px, 1.1fr) ${GUT}px minmax(360px, 1fr)` : ''; cm.refresh(); return; }
-    const w = cols.map((n) => `${Math.round(n)}px`);
-    mainEl.style.gridTemplateColumns = collapsed ? `${w[0]} ${GUT}px ${w[1]} ${GUT}px minmax(0, 1fr)` : `${w[0]} ${GUT}px ${w[1]} ${GUT}px ${w[2]} ${GUT}px minmax(0, 1fr)`;
+    const sb = !document.body.classList.contains('sidebarHidden');
+    const w = cols ? cols.map((n) => `${Math.round(n)}px`) : ['230px', 'minmax(360px, 1.2fr)'];
+    const rest = cols ? 'minmax(0, 1fr)' : 'minmax(320px, 1fr)';
+    mainEl.style.gridTemplateColumns = sb ? `${w[0]} ${GUT}px ${w[1]} ${GUT}px ${rest}` : `${w[1]} ${GUT}px ${rest}`;
+    $('logsec').style.height = `${Math.round(logh)}px`;
     cm.refresh();
   }
-  document.querySelectorAll('main > .gutter').forEach((g) => {
+  document.querySelectorAll('.gutter').forEach((g) => {
     g.addEventListener('pointerdown', (ev) => {
-      const i = +g.dataset.i, startX = ev.clientX;
+      const i = +g.dataset.i, startX = ev.clientX, startY = ev.clientY;
       const px = panels.map((p) => p.getBoundingClientRect().width);
-      if (!cols) cols = px.slice(0, 3);
-      const start = cols.slice(), min = [120, 300, 240, 200];
+      if (!cols) cols = px.slice(0, 2);
+      const start = cols.slice(), min = [140, 300, 260], startH = logh;
       try { g.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } g.classList.add('active'); ev.preventDefault();
       const onMove = (e) => {
+        if (i === 2) { logh = Math.min(Math.max(80, startH - (e.clientY - startY)), window.innerHeight - 260); applyCols(); return; }
         let d = e.clientX - startX;
         d = Math.max(min[i] - start[i], d); // left panel keeps its minimum
-        const right = i + 1 < 3 ? start[i + 1] : px[3]; d = Math.min(right - min[i + 1], d); // and so does the right one
-        cols[i] = start[i] + d; if (i + 1 < 3) cols[i + 1] = start[i + 1] - d;
+        const right = i === 0 ? start[1] : px[2]; d = Math.min(right - min[i + 1], d); // and so does the right one
+        cols[i] = start[i] + d; if (i === 0) cols[1] = start[1] - d;
         applyCols();
       };
-      const onUp = () => { g.classList.remove('active'); g.removeEventListener('pointermove', onMove); g.removeEventListener('pointerup', onUp); g.removeEventListener('pointercancel', onUp); store.set('cols', JSON.stringify(cols)); cm.refresh(); };
+      const onUp = () => { g.classList.remove('active'); g.removeEventListener('pointermove', onMove); g.removeEventListener('pointerup', onUp); g.removeEventListener('pointercancel', onUp); store.set('cols2', JSON.stringify(cols)); store.set('logh', String(Math.round(logh))); cm.refresh(); };
       g.addEventListener('pointermove', onMove); g.addEventListener('pointerup', onUp); g.addEventListener('pointercancel', onUp);
     });
   });
-  function setLogCollapsed(on) { mainEl.classList.toggle('logCollapsed', on); $('logShow').hidden = !on; store.set('logCollapsed', on ? '1' : '0'); applyCols(); }
+  function setLogCollapsed(on) { document.body.classList.toggle('logCollapsed', on); $('logShow').hidden = !on; $('actLog').classList.toggle('on', !on); store.set('logCollapsed', on ? '1' : '0'); applyCols(); }
   $('logToggle').onclick = () => setLogCollapsed(true); $('logShow').onclick = () => setLogCollapsed(false);
+  $('actLog').onclick = () => setLogCollapsed(!document.body.classList.contains('logCollapsed'));
   setLogCollapsed(store.get('logCollapsed') === '1');
+  // the bottom panel's tabs: the request log, and the demo transcript once a demo has run
+  function panelTab(name) { document.querySelectorAll('#logsec .ptab').forEach((b) => b.classList.toggle('on', b.dataset.ptab === name)); $('log').hidden = name !== 'log'; $('story').hidden = name !== 'story'; }
+  document.querySelectorAll('#logsec .ptab').forEach((b) => b.onclick = () => panelTab(b.dataset.ptab));
+  // the activity bar: a view in the sidebar (clicking the current one hides the sidebar), and the bottom panel
+  const views = { explorer: 'Explorer', demos: 'Demos' };
+  let view = store.get('view') in views ? store.get('view') : 'explorer';
+  function showView(v, toggle) {
+    const hidden = document.body.classList.contains('sidebarHidden');
+    if (toggle && v === view && !hidden) { document.body.classList.add('sidebarHidden'); }
+    else { document.body.classList.remove('sidebarHidden'); view = v; store.set('view', v); }
+    const shown = !document.body.classList.contains('sidebarHidden');
+    document.querySelectorAll('#activity [data-view]').forEach((b) => b.classList.toggle('on', shown && b.dataset.view === view));
+    $('sideTitle').textContent = views[view]; $('viewExplorer').hidden = view !== 'explorer'; $('viewDemos').hidden = view !== 'demos';
+    store.set('sidebarHidden', shown ? '0' : '1'); applyCols();
+  }
+  document.querySelectorAll('#activity [data-view]').forEach((b) => b.onclick = () => showView(b.dataset.view, true));
+  showView(view, false); if (store.get('sidebarHidden') === '1') showView(view, true);
+  // the advanced controls fold away
+  function setAdvanced(on) { $('advanced').hidden = !on; $('advToggle').setAttribute('aria-expanded', on ? 'true' : 'false'); store.set('advanced', on ? '1' : '0'); cm.refresh(); }
+  $('advToggle').onclick = () => setAdvanced($('advanced').hidden);
+  setAdvanced(store.get('advanced') === '1');
   // ---- navigation history: where the cursor was before a file load or a definition jump
   const nav = { stack: [], at: -1, moving: false };
   function navHere() { return { file: currentFile, pos: cm.getCursor() }; }
@@ -205,13 +323,16 @@
   document.addEventListener('keydown', (ev) => { if (ev.altKey && ev.key === 'ArrowLeft') { ev.preventDefault(); navGo(-1); } else if (ev.altKey && ev.key === 'ArrowRight') { ev.preventDefault(); navGo(1); } });
   // Real compiler sources: the server lists a snapshot of compiler/src/dotty/tools/dotc (the explorer panel)
   let currentFile = '';
+  const emptyState = (title, text) => `<div class="empty">${I.xray}<h3>${esc(title)}</h3><p>${text}</p></div>`;
   async function loadFile(file) {
     if (!nav.moving && cm.getValue()) navPush();
     currentFile = file;
     document.querySelectorAll('#tree .file').forEach((el) => el.classList.toggle('sel', el.dataset.file === file));
     const r = await (await fetch('/source?file=' + encodeURIComponent(file))).json();
     cm.setValue(r.source); $('fname').textContent = $('stFile').textContent = file || 'A.scala';
-    lineMarks = []; if (!loadFile.keepXray) $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
+    lineMarks = []; if (!loadFile.keepXray) $('xray').innerHTML = file
+      ? emptyState(`${file.split('/').pop()} is open`, `${esc(file)} (${cm.lineCount()} lines). Place the cursor inside a method body and press Complete: only the path to the cursor is typed, against the compiler's own classes; the rest of the file stays untyped (grey).`)
+      : emptyState('The generated file is open', 'Place the cursor inside a method and press Complete, or run a demo.');
     if (file) gotoFirstMethodBody(); else gotoObject(10);
   }
   try {
@@ -221,10 +342,10 @@
       fl.files.forEach((f) => { const parts = f.split('/'); let n = root; parts.slice(0, -1).forEach((p) => { n = n[p] = n[p] || {}; }); (n.__files = n.__files || []).push(f); });
       const render = (node, name) => {
         const dirs = Object.keys(node).filter((k) => k !== '__files').sort();
-        const kids = dirs.map((d) => render(node[d], d)).join('') + (node.__files || []).map((f) => `<div class="file" data-file="${esc(f)}" title="${esc(f)}">${esc(f.split('/').pop())}</div>`).join('');
-        return name == null ? kids : `<div class="dir"><div class="name">${esc(name)}</div><div class="kids">${kids}</div></div>`;
+        const kids = dirs.map((d) => render(node[d], d)).join('') + (node.__files || []).map((f) => `<div class="row file" data-file="${esc(f)}" title="${esc(f)}">${I.file}${esc(f.split('/').pop())}</div>`).join('');
+        return name == null ? kids : `<div class="dir"><div class="row name">${I.chev}${I.folder}${esc(name)}</div><div class="kids">${kids}</div></div>`;
       };
-      $('treeroot').className = ''; $('treeroot').innerHTML = `<div class="dim" style="margin:6px 0 2px">dotc at d168df2a76, snapshot</div>` + render(root, null);
+      $('treeroot').className = ''; $('treeroot').innerHTML = `<div class="dim snap" title="a snapshot of compiler/src/dotty/tools/dotc">dotc at d168df2a76, snapshot</div>` + render(root, null);
       $('treeroot').querySelectorAll('.dir > .name').forEach((el) => el.onclick = () => el.parentElement.classList.toggle('open'));
     }
   } catch (e) { /* no sources */ }
@@ -254,7 +375,8 @@
     cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor();
   }
 
-  const setBusy = (on, text) => { busy = on; $('busy').textContent = on ? text : ''; document.querySelectorAll('button').forEach((b) => { if (b.id !== 'release' && b.id !== 'cancelNow') b.disabled = on; }); };
+  // while a request runs the action buttons are disabled; the frame's own buttons (.chrome) stay live
+  const setBusy = (on, text) => { busy = on; $('busy').textContent = on ? text : ''; document.querySelectorAll('button:not(.chrome)').forEach((b) => { if (b.id !== 'release' && b.id !== 'cancelNow') b.disabled = on; }); navUpdate(); };
   function finish(r, code, cancelAfterMs) {
     r.seq = ++seq; r.cancelRequested = cancelAfterMs; r.code = code;
     render(r); logRow(r); last = r; return r;
@@ -415,8 +537,9 @@
   $('cancelNow').onclick = () => fetch('/cancel', { method: 'POST' });
   function cancelMs() { const v = $('cancelms').value; $('cancelms').value = ''; return v === '' ? -1 : +v; }
   $('clear').onclick = () => {
-    $('story').hidden = true; $('story').innerHTML = ''; $('logbody').innerHTML = '';
-    $('xray').innerHTML = '<p class="dim">Cleared. Place the cursor and press <b>Complete at cursor</b>, or run a demo.</p>';
+    $('story').innerHTML = ''; $('logbody').innerHTML = ''; $('log').querySelector('.none').hidden = false;
+    document.querySelector('#logsec .ptab[data-ptab="story"]').disabled = true; panelTab('log');
+    $('xray').innerHTML = emptyState('All clear', 'Place the cursor inside a method and press Complete, or run a demo.');
     lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
     $('stLast').textContent = 'no request yet'; $('stSession').textContent = ''; $('hoverState').textContent = ''; cm.refresh();
   };
@@ -429,7 +552,7 @@
 
   function render(r) {
     const x = $('xray');
-    if (r.outcome === 'error') { x.innerHTML = `<p class="badge o-error">error</p><pre>${esc(r.error || '')}</pre>`; return; }
+    if (r.outcome === 'error') { x.innerHTML = `<div class="outcome"><span class="pill o-error">error</span></div><pre class="hljs">${esc(r.error || '')}</pre>`; return; }
     const runCls = r.runChanged ? 'changed' : 'same';
     const stats = (r.statements || []).map((s, i) => {
       const partial = s.state !== 'untyped' && (s.skippedMembers || []).length > 0;
@@ -439,30 +562,32 @@
     }).join('');
     const compl = (r.completions || []);
     // the innermost enclosing definition at the cursor (cursorDef, from the server), else the whole top-level statement
-    let cursorTitle = 'statement at the cursor', cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '', cursorMore = 0;
+    let cursorTitle = 'Statement at the cursor', cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '', cursorMore = 0;
     if (r.cursorDef && typeof r.cursorDef.start === 'number') {
-      cursorTitle = `definition at the cursor: ${r.cursorDef.name}`;
+      cursorTitle = `Definition at the cursor: ${r.cursorDef.name}`;
       const lines = r.code.slice(r.cursorDef.start, r.cursorDef.end).split('\n');
       cursorMore = Math.max(0, lines.length - 20); cursorSrc = lines.slice(0, 20).join('\n');
     }
+    const tile = (v, l, d, cls) => `<div class="tile${cls ? ' ' + cls : ''}"><div class="v">${v}</div><div class="l">${l}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
     x.innerHTML = `
-      <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
-      <dl class="kv">
-        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `${r.kind === 'typeAt' ? 'typeAt (hover): ' : r.kind === 'definition' ? 'definition: ' : ''}runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
-        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''})</span></dd>
-        <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
-        <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
-        <dt>typedTreeCount</dt><dd><b>${r.typedTrees}</b> <span class="dim">trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)</span></dd>
-        <dt>wall time</dt><dd><b>${r.ms} ms</b></dd>
-        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the file's packages after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
-        <dt>diagnostics</dt><dd>${r.diagnostics}</dd>
-      </dl>
+      <div class="outcome"><span class="pill o-${r.outcome}">${esc(r.outcome)}</span><span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<span class="dim" style="flex-basis:100%">where: ${esc(r.where)}</span>` : ''}</div>
+      <div class="req"><span class="dim">request</span> ${r.kind === 'full' ? 'driver.run (whole file)' : `${r.kind === 'typeAt' ? 'typeAt (hover): ' : r.kind === 'definition' ? 'definition: ' : ''}runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</div>
+      <div class="tiles">
+        ${tile(`<span class="${runCls}">${r.runId}</span>`, 'run id', `was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''}`)}
+        ${tile(`${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}`, 'typed top-level', `typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}`)}
+        ${tile(`${r.typedStatements} of ${r.statements.length}`, 'statements typed', `<b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session`)}
+        ${tile(r.typedTrees, 'typedTreeCount', `trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)`)}
+        ${tile(`${r.ms} ms`, 'wall time')}
+        ${tile(r.touched, 'Touched', `symbol(s) of the file completing (<code>isCompleting</code>) in the file's packages after the request (before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})`)}
+        ${tile(r.diagnostics, 'diagnostics')}
+      </div>
+      <h4 class="sec">Statements</h4>
       <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
       <div id="stats">${stats}</div>
-      ${r.kind === 'definition' && r.hover ? `<div class="dim">definition</div><ul class="compl"><li class="mono">${r.hover.found ? esc(r.hover.symbol) + ' → ' + esc(r.hover.file || 'this file') + ' [' + r.hover.start + ', ' + r.hover.end + ')' : esc(r.hover.reason || 'not found')}</li>${r.hover.how ? `<li class="dim">${esc(r.hover.how)}</li>` : ''}</ul>` : ''}
-      ${r.kind === 'typeAt' && r.hover ? `<div class="dim">type at the pointer</div><ul class="compl">${r.hover.found ? `<li class="mono">${esc(r.hover.symbol || r.hover.tree)}${r.hover.info ? ': ' + esc(r.hover.info) : ''}</li><li class="mono dim">type: ${esc(r.hover.type)}</li>` : '<li class="dim">no typed tree at the offset</li>'}</ul>` : ''}
-      ${r.kind === 'complete' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
-      ${cursorSrc ? `<div class="dim">${esc(cursorTitle)}</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>${cursorMore ? `<div class="dim">… (${cursorMore} more line${cursorMore === 1 ? '' : 's'})</div>` : ''}` : ''}`;
+      ${r.kind === 'definition' && r.hover ? `<h4 class="sec">Definition</h4><ul class="compl"><li class="mono">${r.hover.found ? esc(r.hover.symbol) + ' → ' + esc(r.hover.file || 'this file') + ' [' + r.hover.start + ', ' + r.hover.end + ')' : esc(r.hover.reason || 'not found')}</li>${r.hover.how ? `<li class="dim">${esc(r.hover.how)}</li>` : ''}</ul>` : ''}
+      ${r.kind === 'typeAt' && r.hover ? `<h4 class="sec">Type at the pointer</h4><ul class="compl">${r.hover.found ? `<li class="mono">${esc(r.hover.symbol || r.hover.tree)}${r.hover.info ? ': ' + esc(r.hover.info) : ''}</li><li class="mono dim">type: ${esc(r.hover.type)}</li>` : '<li class="dim">no typed tree at the offset</li>'}</ul>` : ''}
+      ${r.kind === 'complete' ? `<h4 class="sec">Completions at the cursor <span class="dim">(${compl.length})</span></h4><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
+      ${cursorSrc ? `<h4 class="sec">${esc(cursorTitle)}</h4><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>${cursorMore ? `<div class="dim">… (${cursorMore} more line${cursorMore === 1 ? '' : 's'})</div>` : ''}` : ''}`;
     x.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     x.querySelectorAll('.st').forEach((el) => el.onclick = () => { const s = r.statements[+el.dataset.i]; cm.setCursor(cm.posFromIndex(s.start)); cm.scrollIntoView(null, 120); cm.focus(); });
     lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
@@ -481,7 +606,7 @@
     const req = r.kind === 'full' ? 'type whole file' : `${r.kind === 'typeAt' ? 'typeAt' : r.kind === 'definition' ? 'definition' : 'complete'} @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
     tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}${r.latch ? ' <span class="dim">latched' + (r.cancelledByButton ? ', cancelled' : ', released') + '</span>' : ''}</td><td>${esc(r.outcome)}</td>
       <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
-    $('logbody').prepend(tr);
+    $('logbody').prepend(tr); $('log').querySelector('.none').hidden = true;
     // the status bar: the same entry in one line, and the session state the result reports
     $('stLast').textContent = `#${r.seq} ${req}${r.cancelAfterMs >= 0 ? ` (cancel ${r.cancelAfterMs} ms)` : ''}${r.latch ? (r.cancelledByButton ? ' (latched, cancelled)' : ' (latched, released)') : ''} · ${r.outcome}` +
       (r.outcome === 'error' ? `: ${String(r.error || '').slice(0, 80)}` : ` · run ${r.runId}${r.runChanged ? ' (new)' : ''} · ${r.typedTrees} trees · ${r.ms} ms`);
@@ -494,13 +619,17 @@
   }
   // ---- demos: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
   const story = { steps: [] };
-  function storyStart(title) { demoStartedAt = Date.now(); if (hover.inFlight) cancelInFlight(); hidePopup(); story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
+  function storyStart(title) {
+    demoStartedAt = Date.now(); if (hover.inFlight) cancelInFlight(); hidePopup(); story.steps = [];
+    $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`;
+    document.querySelector('#logsec .ptab[data-ptab="story"]').disabled = false; setLogCollapsed(false); panelTab('story'); cm.refresh(); reveal();
+  }
   // the editor shrank when the transcript appeared: scroll so the cursor sits in the upper third of what is left
   const reveal = () => { const info = cm.getScrollInfo(), y = cm.charCoords(cm.getCursor(), 'local').top; cm.scrollTo(null, Math.max(0, y - info.clientHeight / 3)); };
-  function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
-  function storyResult(li, ok, text) { li.innerHTML += ` <span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; li.scrollIntoView({ block: 'nearest' }); }
+  function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<div class="do">${esc(doing)}</div><div class="exp">expect: ${esc(expect)}</div>`; $('story').querySelector('ol').append(li); li.scrollIntoView({ block: 'nearest' }); return li; }
+  function storyResult(li, ok, text) { li.insertAdjacentHTML('beforeend', `<div class="res"><span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'}</span> ${esc(text)}</div>`); li.scrollIntoView({ block: 'nearest' }); }
   const typedOf = (r) => `${r.typedStatements}/${r.statements.length} statements typed, ${r.typedTrees} trees, ${r.ms} ms`;
-  const needsGenerated = () => { if (currentFile) { storyStart('The demos run on the generated file: pick "A.scala (generated)" first.'); return true; } return false; };
+  const needsGenerated = () => { if (currentFile) { storyStart('The demos run on the generated file: pick "A.scala (generated)" in the Explorer first.'); return true; } return false; };
   $('demoSession').onclick = async () => {
     if (needsGenerated()) return;
     storyStart('Demo: one run serves a session of requests');
