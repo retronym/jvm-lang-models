@@ -995,10 +995,10 @@ index 5b78dc804b..8d79401ecc 100644
 +object InteractiveDriver:
 +  private val neverCancelled: () => Boolean = () => false
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-index d85b5bcc1b..a110c05430 100644
+index d85b5bcc1b..358088f3f8 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
 +++ b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-@@ -1599,13 +1599,27 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -1599,13 +1599,33 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
            }
      }
  
@@ -1015,8 +1015,14 @@ index d85b5bcc1b..a110c05430 100644
 +    // completer when an overload resolution elsewhere needs the type) is typed
 +    // whole, since the typed-ahead body is cached and reused when the method
 +    // is later typed with a target inside it; stubs made then stayed.
++    // Never inside an inline method: its typed body is registered whole
++    // (`PrepareInlineable.makeInlineable` maps it, and callers inline it), so
++    // a stub in it is a wrong body, and the map failed on the stub's untyped
++    // type tree.
 +    val run = ctx.run
-+    if run != null && run.typingTarget.exists && blockSpan.exists && blockSpan.contains(run.typingTarget) then
++    if run != null && run.typingTarget.exists && blockSpan.exists && blockSpan.contains(run.typingTarget)
++       && !ctx.owner.ownersIterator.exists(_.isInlineMethod)
++    then
 +      run.targetedStatsOwner = ctx.owner
 +      run.targetedStatsInBlock = true
      typedStats(stats, ctx.owner)
@@ -1028,7 +1034,7 @@ index d85b5bcc1b..a110c05430 100644
      }
  
      var expr1 = typedExpr(tree.expr, pt.dropIfProto)(using exprCtx)
-@@ -3556,6 +3570,13 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3556,6 +3576,13 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        cdef.withType(UnspecifiedErrorType)
      else {
        val dummy = localDummy(cls, impl)
@@ -1042,7 +1048,7 @@ index d85b5bcc1b..a110c05430 100644
        val body1 =
          implementDeferredGivens(
            addParentRefinements(
-@@ -3739,6 +3760,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3739,6 +3766,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                    if !pobj.symbol.isCompleting then
                      pobj.symbol.ensureCompleted()
                case _ =>
@@ -1052,7 +1058,7 @@ index d85b5bcc1b..a110c05430 100644
            var stats1 = typedStats(tree.stats, pkg.moduleClass)._1
            if (!ctx.isAfterTyper)
              stats1 = stats1 ++ typedBlockStats(MainProxies.proxies(stats1))._1
-@@ -4150,6 +4174,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4150,6 +4180,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        record("typed total")
        if ctx.phase.isTyper then
          assertPositioned(tree)
@@ -1060,7 +1066,7 @@ index d85b5bcc1b..a110c05430 100644
        if tree.source != ctx.source && tree.source.exists then
          typed(tree, pt, locked)(using ctx.withSource(tree.source))
        else if ctx.run.nn.isCancelled then
-@@ -4169,12 +4194,132 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4169,12 +4200,132 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
      var enumContexts: SimpleIdentityMap[Symbol, Context] = SimpleIdentityMap.empty
      val initialNotNullInfos = ctx.notNullInfos
        // A map from `enum` symbols to the contexts enclosing their definitions
@@ -1193,7 +1199,7 @@ index d85b5bcc1b..a110c05430 100644
          mdef.removeAttachment(ExpandedTree) match {
            case Some(xtree) =>
              traverse(xtree :: rest)
-@@ -4204,9 +4349,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4204,9 +4355,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
          buf ++= stat.attachmentOrElse(ExportForwarders, Nil)
            // no attachment can happen in case of cyclic references
          traverse(rest)
@@ -1699,10 +1705,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..99305c1e26
+index 0000000000..fde95817e6
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,467 @@
+@@ -0,0 +1,496 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -2064,6 +2070,35 @@ index 0000000000..99305c1e26
 +    assert(skipped0 > 0, "the targeted run skipped something")
 +    assert(run1 == run0 && fully, "the whole-file run completed the session in the same run")
 +    assert(run2 == run0 && skipped2 == 0, "the request after it is served from the same run")
++
++  @Test def `an-inline-method-body-is-never-stubbed` =
++    // The body of an inline method is registered whole for its callers and
++    // mapped by PrepareInlineable: a stub for a skipped local inside it
++    // broke that map (UnAssignedTypeException on the stub's type tree).
++    val code =
++      """|object Inl {
++         |  inline def twice(x: Int): Int = {
++         |    val a = x + 1
++         |    val b = a * 2
++         |    val c = b - 1
++         |    c + a
++         |  }
++         |  def use(y: Int): Int = twice(y) + 1
++         |}
++         |""".stripMargin
++    val uri = URI.create("file:///Inl.scala")
++    val src = SourceFile.virtual(uri, code)
++    val (skippedInInline, usedOk) = withDriver { d =>
++      d.runUpTo(uri, src, Span(code.indexOf("b - 1") + 2))
++      val inInline = d.untypedSpans(uri).filter(sp => sp.start > code.indexOf("inline def") && sp.end < code.indexOf("def use"))
++      d.runUpTo(uri, src, Span(code.indexOf("twice(y)") + 3))
++      val unit = d.compilationUnits(uri)
++      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      (inInline.size, Interactive.pathTo(unit.tpdTree, Span(code.indexOf("twice(y)") + 3)).headOption.exists(_.symbol.name.toString == "twice"))
++    }
++    println(s"[an-inline-method-body-is-never-stubbed] skipped inside the inline body: $skippedInInline; the call site typed: $usedOk")
++    assert(skippedInInline == 0, "no statement of an inline method's body is skipped")
++    assert(usedOk, "the request in the caller of the inline method is answered")
 +
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
@@ -2657,10 +2692,10 @@ index 0000000000..32a2652754
 +          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
 new file mode 100644
-index 0000000000..6aaa4faaa0
+index 0000000000..39ea1e05fc
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,173 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2824,6 +2859,15 @@ index 0000000000..6aaa4faaa0
 +  @Test def `SourceTree-seed-1` = oracle("interactive/SourceTree.scala", 1, 300)
 +  @Test def `SourceTree-seed-2` = oracle("interactive/SourceTree.scala", 2, 300)
 +  @Test def `Chars-seed-1` = oracle("util/Chars.scala", 1, 300)
++  /** inline methods with local definitions, givens, a large class: what VS Code
++   *  hovered on. Finding I29: at step 169, after a cancellation at step 168
++   *  landed in a resume (k=3) and the statement was replaced, a recheck of
++   *  `commit(result)(using nestedCtx)` answers `<error unspecified error>`
++   *  where the whole-file run has `Boolean`. Kept as the reproduction.
++   */
++  @org.junit.Ignore("finding I29: an unspecified error type after a cancellation and a replacement in Contexts.scala")
++  @Test def `Contexts-seed-1` = oracle("core/Contexts.scala", 1, 300)
++  @Test def `Contexts-seed-2` = oracle("core/Contexts.scala", 2, 160)
 +  @Test def `SimpleIdentityMap-seed-1` = oracle("util/SimpleIdentityMap.scala", 1, 300)
 diff --git a/presentation-compiler/test/dotty/tools/dotc/interactive/TestLeaks.scala b/presentation-compiler/test/dotty/tools/dotc/interactive/TestLeaks.scala
 new file mode 100644
