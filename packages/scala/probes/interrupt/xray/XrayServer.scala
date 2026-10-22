@@ -542,7 +542,9 @@ object XrayServer:
         def go(): Map[String, Any] =
           val result =
             try request(kind, code, offset, cancel, latch, file)
-            catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
+            catch
+              case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
+              case ex: StackOverflowError => Map("outcome" -> "error", "error" -> s"StackOverflowError at ${ex.getStackTrace.take(3).mkString(", ")}")
           println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
           result
         if async then
