@@ -1,0 +1,15 @@
+// event: completion B Client.g
+// note: I17: a targeted run of A skips Lib, whose completers belong to that run; a request on B starts another run, in which Lib's class completer refuses to run, so Lib.w is not found
+// requests: completion A Use.f; completion B Client.g; loadedTyped B
+// file: A
+class Int {}
+object Use {
+  def x: Int
+  def f = x
+}
+object Lib {
+  def v: Int
+  def w = v
+}
+// file: B
+object Client { def g = Lib.w }

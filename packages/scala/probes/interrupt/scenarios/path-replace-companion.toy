@@ -1,0 +1,14 @@
+// event: completion A Use2.g
+// note: I22: a cancellation inside object L (resumed in the session) poisons it, and it is replaced by a fresh parse re-indexed alone, without the apply and unapply that case class L's desugaring merged into it; Use2's L.apply then fails
+// requests: completion A Use.f; cancel@0 completion A L.e; completion A Use2.g; loadedTyped A
+// file: A
+class Int {}
+case class L(a: Int) {}
+object L {
+  def extra: Int
+  def e = extra
+}
+object Use { def f = L.apply.a }
+object Use2 { def g = L.apply.a }
+// file: B
+class Other {}

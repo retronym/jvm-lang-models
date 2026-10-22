@@ -34,27 +34,44 @@ public final class Main {
       return;
     }
     if (sessions) {
+      List<String> ks = List.of("dotc-session", "dotc-session-path", "dotc-revisions");
+      List<String> naive = List.of("dotc-session-naive", "dotc-session-path-naive");
       for (Path p : files) {
         Harness.Scenario sc = Harness.load(p);
-        List<Core.Event> asks = Harness.sweep(sc);
-        Harness.Replay freshBg = Harness.replay(sc, "dotc-metals", asks, true), sessBg = Harness.replay(sc, "dotc-session", asks, true);
-        Harness.Replay revBg = Harness.replay(sc, "dotc-revisions", asks, true);
-        Harness.Replay fresh = Harness.replay(sc, "dotc-metals", asks, false);
-        Harness.Replay sess = Harness.replay(sc, "dotc-session", asks, false);
-        Harness.Replay rev = Harness.replay(sc, "dotc-revisions", asks, false);
-        boolean same = true;
-        for (Harness.Replay other : List.of(freshBg, sessBg, sess, revBg, rev)) same &= fresh.answers().equals(other.answers());
-        System.out.printf("== %-30s %2d requests  work after background: fresh %3d session %3d revisions %3d   no background: fresh %3d session %3d revisions %3d   answers %s%n",
-            sc.name(), asks.size(), freshBg.work(), sessBg.work(), revBg.work(), fresh.work(), sess.work(), rev.work(), same ? "same" : "DIFFER");
-        System.out.println("   per request after background: fresh " + freshBg.perRequest() + " session " + sessBg.perRequest() + " revisions " + revBg.perRequest());
+        List<Harness.Step> asks = Harness.steps(sc);
+        Harness.Replay fresh = Harness.replaySteps(sc, "dotc-metals", asks, false), freshBg = Harness.replaySteps(sc, "dotc-metals", asks, true);
+        Map<String, Harness.Replay> bg = new LinkedHashMap<>(), noBg = new LinkedHashMap<>();
+        for (String k : ks) { bg.put(k, Harness.replaySteps(sc, k, asks, true)); noBg.put(k, Harness.replaySteps(sc, k, asks, false)); }
+        boolean same = fresh.answers().equals(freshBg.answers());
+        for (String k : ks) same &= fresh.answers().equals(bg.get(k).answers()) && fresh.answers().equals(noBg.get(k).answers());
+        StringBuilder w1 = new StringBuilder(String.format("fresh %3d", freshBg.work())), w2 = new StringBuilder(String.format("fresh %3d", fresh.work()));
+        StringBuilder per = new StringBuilder("fresh " + freshBg.perRequest());
+        for (String k : ks) {
+          String n = k.replace("dotc-", "");
+          w1.append(String.format(" %s %3d", n, bg.get(k).work())); w2.append(String.format(" %s %3d", n, noBg.get(k).work()));
+          per.append(" ").append(n).append(" ").append(bg.get(k).perRequest());
+        }
+        System.out.printf("== %-30s %2d requests  work after background: %s   no background: %s   answers %s%n", sc.name(), asks.size(), w1, w2, same ? "same" : "DIFFER");
+        System.out.println("   per request after background: " + per);
         if (!same) {
-          for (Harness.Replay other : List.of(freshBg, sessBg, sess, revBg, rev))
+          List<Harness.Replay> others = new ArrayList<>(List.of(freshBg));
+          for (String k : ks) { others.add(bg.get(k)); others.add(noBg.get(k)); }
+          for (Harness.Replay other : others)
             for (int i = 0; i < asks.size(); i++) if (!fresh.answers().get(i).equals(other.answers().get(i))) {
               System.out.println("   " + asks.get(i) + ":");
               System.out.print(Harness.diff(List.of(fresh.answers().get(i)), List.of(other.answers().get(i))));
               if (!all) return;
             }
           return;
+        }
+        for (String k : naive) {
+          Harness.Replay r = Harness.replaySteps(sc, k, asks, true);
+          boolean ok = fresh.answers().equals(r.answers());
+          System.out.println("   " + k + " (after background): " + (ok ? "same" : "DIFFER"));
+          if (!ok) for (int i = 0; i < asks.size(); i++) if (!fresh.answers().get(i).equals(r.answers().get(i))) {
+            System.out.println("    " + asks.get(i) + ":");
+            System.out.print(Harness.diff(List.of(fresh.answers().get(i)), List.of(r.answers().get(i))).replaceAll("(?m)^", " "));
+          }
         }
       }
       return;

@@ -318,8 +318,7 @@ public final class Revisions extends Global implements Kernel {
       Sym cls = byPath.get(d.kind() + " " + d.name());
       Fact f = fact("body " + key(cls), d.name(), u, () -> bodyRule(u, cls));
       ((Map<String, List<String>>) demand(f)).forEach((k, v) -> {
-        if (k.equals(d.kind() + " " + d.name())) bodies.put(k, new ArrayList<>(v));   // typeDecl's `put`
-        else bodies.computeIfAbsent(k, x -> new ArrayList<>()).addAll(v);
+        bodies.computeIfAbsent(k, x -> new ArrayList<>()).addAll(v);   // typeDecl's, after the merged synthetics
       });
       todo.add(f);
       if (d.mods().contains("nowarn")) nowarn.add(d.name());
