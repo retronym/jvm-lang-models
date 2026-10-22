@@ -15,6 +15,7 @@ import dotty.tools.dotc.ast.{tpd, untpd}
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Phases
 import dotty.tools.dotc.core.Symbols.*
+import dotty.tools.dotc.core.NameOps.*
 import dotty.tools.dotc.interactive.{CachedLogicalPackage, Completion, Interactive, InteractiveDriver}
 import dotty.tools.dotc.parsing.Parsers
 import dotty.tools.dotc.util.{SourceFile, SourcePosition}
@@ -54,6 +55,69 @@ object XrayServer:
       val s = Files.walk(root)
       try s.iterator().asScala.filter(f => f.toString.endsWith(".scala")).map(f => root.relativize(f).toString).toList.sorted
       finally s.close()
+
+  /** The snapshot's top-level definitions, by fully qualified name, from
+   *  one parse pass over every file (built on the first definition request):
+   *  what a go-to-definition needs to find the file of a symbol; the
+   *  definition inside the file is then found by a parse of that file.
+   */
+  private lazy val definitionIndex: Map[String, String] = sourcesRoot match
+    case None => Map.empty
+    case Some(root) =>
+      given Context = driver.currentCtx
+      val t0 = System.nanoTime()
+      val index = Map.newBuilder[String, String]
+      var files = 0
+      for rel <- sourceFiles() do
+        val code = Files.readString(root.resolve(rel))
+        val source = SourceFile.virtual(root.resolve(rel).toUri, code)
+        val tree = new Parsers.Parser(source)(using ctx.fresh.setSource(source)).parse()
+        files += 1
+        def walk(t: untpd.Tree, pkg: String): Unit = t match
+          case untpd.PackageDef(pid, stats) =>
+            val name = pid.show
+            val pkg1 = if pkg.isEmpty then name else s"$pkg.$name"
+            stats.foreach(walk(_, if name == "<empty>" then pkg else pkg1))
+          case m: untpd.ModuleDef => index += (s"$pkg.${m.name}" -> rel)
+          case d: untpd.TypeDef => index += (s"$pkg.${d.name}" -> rel)
+          case d: untpd.DefDef => index += (s"$pkg.${d.name}" -> rel)
+          case v: untpd.ValDef => index += (s"$pkg.${v.name}" -> rel)
+          case _ =>
+        walk(tree, "")
+      val result = index.result()
+      println(f"[xray] definition index: ${result.size} top-level definitions in $files files, ${(System.nanoTime() - t0) / 1e6}%.0f ms")
+      result
+
+  /** Find the definition named by `chain` (the owner chain of names from the
+   *  top-level definition down to the symbol) in `rel`, by a parse of it:
+   *  the span of the innermost matching definition.
+   */
+  private def locateIn(rel: String, chain: List[String]): Option[(Int, Int)] = sourcesRoot.flatMap { root =>
+    given Context = driver.currentCtx
+    val code = Files.readString(root.resolve(rel))
+    val source = SourceFile.virtual(root.resolve(rel).toUri, code)
+    val tree = new Parsers.Parser(source)(using ctx.fresh.setSource(source)).parse()
+    def nameOf(t: untpd.Tree): Option[String] = t match
+      case m: untpd.ModuleDef => Some(m.name.toString)
+      case d: untpd.TypeDef => Some(d.name.toString)
+      case d: untpd.DefDef => Some(d.name.toString)
+      case v: untpd.ValDef => Some(v.name.toString)
+      case _ => None
+    def body(t: untpd.Tree): List[untpd.Tree] = t match
+      case m: untpd.ModuleDef => m.impl.body
+      case d: untpd.TypeDef => d.rhs match { case impl: untpd.Template => impl.body; case _ => Nil }
+      case _ => Nil
+    def stats(t: untpd.Tree): List[untpd.Tree] = t match
+      case untpd.PackageDef(_, ss) => ss.flatMap(s => s match { case _: untpd.PackageDef => stats(s); case _ => List(s) })
+      case _ => Nil
+    def find(candidates: List[untpd.Tree], chain: List[String]): Option[untpd.Tree] = chain match
+      case Nil => None
+      case name :: rest =>
+        val here = candidates.filter(c => nameOf(c).contains(name))
+        if rest.isEmpty then here.headOption
+        else here.view.flatMap(h => find(body(h), rest)).headOption.orElse(here.headOption)
+    find(stats(tree), chain).map(t => (t.span.start, t.span.end))
+  }
 
   /** The uri of the file a request is on: the generated one, or a real source. */
   private def uriOf(file: String): URI =
@@ -285,6 +349,12 @@ object XrayServer:
               given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
               hover = typeAt(unit.tpdTree, offset)
             }
+          case "definition" =>
+            diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
+            driver.compilationUnits.get(uri).foreach { unit =>
+              given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
+              hover = definitionAt(unit.tpdTree, offset, source)
+            }
           case _ =>
             diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
             driver.compilationUnits.get(uri).foreach { unit =>
@@ -361,6 +431,37 @@ object XrayServer:
       "hover" -> hover
     )
   }
+
+  /** The definition of the symbol of the innermost typed tree at `offset`:
+   *  in this file by the symbol's own span; otherwise its top-level class
+   *  through the definition index, and the member inside that file by its
+   *  owner chain of names.
+   */
+  private def definitionAt(tree: tpd.Tree, offset: Int, source: SourceFile)(using Context): Map[String, Any] =
+    val path = Interactive.pathTo(tree, Span(offset))
+    val sym0 = path.headOption.map(_.symbol).getOrElse(NoSymbol)
+    // the member selected, not its accessor or module val
+    val sym = if sym0.is(dotty.tools.dotc.core.Flags.ModuleVal) then sym0.moduleClass else sym0
+    if !sym.exists then Map("found" -> false, "reason" -> "no symbol at the offset")
+    else
+      val top = sym.topLevelClass
+      val pkg = top.owner
+      val fqn = s"${if pkg.isEffectiveRoot then "<empty>" else pkg.showFullName}.${top.name.stripModuleClassSuffix}"
+      val chain = (sym.ownersIterator.takeWhile(o => o != top && !o.isEffectiveRoot).toList.reverse :+ sym)
+        .filter(o => !o.isAnonymousClass && !o.isLocalDummy && !o.is(dotty.tools.dotc.core.Flags.Package))
+        .map(_.name.stripModuleClassSuffix.toString)
+      val chainNames = (top.name.stripModuleClassSuffix.toString :: chain).distinct
+      val symbolText = s"${sym.showKind} ${sym.showFullName}"
+      val inThisFile = sym.source == source || (sym.associatedFile != null && sym.associatedFile.path == source.file.path)
+      if inThisFile && sym.span.exists then
+        Map("found" -> true, "symbol" -> symbolText, "file" -> "", "start" -> sym.span.start, "end" -> sym.span.end, "how" -> "the symbol's span in this file")
+      else definitionIndex.get(fqn) match
+        case Some(rel) =>
+          locateIn(rel, chainNames) match
+            case Some((start, end)) => Map("found" -> true, "symbol" -> symbolText, "file" -> rel, "start" -> start, "end" -> end, "how" -> s"index: $fqn in $rel, then ${chainNames.mkString(".")} by a parse")
+            case None => Map("found" -> false, "symbol" -> symbolText, "file" -> rel, "reason" -> s"$fqn is in $rel but ${chainNames.mkString(".")} was not found in it")
+        case None =>
+          Map("found" -> false, "symbol" -> symbolText, "reason" -> s"$fqn is not a top-level definition of the snapshot (${sym.associatedFile})")
 
   /** The innermost typed tree at `offset` (the path drops untyped heads: a
    *  skipped statement's inside is not there), its type and its symbol, as

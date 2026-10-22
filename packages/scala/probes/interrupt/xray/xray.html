@@ -61,6 +61,10 @@
   #popup { position: fixed; z-index: 10; max-width: 560px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 8px 10px; font-size: 12px; pointer-events: none; }
   #popup .t { font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; } #popup .x { color: var(--dim); margin-top: 4px; }
   #popup.pending { border-color: var(--cur); } #popup.cancelled { border-color: var(--cancelu); }
+  #menu { position: fixed; z-index: 11; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 4px; font-size: 12px; }
+  #menu div { padding: 4px 10px; border-radius: 4px; cursor: pointer; } #menu div:hover { background: var(--code); }
+  .CodeMirror .cm-deflink { text-decoration: underline; cursor: pointer; }
+  .defhit { background: rgba(240,140,0,.35); }
   #latch { background: var(--warn); padding: 3px 8px; border-radius: 6px; }
   #story { border-bottom: 1px solid var(--line); background: var(--panel); padding: 6px 12px; font-size: 12px; max-height: 190px; overflow: auto; }
   #story h3 { margin: 0 0 4px; font-size: 12px; } #story ol { margin: 0; padding-left: 20px; } #story li { margin: 2px 0; }
@@ -90,6 +94,7 @@
       <span id="hoverState" class="dim"></span>
     </div>
     <div id="popup" hidden></div>
+    <div id="menu" hidden><div data-act="definition">Go to definition <span class="dim">⌘/Ctrl-click</span></div><div data-act="typeAt">Type at the pointer</div><div data-act="complete">Complete here</div></div>
     <div class="toolbar">
       <span class="dim">Go to object</span>
       <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
@@ -137,7 +142,7 @@
     document.querySelectorAll('#tree .file').forEach((el) => el.classList.toggle('sel', el.dataset.file === file));
     const r = await (await fetch('/source?file=' + encodeURIComponent(file))).json();
     cm.setValue(r.source); $('fname').textContent = file || 'A.scala';
-    lineMarks = []; $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
+    lineMarks = []; if (!loadFile.keepXray) $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
     if (file) gotoFirstMethodBody(); else gotoObject(10);
   }
   try {
@@ -202,7 +207,7 @@
     const code = cm.getValue(), offset = offsetOf();
     const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1', file: currentFile });
     let st;
-    try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { setBusy(false); return finish({ outcome: 'error', error: String(e) }, code, -1); }
+    try { const resp = await fetch('/request', { method: 'POST', body }); if (resp.status === 409) { setBusy(false); return null; } st = await resp.json(); } catch (e) { setBusy(false); return finish({ outcome: 'error', error: String(e) }, code, -1); }
     if (st.outcome) { setBusy(false); return finish(st, code, -1); }
     $('latch').hidden = false;
     while (true) {
@@ -239,7 +244,7 @@
     $('hoverState').textContent = `typeAt ${tok.text}…`;
     const body = new URLSearchParams({ kind: 'typeAt', code, offset: String(offset), cancelAfterMs: '-1', async: '1', file: currentFile });
     let st;
-    try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { hover.inFlight = null; return; }
+    try { const resp = await fetch('/request', { method: 'POST', body }); if (resp.status === 409) { hover.inFlight = null; return; } st = await resp.json(); } catch (e) { hover.inFlight = null; return; }
     if (st.outcome) { hover.inFlight = null; return; }
     while (true) {
       await sleep(40);
@@ -267,6 +272,49 @@
     if (!tok) { hidePopup(); if (hover.inFlight) cancelInFlight(); return; }
     hover.timer = setTimeout(() => { if (hover.token === tok) hoverRequest(tok, ev); }, 150);
   });
+  // ---- go to definition: cmd/ctrl-click, or the context menu
+  let defMark = null;
+  async function gotoDefinition(tok) {
+    if (!tok) return;
+    const code = cm.getValue(), offset = cm.indexFromPos({ line: tok.line, ch: tok.b });
+    if (hover.inFlight) { await cancelInFlight(); for (let i = 0; i < 100 && hover.inFlight; i++) await sleep(30); }
+    setBusy(true, `… definition of ${tok.text}`);
+    const body = new URLSearchParams({ kind: 'definition', code, offset: String(offset), cancelAfterMs: '-1', file: currentFile });
+    let r;
+    try { r = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { r = { outcome: 'error', error: String(e) }; }
+    setBusy(false);
+    finish(r, code, -1);
+    const d = r.hover || {};
+    if (!d.found) { $('hoverState').textContent = `definition of ${tok.text}: ${d.reason || r.outcome}`; return; }
+    if (d.file !== currentFile) { loadFile.keepXray = true; try { await loadFile(d.file); } finally { loadFile.keepXray = false; } }
+    if (defMark) defMark.clear();
+    const from = cm.posFromIndex(d.start), to = cm.posFromIndex(d.end);
+    defMark = cm.markText(from, { line: from.line, ch: cm.getLine(from.line).length }, { className: 'defhit' });
+    cm.setCursor(from); cm.scrollIntoView({ from, to }, 160); cm.focus(); showCursor();
+    $('hoverState').textContent = `${d.symbol} → ${d.file || 'this file'} [${d.start}, ${d.end}) · ${d.how}`;
+  }
+  cm.getWrapperElement().addEventListener('click', (ev) => {
+    if (!(ev.metaKey || ev.ctrlKey)) return;
+    const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
+    const tok = wordAt(pos); if (!tok) return;
+    ev.preventDefault(); hidePopup(); gotoDefinition(tok);
+  });
+  cm.getWrapperElement().addEventListener('contextmenu', (ev) => {
+    const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
+    const tok = wordAt(pos); if (!tok) return;
+    ev.preventDefault(); hidePopup();
+    const m = $('menu'); m.hidden = false; m.style.left = ev.clientX + 'px'; m.style.top = ev.clientY + 'px';
+    m.querySelectorAll('div').forEach((el) => el.onclick = () => {
+      m.hidden = true;
+      const act = el.dataset.act;
+      cm.setCursor({ line: tok.line, ch: tok.b });
+      if (act === 'definition') gotoDefinition(tok);
+      else if (act === 'typeAt') { hover.token = tok; hoverRequest(tok, ev); }
+      else send('complete', -1);
+    });
+  });
+  document.addEventListener('click', (ev) => { if (!$('menu').contains(ev.target)) $('menu').hidden = true; });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { $('menu').hidden = true; hidePopup(); } });
   cm.getWrapperElement().addEventListener('mouseleave', () => { clearTimeout(hover.timer); hover.token = null; hidePopup(); if (hover.inFlight) cancelInFlight(); });
   $('hoverMode').onchange = () => { if (!$('hoverMode').checked) { hidePopup(); hover.token = null; } };
   $('latchGo').onclick = () => { gotoGiant(); sendLatched(); };
@@ -295,7 +343,7 @@
     x.innerHTML = `
       <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
       <dl class="kv">
-        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `${r.kind === 'typeAt' ? 'typeAt (hover): ' : ''}runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
+        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `${r.kind === 'typeAt' ? 'typeAt (hover): ' : r.kind === 'definition' ? 'definition: ' : ''}runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
         <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''})</span></dd>
         <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
         <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
@@ -306,6 +354,7 @@
       </dl>
       <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
       <div id="stats">${stats}</div>
+      ${r.kind === 'definition' && r.hover ? `<div class="dim">definition</div><ul class="compl"><li class="mono">${r.hover.found ? esc(r.hover.symbol) + ' → ' + esc(r.hover.file || 'this file') + ' [' + r.hover.start + ', ' + r.hover.end + ')' : esc(r.hover.reason || 'not found')}</li>${r.hover.how ? `<li class="dim">${esc(r.hover.how)}</li>` : ''}</ul>` : ''}
       ${r.kind === 'typeAt' && r.hover ? `<div class="dim">type at the pointer</div><ul class="compl">${r.hover.found ? `<li class="mono">${esc(r.hover.symbol || r.hover.tree)}${r.hover.info ? ': ' + esc(r.hover.info) : ''}</li><li class="mono dim">type: ${esc(r.hover.type)}</li>` : '<li class="dim">no typed tree at the offset</li>'}</ul>` : ''}
       ${r.kind === 'complete' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
       ${cursorSrc ? `<div class="dim">statement at the cursor</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>` : ''}`;
@@ -324,7 +373,7 @@
   }
   function logRow(r) {
     const tr = document.createElement('tr'); tr.className = r.outcome.startsWith('cancelled') ? 'cancelled' : '';
-    const req = r.kind === 'full' ? 'type whole file' : `${r.kind === 'typeAt' ? 'typeAt' : 'complete'} @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
+    const req = r.kind === 'full' ? 'type whole file' : `${r.kind === 'typeAt' ? 'typeAt' : r.kind === 'definition' ? 'definition' : 'complete'} @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
     tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}${r.latch ? ' <span class="dim">latched' + (r.cancelledByButton ? ', cancelled' : ', released') + '</span>' : ''}</td><td>${esc(r.outcome)}</td>
       <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
     $('logbody').prepend(tr);
