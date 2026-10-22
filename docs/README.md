@@ -4,6 +4,8 @@ Where to start, by goal; then four kinds of document, by what they are for. Per-
 
 ## Start here, by goal
 
+**Reuse the method.** [`method.md`](method.md) is how a track is done, with Track I as the worked example: a real bug, a survey across systems, a toy of the mechanism with the systems' designs as kernels under one harness, a Lean model derived from the toy whose conformance to it is a theorem, a space of scenarios, and tests and patches projected back; what each rung costs and cannot find, the literature each one belongs to, the mistakes it caught, and a draft skill.
+
 **Understand the theory.** Read [`packages/query/Query/Task.lean`](../packages/query/Query/Task.lean) (a compilation as a query tree with a trace), then [`packages/inc-comp/IncComp/Model.lean`](../packages/inc-comp/IncComp/Model.lean) (the specification's first page: `Compiler`, `Obligations`, `round`, `zinc`), then [`packages/inc-comp/IncComp/General.lean`](../packages/inc-comp/IncComp/General.lean) ([`XCompiler`](../packages/inc-comp/IncComp/General.lean#L22), where T2, T3a, T4 and T5 are proved once). [`packages/inc-comp/IncComp/Uniqueness.lean`](../packages/inc-comp/IncComp/Uniqueness.lean) and [`packages/zinc/Zinc/Loop/Cycles.lean`](../packages/zinc/Zinc/Loop/Cycles.lean) show when incremental equals clean and where it fails. The statements are in [`theorems.md`](theorems.md); [`specification.md`](specification.md) gives the rationale for the method.
 
 **Start from a bug you know.** [`evidence/bug-map.md`](evidence/bug-map.md) maps 145 Zinc and compiler bugs to the part of the model that expresses them, or to a gap.
