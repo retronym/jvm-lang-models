@@ -451,7 +451,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..3376da72da 100644
+index 5b78dc804b..3deafa4984 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -514,7 +514,7 @@ index 5b78dc804b..3376da72da 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,391 @@ class InteractiveDriver(
+@@ -78,37 +107,395 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -610,6 +610,10 @@ index 5b78dc804b..3376da72da 100644
 +        .find(c => c.startsWith("dotty.tools.pc.") && !c.contains("CachingDriver") && !c.contains("CompilerAccess") && !c.contains("CompilerWrapper"))
 +        .map(c => " by " + c.stripPrefix("dotty.tools.pc.").takeWhile(_ != '$')).getOrElse("")
 +      try body
++      catch case scala.util.control.NonFatal(ex) =>
++        // the editor's report keeps the message only: the stack goes to the log
++        System.err.println(s"[dotc-session] $what failed$by: $ex\n" + ex.getStackTrace.nn.take(24).map("    at " + _).mkString("\n"))
++        throw ex
 +      finally System.err.println(f"[dotc-session] $what ${outcome}$by ${(System.nanoTime() - t0) / 1e6}%.1f ms")
 +
 +  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
@@ -910,7 +914,7 @@ index 5b78dc804b..3376da72da 100644
      }
    }
  
-@@ -140,13 +523,15 @@ class InteractiveDriver(
+@@ -140,13 +527,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -928,7 +932,7 @@ index 5b78dc804b..3376da72da 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +563,6 @@ class InteractiveDriver(
+@@ -178,3 +567,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
