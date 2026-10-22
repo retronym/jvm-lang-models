@@ -158,7 +158,7 @@
           <button id="demoSession" class="card" data-icon="session" title="complete at object 10, then 40, then 10 again, then inside method20"><span><b>Session</b><small>One run serves several completions: fresh, resumed, served.</small></span></button>
           <button id="demoCancel" class="card" data-icon="cancel" title="complete at the latch, cancel while the typer is blocked, then complete there again"><span><b>Cancel, deterministically</b><small>Block the typer at a macro, cancel it, then complete there again. About 20 s.</small></span></button>
           <button id="demoEdit" class="card" data-icon="edit" title="type a character into object 0, then complete at object 10"><span><b>Edit</b><small>An edit starts a fresh run; only the path to the cursor is typed.</small></span></button>
-          <button id="demoFull" class="card" data-icon="doc" title="type the whole file, then complete: no session, everything typed"><span><b>Whole file</b><small>Type everything with driver.run, for comparison.</small></span></button>
+          <button id="demoFull" class="card" data-icon="doc" title="a targeted run, then driver.run on the same content: the session is completed in the same run, and the next request is served"><span><b>Whole file</b><small>driver.run completes the session instead of replacing it.</small></span></button>
           <button id="clear" class="ghost" data-icon="trash" title="clear the demo transcript, the request log and the x-ray panel">Clear transcript and log</button>
         </div>
       </div>
@@ -172,7 +172,7 @@
       </div>
       <div class="cmdbar">
         <button id="complete" class="primary" data-icon="complete" title="runUpTo at the cursor, then Completion.completions (Ctrl/Cmd-Space)">Complete</button>
-        <button id="full" class="icon" data-icon="doc" title="Type whole file: driver.run, no session is left"></button>
+        <button id="full" class="icon" data-icon="doc" title="Type whole file: driver.run (completes the session if one exists on this content)"></button>
         <span class="sep"></span>
         <label class="toggle" title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> Hover types</label>
         <span class="sp"></span>
@@ -570,7 +570,7 @@
   cm.on('keydown', (c, e) => { if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); send('complete', cancelMs()); } });
 
   const OUT = { 'served': 'answered from what is typed: nothing typed', resumed: 'resumed the same run: the statement at the cursor was typed', fresh: 'fresh run (content changed or no session): only the path to the cursor typed',
-    full: 'whole file typed by driver.run (no session left)', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
+    full: 'whole file typed by driver.run: a session on this content is completed in the same run, else a new run with no session', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
 
   function render(r) {
     const x = $('xray');
@@ -707,11 +707,15 @@
   };
   $('demoFull').onclick = async () => {
     if (needsGenerated()) return;
-    storyStart('Demo: the whole file, for comparison');
-    let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
-    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(600);
-    li = storyStep('Complete in object 10', 'a fresh targeted run: the whole-file run left no session to resume');
-    gotoObject(10); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'fresh', `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
+    storyStart('Demo: a whole-file run completes the session');
+    let li = storyStep('Complete in object 10', 'a targeted request: only the path to the cursor is typed, the other objects skipped');
+    gotoObject(10); const r0 = await send('complete', -1);
+    if (!r0) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
+    storyResult(li, ['fresh', 'resumed', 'served'].includes(r0.outcome) && !r0.fullyTyped, `${r0.outcome}, run ${r0.runId}, ${typedOf(r0)}`); await sleep(600);
+    li = storyStep('Type the whole file (driver.run)', 'what the editor asks for on every cursor move (document highlight): the session is completed in the same run, every skipped statement typed, nothing discarded');
+    const r = await send('full', -1); storyResult(li, r.outcome === 'full' && !r.runChanged && r.fullyTyped, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, fully typed: ${r.fullyTyped}, ${typedOf(r)}`); await sleep(600);
+    li = storyStep('Complete in object 40', 'served from the completed run: nothing typed');
+    gotoObject(40); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'served' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
   };
   gotoObject(10);
 })();

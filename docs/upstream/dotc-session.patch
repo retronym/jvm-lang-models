@@ -451,7 +451,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..3deafa4984 100644
+index 5b78dc804b..8d79401ecc 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -514,12 +514,57 @@ index 5b78dc804b..3deafa4984 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,395 @@ class InteractiveDriver(
+@@ -78,37 +107,450 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
 -  def run(uri: URI, source: SourceFile): List[Diagnostic] = {
-+  def run(uri: URI, source: SourceFile): List[Diagnostic] = run(uri, source, NoSpan)
++  def run(uri: URI, source: SourceFile): List[Diagnostic] =
++    mySession match
++      case s: Session if targetedRequests && s.uri == uri && s.source.textContent() == source.textContent()
++          && !s.run.isTainted && !s.poisoned && s.skipped.nonEmpty =>
++        completeSession(s)
++      case _ => run(uri, source, NoSpan)
++
++  /** A whole-file run on the content of the session completes the session
++   *  instead of replacing it: every statement still skipped is typed whole,
++   *  in source order, in its recorded context, and all are spliced in one
++   *  pass; the run then holds the whole file typed, and the requests after
++   *  it are served from it. (A whole-file request from the editor, document
++   *  highlight on every cursor move, used to start a new run and so made the
++   *  hover after it a fresh run again.)
++   */
++  private def completeSession(s: Session): List[Diagnostic] =
++    logged(s"run ${fileNameOf(s.uri)} (completes the session)")({
++      myCancelled = false
++      while s.skipped.nonEmpty do
++        val batch = s.skipped.sortBy(_.stat.span.start)
++        s.skipped = Nil
++        s.run.skippedStats.clear()
++        s.run.typingTarget = NoSpan // no target: each statement typed whole
++        val typed = List.newBuilder[(Run.SkippedStat, List[Tree])]
++        try
++          for sk <- batch do
++            val ctx0 = sk.ctx
++            s.run.targetedStatsOwner = NoSymbol
++            s.run.targetedStatsInBlock = false
++            try typed += ((sk, ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)._1))
++            catch case ex: CompilationUnit.CancelledCompilation =>
++              // the ones typed so far are kept; the aborted one is replaced
++              // or poisons the session, as in a resume
++              s.reporter.removeBufferedMessages(using sk.ctx)
++              s.skipped = s.skipped ++ batch.dropWhile(_ ne sk).drop(1)
++              if !replacePoisoned(s, sk) then s.poisoned = true
++              throw ex
++        finally
++          val entries = typed.result()
++          if entries.nonEmpty then spliceAll(s, entries)(using entries.head._1.ctx)
++          s.skipped = s.skipped ++ s.run.skippedStats.toList
++          s.run.skippedStats.clear()
++      s.diagnostics
++    }) {
++      s"run=${runIdOf(s.uri)} typedTop=${typedPrefixLength(s.uri)} skipped=${untypedSpans(s.uri).size} trees=${s.run.typedTrees}"
++    }
 +
 +  /** The state of a targeted run (see `runUpTo`): the run, the unit with
 +   *  the partially typed tree, the statements the run skipped (with the
@@ -685,7 +730,7 @@ index 5b78dc804b..3deafa4984 100644
 +      s.run.targetedStatsInBlock = sk.inBlock
 +      val (stats, _) = ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)
 +      s.skipped = s.skipped ++ s.run.skippedStats.toList
-+      splice(s, sk, stats)(using ctx0)
++      spliceAll(s, List((sk, stats)))(using ctx0)
 +      s.diagnostics
 +    catch case ex: CompilationUnit.CancelledCompilation =>
 +      // The statement being typed can not be typed a second time: typing
@@ -793,37 +838,47 @@ index 5b78dc804b..3deafa4984 100644
 +   *  unit's typed tree (the package for a package class, the template for
 +   *  a local dummy), in source order, and update what depends on the tree.
 +   */
-+  private def splice(s: Session, sk: Run.SkippedStat, stats: List[Tree])(using Context): Unit =
-+    val owner = sk.owner
-+    // a skipped block statement left stubs with its span in the typed `Block`
-+    // (one per symbol it defines): the typed statement takes their place
-+    def isStubOf(t: Tree) = t.span == sk.stat.span && (t.source eq s.unit.source)
-+    def insert(into: List[Tree]): List[Tree] =
-+      val start = stats.headOption.map(_.span.start).getOrElse(-1)
-+      val (before, after) = into.span(t => !t.span.exists || t.span.start <= start)
-+      before ++ stats ++ after
++  private def spliceAll(s: Session, entries: List[(Run.SkippedStat, List[Tree])])(using Context): Unit =
++    val src = s.unit.source
++    def isStubOf(sk: Run.SkippedStat)(t: Tree) = t.span == sk.stat.span && (t.source eq src)
++    /** `stats` inserted into `into` in source order */
++    def insert(into: List[Tree], stats: List[Tree]): List[Tree] =
++      stats.foldLeft(into) { (acc, st) =>
++        val (before, after) = acc.span(t => !t.span.exists || t.span.start <= st.span.start)
++        before ++ (st :: after)
++      }
++    val ofOwner = entries.filter(!_._1.inBlock).groupBy(_._1.owner)
++    val inBlocks = entries.filter(_._1.inBlock)
 +    val mapper = new tpd.TreeMap:
 +      override def transform(tree: Tree)(using Context): Tree = tree match
 +        // a skipped block definition's stub has an untyped type tree: not entered
 +        case t if !t.hasType => t
-+        case t: PackageDef if !sk.inBlock && owner.is(Flags.PackageClass) && t.symbol.moduleClass == owner =>
-+          tpd.cpy.PackageDef(t)(t.pid, insert(t.stats))
-+        case t: Template if !sk.inBlock && t.symbol == owner =>
-+          tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body))
-+        // the innermost typed block containing the statement's span: its
-+        // stubs (a definition's) go, the typed statement is inserted in order
-+        // (an expression statement left no stub); a block nested in one of
-+        // its statements is reached by the traversal
-+        case b: Block if sk.inBlock && (b.source eq s.unit.source) && b.span.contains(sk.stat.span)
-+            && !(b.stats :+ b.expr).exists(t => t.span.exists && !isStubOf(t) && t.span != sk.stat.span && t.span.contains(sk.stat.span)) =>
-+          tpd.cpy.Block(b)(insert(b.stats.filterNot(isStubOf)), b.expr)
++        case t: PackageDef if t.symbol.moduleClass.is(Flags.PackageClass) && ofOwner.contains(t.symbol.moduleClass) =>
++          val t1 = tpd.cpy.PackageDef(t)(t.pid, insert(t.stats, ofOwner(t.symbol.moduleClass).flatMap(_._2)))
++          if inBlocks.isEmpty then t1 else super.transform(t1)
++        case t: Template if ofOwner.contains(t.symbol) =>
++          val t1 = tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body, ofOwner(t.symbol).flatMap(_._2)))
++          if inBlocks.isEmpty then t1 else super.transform(t1)
++        // the innermost typed block containing a statement's span: its stubs
++        // (a definition's) go, the typed statement is inserted in order (an
++        // expression statement left no stub); a block nested in one of the
++        // block's statements is reached by the traversal
++        case b: Block if inBlocks.nonEmpty && (b.source eq src) =>
++          val here = inBlocks.filter { (sk, _) =>
++            b.span.contains(sk.stat.span)
++            && !(b.stats :+ b.expr).exists(t => t.span.exists && !isStubOf(sk)(t) && t.span != sk.stat.span && t.span.contains(sk.stat.span)) }
++          if here.isEmpty then super.transform(b)
++          else
++            val stubs = here.map(_._1)
++            val b1 = tpd.cpy.Block(b)(insert(b.stats.filterNot(t => stubs.exists(sk => isStubOf(sk)(t))), here.flatMap(_._2)), b.expr)
++            if inBlocks.size == here.size then b1 else super.transform(b1)
 +        case _ => super.transform(tree)
 +    val t = mapper.transform(s.unit.tpdTree)
 +    s.unit.tpdTree = t
 +    // What `SetRootTree` would have done had the statements been typed in the phase
 +    inContext(ctx.fresh.setCompilationUnit(s.unit)):
 +      new transform.SetRootTree().run
-+    stats.foreach(cleanup(_, errorOutCompleters = false))
++    entries.foreach(_._2.foreach(cleanup(_, errorOutCompleters = false)))
 +    myOpenedTrees(s.uri) = topLevelTrees(t, s.source)
 +    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
 +
@@ -914,7 +969,7 @@ index 5b78dc804b..3deafa4984 100644
      }
    }
  
-@@ -140,13 +527,15 @@ class InteractiveDriver(
+@@ -140,13 +582,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -932,7 +987,7 @@ index 5b78dc804b..3deafa4984 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +567,6 @@ class InteractiveDriver(
+@@ -178,3 +622,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1644,10 +1699,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..7be696d913
+index 0000000000..99305c1e26
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,467 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -1987,6 +2042,28 @@ index 0000000000..7be696d913
 +    assert(before.exists(_.startsWith("while")), s"the while is skipped by the first request: $before")
 +    assert(!after.exists(_.startsWith("while")), s"the while is typed by the second: $after")
 +    assert(resumed.contains("Select toByte"), s"the tree at the target is the typed select: $resumed")
++
++  @Test def `a-whole-file-run-completes-the-session` =
++    // A whole-file run on the session's content (document highlight asks for
++    // one on every cursor move) types what is still skipped and keeps the run:
++    // the request after it is served, not a fresh run.
++    val code = (0 until 20).map(i => s"object W$i {\n  def m$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum\n  val r = this.m$i\n}").mkString("\n") + "\n"
++    val uri = URI.create("file:///W.scala")
++    val src = SourceFile.virtual(uri, code)
++    val at3 = code.indexOf(".filter(_ > 3)") + 4
++    val at15 = code.indexOf(".filter(_ > 15)") + 4
++    val (run0, skipped0, run1, fully, run2, skipped2) = withDriver { d =>
++      d.runUpTo(uri, src, Span(at3))
++      val run0 = d.runIdOf(uri); val skipped0 = d.untypedSpans(uri).size
++      d.run(uri, src)
++      val run1 = d.runIdOf(uri); val fully = d.isFullyTyped(uri)
++      d.runUpTo(uri, src, Span(at15))
++      (run0, skipped0, run1, fully, d.runIdOf(uri), d.untypedSpans(uri).size)
++    }
++    println(s"[a-whole-file-run-completes-the-session] targeted run $run0 skipped $skipped0; after run: run $run1 fully typed $fully; after the next request: run $run2 skipped $skipped2")
++    assert(skipped0 > 0, "the targeted run skipped something")
++    assert(run1 == run0 && fully, "the whole-file run completed the session in the same run")
++    assert(run2 == run0 && skipped2 == 0, "the request after it is served from the same run")
 +
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
@@ -2580,10 +2657,10 @@ index 0000000000..32a2652754
 +          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
 new file mode 100644
-index 0000000000..e159a4a7e9
+index 0000000000..6aaa4faaa0
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,164 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2703,6 +2780,11 @@ index 0000000000..e159a4a7e9
 +    try
 +      for step <- 1 to requests do
 +        val (o, name) = idents(rng.nextInt(idents.size))
++        if step % 40 == 0 then
++          // what document highlight does between hovers: a whole-file run,
++          // which completes the session; the answers after it must still match
++          driver.runUpTo(uri, source, Span(o)); driver.run(uri, source)
++          log += s"$step run (whole file) run=${driver.runIdOf(uri)} fully=${driver.isFullyTyped(uri)}"
 +        if step % cancelEvery == 0 then
 +          val k = 1 + rng.nextInt(3)
 +          var p = 0
@@ -3404,10 +3486,10 @@ index 0000000000..b9a6294569
 +    Thread.currentThread.join()
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/xray.html b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
 new file mode 100644
-index 0000000000..637660fe32
+index 0000000000..2123eed0be
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
-@@ -0,0 +1,720 @@
+@@ -0,0 +1,724 @@
 +<!doctype html>
 +<html lang="en">
 +<head>
@@ -3568,7 +3650,7 @@ index 0000000000..637660fe32
 +          <button id="demoSession" class="card" data-icon="session" title="complete at object 10, then 40, then 10 again, then inside method20"><span><b>Session</b><small>One run serves several completions: fresh, resumed, served.</small></span></button>
 +          <button id="demoCancel" class="card" data-icon="cancel" title="complete at the latch, cancel while the typer is blocked, then complete there again"><span><b>Cancel, deterministically</b><small>Block the typer at a macro, cancel it, then complete there again. About 20 s.</small></span></button>
 +          <button id="demoEdit" class="card" data-icon="edit" title="type a character into object 0, then complete at object 10"><span><b>Edit</b><small>An edit starts a fresh run; only the path to the cursor is typed.</small></span></button>
-+          <button id="demoFull" class="card" data-icon="doc" title="type the whole file, then complete: no session, everything typed"><span><b>Whole file</b><small>Type everything with driver.run, for comparison.</small></span></button>
++          <button id="demoFull" class="card" data-icon="doc" title="a targeted run, then driver.run on the same content: the session is completed in the same run, and the next request is served"><span><b>Whole file</b><small>driver.run completes the session instead of replacing it.</small></span></button>
 +          <button id="clear" class="ghost" data-icon="trash" title="clear the demo transcript, the request log and the x-ray panel">Clear transcript and log</button>
 +        </div>
 +      </div>
@@ -3582,7 +3664,7 @@ index 0000000000..637660fe32
 +      </div>
 +      <div class="cmdbar">
 +        <button id="complete" class="primary" data-icon="complete" title="runUpTo at the cursor, then Completion.completions (Ctrl/Cmd-Space)">Complete</button>
-+        <button id="full" class="icon" data-icon="doc" title="Type whole file: driver.run, no session is left"></button>
++        <button id="full" class="icon" data-icon="doc" title="Type whole file: driver.run (completes the session if one exists on this content)"></button>
 +        <span class="sep"></span>
 +        <label class="toggle" title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> Hover types</label>
 +        <span class="sp"></span>
@@ -3980,7 +4062,7 @@ index 0000000000..637660fe32
 +  cm.on('keydown', (c, e) => { if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); send('complete', cancelMs()); } });
 +
 +  const OUT = { 'served': 'answered from what is typed: nothing typed', resumed: 'resumed the same run: the statement at the cursor was typed', fresh: 'fresh run (content changed or no session): only the path to the cursor typed',
-+    full: 'whole file typed by driver.run (no session left)', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
++    full: 'whole file typed by driver.run: a session on this content is completed in the same run, else a new run with no session', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
 +
 +  function render(r) {
 +    const x = $('xray');
@@ -4117,11 +4199,15 @@ index 0000000000..637660fe32
 +  };
 +  $('demoFull').onclick = async () => {
 +    if (needsGenerated()) return;
-+    storyStart('Demo: the whole file, for comparison');
-+    let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
-+    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(600);
-+    li = storyStep('Complete in object 10', 'a fresh targeted run: the whole-file run left no session to resume');
-+    gotoObject(10); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'fresh', `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
++    storyStart('Demo: a whole-file run completes the session');
++    let li = storyStep('Complete in object 10', 'a targeted request: only the path to the cursor is typed, the other objects skipped');
++    gotoObject(10); const r0 = await send('complete', -1);
++    if (!r0) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
++    storyResult(li, ['fresh', 'resumed', 'served'].includes(r0.outcome) && !r0.fullyTyped, `${r0.outcome}, run ${r0.runId}, ${typedOf(r0)}`); await sleep(600);
++    li = storyStep('Type the whole file (driver.run)', 'what the editor asks for on every cursor move (document highlight): the session is completed in the same run, every skipped statement typed, nothing discarded');
++    const r = await send('full', -1); storyResult(li, r.outcome === 'full' && !r.runChanged && r.fullyTyped, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, fully typed: ${r.fullyTyped}, ${typedOf(r)}`); await sleep(600);
++    li = storyStep('Complete in object 40', 'served from the completed run: nothing typed');
++    gotoObject(40); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'served' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
 +  };
 +  gotoObject(10);
 +})();
