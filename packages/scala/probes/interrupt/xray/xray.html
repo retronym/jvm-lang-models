@@ -58,6 +58,9 @@
   #log tr.cancelled td { color: var(--cancelu); } #log tr:first-child td { font-weight: 600; }
   pre.hljs { margin: 4px 0 8px; padding: 6px 8px; border-radius: 6px; font-size: 11px; max-height: 120px; overflow: auto; }
   #busy { color: var(--cur); font-weight: 600; }
+  #popup { position: fixed; z-index: 10; max-width: 560px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 8px 10px; font-size: 12px; pointer-events: none; }
+  #popup .t { font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; } #popup .x { color: var(--dim); margin-top: 4px; }
+  #popup.pending { border-color: var(--cur); } #popup.cancelled { border-color: var(--cancelu); }
   #latch { background: var(--warn); padding: 3px 8px; border-radius: 6px; }
   #story { border-bottom: 1px solid var(--line); background: var(--panel); padding: 6px 12px; font-size: 12px; max-height: 190px; overflow: auto; }
   #story h3 { margin: 0 0 4px; font-size: 12px; } #story ol { margin: 0; padding-left: 20px; } #story li { margin: 2px 0; }
@@ -83,7 +86,10 @@
       <button id="full" title="driver.run: type the whole file">Type whole file</button>
       <label>Cancel next request after <input id="cancelms" type="number" min="0" step="5" placeholder="off"> ms</label>
       <span class="dim">cursor: <span id="cur" class="mono">–</span></span>
+      <label title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> hover: type at the pointer, cancel on move</label>
+      <span id="hoverState" class="dim"></span>
     </div>
+    <div id="popup" hidden></div>
     <div class="toolbar">
       <span class="dim">Go to object</span>
       <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
@@ -179,7 +185,8 @@
     render(r); logRow(r); last = r; return r;
   }
   async function send(kind, cancelAfterMs) {
-    if (busy) return null; setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
+    if (busy) return null;
+    if (hover.inFlight) { await cancelInFlight(); for (let i = 0; i < 100 && hover.inFlight; i++) await sleep(30); } setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
     const code = cm.getValue(), offset = offsetOf();
     const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs), file: currentFile });
     let r;
@@ -209,6 +216,59 @@
     return finish(st.result, code, -1);
   }
   const whenLatched = () => new Promise((f) => latchWaiters.push(f));
+
+  // ---- hover mode: a typeAt request per identifier under the pointer, cancelled when the pointer moves on before the answer
+  const hover = { token: null, inFlight: null, timer: null, seq: 0 };
+  const wordAt = (pos) => { const line = cm.getLine(pos.line); let a = pos.ch, b = pos.ch; while (a > 0 && /[\w$]/.test(line[a - 1])) a--; while (b < line.length && /[\w$]/.test(line[b])) b++; return a < b && /[A-Za-z_$]/.test(line[a]) ? { line: pos.line, a, b, text: line.slice(a, b) } : null; };
+  const popupAt = (ev, cls, html) => { const p = $('popup'); p.className = cls; p.innerHTML = html; p.hidden = false; p.style.left = Math.min(ev.clientX + 14, window.innerWidth - 580) + 'px'; p.style.top = (ev.clientY + 16) + 'px'; };
+  const hidePopup = () => { $('popup').hidden = true; };
+  async function cancelInFlight() {
+    if (!hover.inFlight) return;
+    hover.inFlight.dropped = true;
+    try { await fetch('/cancel', { method: 'POST' }); } catch (e) { /* ignore */ }
+  }
+  async function hoverRequest(tok, ev) {
+    const mine = { seq: ++hover.seq, tok, dropped: false };
+    await cancelInFlight();
+    // the server runs one request at a time: wait for the cancelled one to unwind
+    for (let i = 0; i < 100 && hover.inFlight; i++) await sleep(30);
+    if (hover.token !== tok || mine.seq !== hover.seq) return;
+    hover.inFlight = mine;
+    const code = cm.getValue(), offset = cm.indexFromPos({ line: tok.line, ch: tok.b });
+    popupAt(ev, 'pending', `<div class="t">${esc(tok.text)}</div><div class="x">typeAt(${offset}) in flight…</div>`);
+    $('hoverState').textContent = `typeAt ${tok.text}…`;
+    const body = new URLSearchParams({ kind: 'typeAt', code, offset: String(offset), cancelAfterMs: '-1', async: '1', file: currentFile });
+    let st;
+    try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { hover.inFlight = null; return; }
+    if (st.outcome) { hover.inFlight = null; return; }
+    while (true) {
+      await sleep(40);
+      try { st = await (await fetch('/status')).json(); } catch (e) { continue; }
+      if (!st.inFlight && st.result) break;
+    }
+    hover.inFlight = null;
+    const r = finish(st.result, code, -1);
+    if (mine.dropped || hover.token !== tok) { $('hoverState').textContent = `${tok.text}: ${r.outcome.startsWith('cancelled') ? 'cancelled in the typer' : 'answer dropped (pointer moved)'}`; return; }
+    const h = r.hover || {};
+    const sum = `${r.outcome}, run ${r.runId}, ${r.typedTrees} trees, ${r.ms} ms`;
+    if (r.outcome.startsWith('cancelled')) popupAt(ev, 'cancelled', `<div class="t">${esc(tok.text)}</div><div class="x">cancelled: ${esc(r.where || '')} (${sum})</div>`);
+    else if (!h.found) popupAt(ev, '', `<div class="t">${esc(tok.text)}</div><div class="x">no typed tree here (${sum})</div>`);
+    else popupAt(ev, '', `<div class="t">${esc(h.symbol || h.tree)}${h.info ? ': ' + esc(h.info) : ''}</div><div class="t dim">type: ${esc(h.type)}</div><div class="x">${esc(h.tree)} [${h.start}, ${h.end})${h.enclosing ? ' in ' + esc(h.enclosing) : ''} · ${sum}</div>`);
+    $('hoverState').textContent = `${tok.text}: ${r.outcome} ${r.ms} ms`;
+  }
+  cm.getWrapperElement().addEventListener('mousemove', (ev) => {
+    if (!$('hoverMode').checked || busy) return;
+    const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
+    const tok = wordAt(pos);
+    const same = tok && hover.token && tok.line === hover.token.line && tok.a === hover.token.a;
+    if (same) return;
+    clearTimeout(hover.timer);
+    hover.token = tok;
+    if (!tok) { hidePopup(); if (hover.inFlight) cancelInFlight(); return; }
+    hover.timer = setTimeout(() => { if (hover.token === tok) hoverRequest(tok, ev); }, 150);
+  });
+  cm.getWrapperElement().addEventListener('mouseleave', () => { clearTimeout(hover.timer); hover.token = null; hidePopup(); if (hover.inFlight) cancelInFlight(); });
+  $('hoverMode').onchange = () => { if (!$('hoverMode').checked) { hidePopup(); hover.token = null; } };
   $('latchGo').onclick = () => { gotoGiant(); sendLatched(); };
   $('release').onclick = () => fetch('/release', { method: 'POST' });
   $('cancelNow').onclick = () => fetch('/cancel', { method: 'POST' });
@@ -235,7 +295,7 @@
     x.innerHTML = `
       <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
       <dl class="kv">
-        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
+        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `${r.kind === 'typeAt' ? 'typeAt (hover): ' : ''}runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
         <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''})</span></dd>
         <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
         <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
@@ -246,7 +306,8 @@
       </dl>
       <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
       <div id="stats">${stats}</div>
-      ${r.kind !== 'full' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
+      ${r.kind === 'typeAt' && r.hover ? `<div class="dim">type at the pointer</div><ul class="compl">${r.hover.found ? `<li class="mono">${esc(r.hover.symbol || r.hover.tree)}${r.hover.info ? ': ' + esc(r.hover.info) : ''}</li><li class="mono dim">type: ${esc(r.hover.type)}</li>` : '<li class="dim">no typed tree at the offset</li>'}</ul>` : ''}
+      ${r.kind === 'complete' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
       ${cursorSrc ? `<div class="dim">statement at the cursor</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>` : ''}`;
     x.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     x.querySelectorAll('.st').forEach((el) => el.onclick = () => { const s = r.statements[+el.dataset.i]; cm.setCursor(cm.posFromIndex(s.start)); cm.scrollIntoView(null, 120); cm.focus(); });
@@ -263,7 +324,7 @@
   }
   function logRow(r) {
     const tr = document.createElement('tr'); tr.className = r.outcome.startsWith('cancelled') ? 'cancelled' : '';
-    const req = r.kind === 'full' ? 'type whole file' : `complete @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
+    const req = r.kind === 'full' ? 'type whole file' : `${r.kind === 'typeAt' ? 'typeAt' : 'complete'} @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
     tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}${r.latch ? ' <span class="dim">latched' + (r.cancelledByButton ? ', cancelled' : ', released') + '</span>' : ''}</td><td>${esc(r.outcome)}</td>
       <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
     $('logbody').prepend(tr);

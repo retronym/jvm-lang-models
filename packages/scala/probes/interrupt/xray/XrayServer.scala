@@ -15,7 +15,7 @@ import dotty.tools.dotc.ast.{tpd, untpd}
 import dotty.tools.dotc.core.Contexts.*
 import dotty.tools.dotc.core.Phases
 import dotty.tools.dotc.core.Symbols.*
-import dotty.tools.dotc.interactive.{CachedLogicalPackage, Completion, InteractiveDriver}
+import dotty.tools.dotc.interactive.{CachedLogicalPackage, Completion, Interactive, InteractiveDriver}
 import dotty.tools.dotc.parsing.Parsers
 import dotty.tools.dotc.util.{SourceFile, SourcePosition}
 import dotty.tools.dotc.util.Spans.Span
@@ -220,6 +220,7 @@ object XrayServer:
   def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false, file: String = ""): Map[String, Any] = lock.synchronized {
     cancelNow = false
     if latch then armLatch() else releaseLatch()
+    // (an async request without the latch runs the same way, on its own thread, cancellable through /cancel)
     inFlight = Map("kind" -> kind, "offset" -> offset, "cancelAfterMs" -> cancelAfterMs, "latch" -> latch)
     startedAt = System.nanoTime()
     locally {
@@ -267,12 +268,19 @@ object XrayServer:
     var cancelled = false
     var error: String | Null = null
     var completions: List[Completion] = Nil
+    var hover: Map[String, Any] | Null = null
     var diagnostics = 0
     try
       driver.withCancelChecker(checker) {
         kind match
           case "full" =>
             diagnostics = driver.run(uri, source).size
+          case "typeAt" =>
+            diagnostics = driver.runUpTo(uri, source, Span(offset)).size
+            driver.compilationUnits.get(uri).foreach { unit =>
+              given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
+              hover = typeAt(unit.tpdTree, offset)
+            }
           case _ =>
             diagnostics = driver.runUpTo(uri, source, Span(offset)).size
             driver.compilationUnits.get(uri).foreach { unit =>
@@ -345,9 +353,29 @@ object XrayServer:
       "ms" -> math.round(ms * 10) / 10.0,
       "touched" -> touched, "touchedBefore" -> touchedBefore, "completed" -> completed, "scopeSize" -> total,
       "diagnostics" -> diagnostics,
-      "completions" -> completions.map(c => c.label + (if c.description.nonEmpty then " " + c.description else "")).take(50)
+      "completions" -> completions.map(c => c.label + (if c.description.nonEmpty then " " + c.description else "")).take(50),
+      "hover" -> hover
     )
   }
+
+  /** The innermost typed tree at `offset` (the path drops untyped heads: a
+   *  skipped statement's inside is not there), its type and its symbol, as
+   *  a hover would show them.
+   */
+  private def typeAt(tree: tpd.Tree, offset: Int)(using Context): Map[String, Any] =
+    val path = Interactive.pathTo(tree, Span(offset))
+    path.headOption match
+      case None => Map("found" -> false)
+      case Some(t) =>
+        val sym = t.symbol
+        val tpe = if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>"
+        Map("found" -> true, "tree" -> t.getClass.getSimpleName, "start" -> t.span.start, "end" -> t.span.end,
+          "type" -> tpe,
+          "symbol" -> (if sym.exists then s"${sym.showKind} ${sym.showFullName}" else ""),
+          "info" -> (if sym.exists then sym.info.show.take(300) else ""),
+          "owner" -> (if sym.exists then sym.owner.showFullName else ""),
+          "enclosing" -> path.collectFirst { case d: tpd.DefDef => s"def ${d.name}"; case c: tpd.TypeDef => s"${c.name}" }.getOrElse(""))
+
 
   private def findPage(): Path =
     sys.props.get("xray.page").map(Paths.get(_)).filter(Files.exists(_)).getOrElse {
@@ -404,6 +432,7 @@ object XrayServer:
         val offset = field(body, "offset").map(_.toInt).getOrElse(0)
         val cancel = field(body, "cancelAfterMs").map(_.toLong).getOrElse(-1L)
         val latch = field(body, "latch").contains("1")
+        val async = latch || field(body, "async").contains("1")
         val file = field(body, "file").getOrElse("")
         def go(): Map[String, Any] =
           val result =
@@ -411,9 +440,10 @@ object XrayServer:
             catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
           println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
           result
-        if latch then
+        if async then
           // Runs on its own thread; the page polls /status and releases or cancels.
-          if latchFile.isEmpty then reply(ex, 400, "text/plain", "the server was started without -Dxray.latch")
+          if latch && latchFile.isEmpty then reply(ex, 400, "text/plain", "the server was started without -Dxray.latch")
+          else if inFlight != null then reply(ex, 409, "application/json", json(status()))
           else
             val t = new Thread((() => { lastResult = null; go(); () }): Runnable, "xray-latched-request")
             t.setDaemon(true); t.start()
