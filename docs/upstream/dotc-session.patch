@@ -442,6 +442,36 @@ index bec515aa79..4734fe8b4b 100644
             !denot.completer.isInstanceOf[SymbolLoaders.SecondCompleter] then
            failure match
              case Some(failure) => denot.markLoadFailed(failure)
+diff --git a/compiler/src/dotty/tools/dotc/core/TypeOps.scala b/compiler/src/dotty/tools/dotc/core/TypeOps.scala
+index a72dfb36f1..c236e650e9 100644
+--- a/compiler/src/dotty/tools/dotc/core/TypeOps.scala
++++ b/compiler/src/dotty/tools/dotc/core/TypeOps.scala
+@@ -244,7 +244,7 @@ object TypeOps:
+         val accu1 = if accu.exists(_.derivesFrom(c)) then accu else c :: accu
+         if (cs == c.baseClasses) accu1 else dominators(rest, accu1)
+       case Nil => // this case can happen because after erasure we do not have a top class anymore
+-        assert(ctx.erasedTypes || ctx.reporter.errorsReported)
++        assert(ctx.erasedTypes || ctx.reporter.errorsReported || ctx.mode.is(Mode.Interactive), i"no common base class of $cs")
+         defn.ObjectClass :: Nil
+     }
+ 
+diff --git a/compiler/src/dotty/tools/dotc/core/TyperState.scala b/compiler/src/dotty/tools/dotc/core/TyperState.scala
+index 312756b614..a84927e687 100644
+--- a/compiler/src/dotty/tools/dotc/core/TyperState.scala
++++ b/compiler/src/dotty/tools/dotc/core/TyperState.scala
+@@ -140,6 +140,12 @@ class TyperState() {
+   /** The closest ancestor of this typer state (including possibly this typer state itself)
+    *  which is not yet committed, or which does not have a parent.
+    */
++  /** Has this typer state been committed into its parent? */
++  def hasBeenCommitted: Boolean = isCommitted
++
++  /** The previous typer state, the one this state commits into. */
++  def previousState: TyperState | Null = previous
++
+   def uncommittedAncestor: TyperState =
+     previous match
+       case null => this
 diff --git a/compiler/src/dotty/tools/dotc/interactive/Completion.scala b/compiler/src/dotty/tools/dotc/interactive/Completion.scala
 index da6d02b5ad..c67d7b8b0a 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/Completion.scala
@@ -464,7 +494,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..97ee8aac92 100644
+index 5b78dc804b..f50ed33315 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,14 @@ import scala.collection.*
@@ -528,7 +558,7 @@ index 5b78dc804b..97ee8aac92 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +108,527 @@ class InteractiveDriver(
+@@ -78,37 +108,568 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -609,7 +639,7 @@ index 5b78dc804b..97ee8aac92 100644
 +     */
 +    def complete(): List[Diagnostic] =
 +      beginTyping()
-+      while skipped.nonEmpty do
++      while skipped.nonEmpty && !poisoned do
 +        val batch = skipped.sortBy(_.stat.span.start)
 +        skipped = Nil
 +        run.clearTargeting() // no target: each statement typed whole
@@ -617,14 +647,20 @@ index 5b78dc804b..97ee8aac92 100644
 +        try
 +          for sk <- batch do
 +            assertOwnSource(sk)
-+            val ctx0 = sk.ctx
-+            try typed += ((sk, ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)._1))
-+            catch case ex: CompilationUnit.CancelledCompilation =>
-+              // the ones typed so far are kept; the aborted one is replaced
-+              // or poisons the session, as in a resume
-+              skipped = skipped ++ batch.dropWhile(_ ne sk).drop(1)
-+              abandon(sk)
-+              throw ex
++            liveContext(sk.ctx) match
++              case None =>
++                // no typer state left to type it in: it stays skipped, and the
++                // next request starts fresh
++                skipped = sk :: skipped
++                poisoned = true
++              case Some(ctx0) =>
++                try typed += ((sk, ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)._1))
++                catch case ex: CompilationUnit.CancelledCompilation =>
++                  // the ones typed so far are kept; the aborted one is replaced
++                  // or poisons the session, as in a resume
++                  skipped = skipped ++ batch.dropWhile(_ ne sk).drop(1)
++                  abandon(sk)
++                  throw ex
 +        finally
 +          val entries = typed.result()
 +          if entries.nonEmpty then spliceAll(entries)(using entries.head._1.ctx)
@@ -642,13 +678,37 @@ index 5b78dc804b..97ee8aac92 100644
 +     *  splice the result into the unit's typed tree.
 +     */
 +    def resume(sk: Run.SkippedStat, target: Span): List[Diagnostic] =
++      liveContext(sk.ctx) match
++        case None => InteractiveDriver.this.run(uri, source, target) // no typer state left to resume in
++        case Some(ctx0) => resumeIn(sk, ctx0, target)
++
++    /** The recorded context of a skipped statement, in the nearest typer
++     *  state that can still take constraints. A statement skipped inside an
++     *  argument is recorded under the nested state that `tryEither` made for
++     *  the application, which is committed into its parent when the
++     *  application succeeds; typing under it would commit into a committed
++     *  state. Its parent holds everything it held, and what the application
++     *  instantiated afterwards. An explore state (not committable) is
++     *  climbed over the same way. `None` if no ancestor is live.
++     */
++    private def liveContext(ctx0: Context): Option[Context] =
++      def live(ts: TyperState | Null): TyperState | Null =
++        if ts == null then null
++        else if ts.isCommittable && !ts.hasBeenCommitted then ts
++        else live(ts.previousState)
++      val ts = ctx0.typerState
++      if ts.isCommittable && !ts.hasBeenCommitted then Some(ctx0)
++      else live(ts.previousState) match
++        case null => None
++        case ts1 => Some(ctx0.fresh.setTyperState(ts1))
++
++    private def resumeIn(sk: Run.SkippedStat, ctx0: Context, target: Span): List[Diagnostic] =
 +      beginTyping()
 +      assertOwnSource(sk)
 +      skipped = skipped.filterNot(_ eq sk)
 +      run.clearTargeting()
 +      run.typingTarget = target
 +      try
-+        val ctx0 = sk.ctx
 +        run.targetNextStats(sk.owner, sk.inBlock)(using ctx0)
 +        val (stats, _) = ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)
 +        collectSkipped()
@@ -786,34 +846,45 @@ index 5b78dc804b..97ee8aac92 100644
 +        }
 +      val ofOwner = entries.filter(!_._1.inBlock).groupBy(_._1.owner)
 +      val inBlocks = entries.filter(_._1.inBlock)
++      val placed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[Run.SkippedStat, java.lang.Boolean])
 +      val mapper = new tpd.TreeMap:
 +        override def transform(tree: Tree)(using Context): Tree = tree match
 +          // a skipped block definition's stub has an untyped type tree: not entered
 +          case t if !t.hasType => t
 +          case t: PackageDef if t.symbol.moduleClass.is(Flags.PackageClass) && ofOwner.contains(t.symbol.moduleClass) =>
 +            // and on into the classes and blocks it holds: their entries are theirs
++            ofOwner(t.symbol.moduleClass).foreach(e => placed.add(e._1))
 +            super.transform(tpd.cpy.PackageDef(t)(t.pid, insert(t.stats, ofOwner(t.symbol.moduleClass).flatMap(_._2))))
 +          case t: Template if ofOwner.contains(t.symbol) =>
++            ofOwner(t.symbol).foreach(e => placed.add(e._1))
 +            super.transform(tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body, ofOwner(t.symbol).flatMap(_._2))))
 +          // the innermost typed block containing a statement's span: its stubs
 +          // (a definition's) go, the typed statement is inserted in order (an
 +          // expression statement left no stub); a block nested in one of the
 +          // block's statements is reached by the traversal
 +          case b: Block if inBlocks.nonEmpty && (b.source eq src) =>
++            // a definition's place is the block that holds its stub, whatever
++            // else overlaps it there (the synthetic temporary of a pattern
++            // definition spans the vals it binds); an expression statement
++            // left no stub, and its place is the block that contains it
++            // directly, not through one of the block's statements
 +            val here = inBlocks.filter { (sk, _) =>
-+              b.span.contains(sk.stat.span)
-+              && !(b.stats :+ b.expr).exists(t => t.span.exists && !isStubOf(sk)(t) && t.span != sk.stat.span && t.span.contains(sk.stat.span)) }
++              b.stats.exists(isStubOf(sk))
++              || b.span.contains(sk.stat.span)
++                 && !(b.stats :+ b.expr).exists(t => t.span.exists && t.span != sk.stat.span && t.span.contains(sk.stat.span)) }
 +            if here.isEmpty then super.transform(b)
 +            else
 +              val stubs = here.map(_._1)
++              stubs.foreach(placed.add)
 +              super.transform(tpd.cpy.Block(b)(insert(b.stats.filterNot(t => stubs.exists(sk => isStubOf(sk)(t))), here.flatMap(_._2)), b.expr))
 +          case _ => super.transform(tree)
 +      val t = mapper.transform(unit.tpdTree)
-+      // Not asserted: every entry should find its owner group or block in the
-+      // tree (an entry that does not is silently dropped), but counting them
-+      // showed 236 of 238 spliced in `SessionOracleSuite` "Contexts-seed-1"
-+      // (a random request and cancellation sequence over Contexts.scala):
-+      // two typed statements found no place. A latent bug to triage.
++      // every typed statement finds its place: its owner's package or template,
++      // or the innermost typed block that contains it
++      val dropped = entries.filterNot(e => placed.contains(e._1))
++      assert(dropped.isEmpty, dropped.map { (sk, stats) =>
++        s"${sk.stat.getClass.getSimpleName}${sk.stat.span} owner=${sk.owner.showLocated} inBlock=${sk.inBlock} typed=${stats.map(_.getClass.getSimpleName).mkString(",")} \"${unit.source.textContent.slice(sk.stat.span.start, sk.stat.span.start + 50).replace('\n', ' ')}\""
++      }.mkString(s"spliced ${entries.size - dropped.size} of ${entries.size} typed statements; dropped: ", "; ", ""))
 +      unit.tpdTree = t
 +      // What `SetRootTree` would have done had the statements been typed in the phase
 +      inContext(ctx.fresh.setCompilationUnit(unit)):
@@ -1060,7 +1131,7 @@ index 5b78dc804b..97ee8aac92 100644
      }
    }
  
-@@ -140,13 +660,15 @@ class InteractiveDriver(
+@@ -140,13 +701,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -1078,7 +1149,7 @@ index 5b78dc804b..97ee8aac92 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +700,6 @@ class InteractiveDriver(
+@@ -178,3 +741,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1086,10 +1157,10 @@ index 5b78dc804b..97ee8aac92 100644
 +object InteractiveDriver:
 +  private val neverCancelled: () => Boolean = () => false
 diff --git a/compiler/src/dotty/tools/dotc/typer/Namer.scala b/compiler/src/dotty/tools/dotc/typer/Namer.scala
-index 635a30ba96..f8fcedd61d 100644
+index 635a30ba96..57ae708251 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Namer.scala
 +++ b/compiler/src/dotty/tools/dotc/typer/Namer.scala
-@@ -424,6 +424,32 @@ class Namer { typer: Typer =>
+@@ -424,6 +424,34 @@ class Namer { typer: Typer =>
      case _ => tree
    }
  
@@ -1109,6 +1180,8 @@ index 635a30ba96..f8fcedd61d 100644
 +        walkOwn(tree)
 +      case Thicket(trees) => trees.foreach(walk)
 +      case PackageDef(_, stats) => stats.foreach(walk)
++      // an `extension` block is not a DefTree; its expansion holds the methods
++      case tree: ExtMethods => tree.getAttachment(ExpandedTree).foreach(walk)
 +      case _ =>
 +    def walkOwn(tree: DefTree): Unit =
 +      tree.getAttachment(SymOfTree).foreach { sym =>
@@ -1122,6 +1195,17 @@ index 635a30ba96..f8fcedd61d 100644
    /** For all class definitions `stat` in `xstats`: If the companion class is
      * not also defined in `xstats`, invalidate it by setting its info to
      * NoType.
+@@ -934,6 +962,10 @@ class Namer { typer: Typer =>
+       val creationRunId = creationContext.runId
+       if ctx.runId > creationRunId then
+         assert(ctx.mode.is(Mode.Interactive), s"completing $denot in wrong run ${ctx.runId}, was created in $creationRunId")
++        // an earlier interactive run indexed it and left before completing it:
++        // its untyped tree belongs to that run. The degraded info is reported,
++        // so that what is computed from it knows an error is behind it.
++        report.error(em"$denot was left incomplete by an earlier run of the presentation compiler", denot.symbol.srcPos)
+         denot.info = UnspecifiedErrorType
+       else
+         try
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
 index d85b5bcc1b..11d3ea8a3b 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
@@ -1751,10 +1835,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..9dd75e8a5c
+index 0000000000..12cacf7f47
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,596 @@
+@@ -0,0 +1,717 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -2245,6 +2329,127 @@ index 0000000000..9dd75e8a5c
 +      assert(thrown, "the cancellation must land")
 +      org.junit.Assert.assertEquals(oracle.mkString("\n"), session.mkString("\n"))
 +    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
++
++  private val closureBody =
++    """|object Com {
++       |  def run(xs: List[Int]): Int = {
++       |    var acc = 0
++       |    xs.foreach { x =>
++       |      if (x > 0) { List(x, x).foreach(y => acc += y); Option(x).map(_ + 1).foreach(acc += _) }
++       |      acc += x
++       |    }
++       |    acc
++       |  }
++       |}
++       |""".stripMargin
++
++  @Test def `a-resume-into-a-closure-body-types-under-a-live-typer-state` =
++    // A statement skipped in a closure body is recorded under the typer state
++    // that tryEither made for the enclosing application, which is committed
++    // when the application succeeds. A resume into it must not type under that
++    // state: committing into a committed state is an assertion (I24).
++    val code = closureBody
++    val uri = URI.create("file:///Com.scala")
++    val src = SourceFile.virtual(uri, code)
++    val atLast = code.indexOf("acc += x") + 4
++    val atInner = code.indexOf("List(x, x)") + 2
++    val (sameRun, before, after, at) = withDriver { d =>
++      d.runUpTo(uri, src, Span(atLast))
++      val run0 = d.runIdOf(uri)
++      val before = d.untypedSpans(uri).map(sp => code.substring(sp.start, math.min(sp.end, sp.start + 10)).trim)
++      d.runUpTo(uri, src, Span(atInner))
++      val after = d.untypedSpans(uri).map(sp => code.substring(sp.start, math.min(sp.end, sp.start + 10)).trim)
++      val unit = d.compilationUnits(uri)
++      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      val path = Interactive.pathTo(unit.tpdTree, Span(atInner))
++      (d.runIdOf(uri) == run0, before, after, path.headOption.map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>"))
++    }
++    println(s"[a-resume-into-a-closure-body] same run: $sameRun; before: $before; after: $after; at List(x, x): $at")
++    assert(before.exists(_.startsWith("if (x > 0)")), s"the if is skipped by the first request: $before")
++    assert(sameRun, "the second request resumes the first request's run")
++    assert(!after.exists(_.startsWith("if (x > 0)")), s"the if is typed by the second: $after")
++    assert(at.exists(_.contains("List")), s"the resumed statement is typed: $at")
++
++  @Test def `the-completing-run-types-a-closure-body-under-a-live-typer-state` =
++    // The same statement, typed by the whole-file run that completes the session (I24).
++    val code = closureBody
++    val uri = URI.create("file:///Com2.scala")
++    val src = SourceFile.virtual(uri, code)
++    val (fully, at) = withDriver { d =>
++      d.runUpTo(uri, src, Span(code.indexOf("acc += x") + 4))
++      d.run(uri, src)
++      val unit = d.compilationUnits(uri)
++      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      val path = Interactive.pathTo(unit.tpdTree, Span(code.indexOf("List(x, x)") + 2))
++      (d.isFullyTyped(uri), path.headOption.map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>"))
++    }
++    println(s"[the-completing-run-types-a-closure-body] fully typed: $fully; at List(x, x): $at")
++    assert(fully, "the whole-file run completes the session")
++    assert(at.exists(_.contains("List")), s"the statement in the closure body is typed: $at")
++
++  @Test def `leaving-a-file-completes-its-extension-methods` =
++    // Before a request leaves a file, the symbols of its skipped statements are
++    // completed in their own run (I17). An `extension` block is not a DefTree:
++    // its methods kept the left run's completers, the next run gave them an
++    // error type silently, and an inferred union over it tripped
++    // TypeOps.orDominator's assertion (I27).
++    val uriA = URI.create("file:///ExtA.scala")
++    val uriB = URI.create("file:///ExtB.scala")
++    val codeA =
++      """|object ExtA {
++         |  extension (s: String) def twice = s.length * 2
++         |  def n = 1
++         |}
++         |""".stripMargin
++    val codeB =
++      """|object ExtB {
++         |  import ExtA.*
++         |  def run(b: Boolean): Int = {
++         |    def pick = if b then "x".twice else 0
++         |    pick
++         |  }
++         |}
++         |""".stripMargin
++    val (diags, tpe) = withDriver { d =>
++      d.runUpTo(uriA, SourceFile.virtual(uriA, codeA), Span(codeA.indexOf("def n") + 5))
++      val diags = d.run(uriB, SourceFile.virtual(uriB, codeB))
++      val unit = d.compilationUnits(uriB)
++      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      val path = Interactive.pathTo(unit.tpdTree, Span(codeB.indexOf("\"x\".twice") + 5))
++      (diags.map(_.msg.message), path.headOption.map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>"))
++    }
++    println(s"[leaving-a-file-completes-its-extension-methods] diagnostics: $diags; twice: $tpe")
++    org.junit.Assert.assertEquals(Nil, diags)
++    org.junit.Assert.assertEquals(Some("(s: String): Int"), tpe)
++
++  @Test def `a-pattern-definition-in-a-block-is-spliced` =
++    // `val (loc, store1) = ...` in a block desugars to a synthetic temporary,
++    // never skipped, and one val per name, skipped with stubs; the temporary's
++    // span covers the vals. The completing run's splice took the temporary for
++    // a statement nesting them and found no block to put them in (I31).
++    val code =
++      """|object Pat {
++         |  def pair(n: Int): (Int, String) = (n, n.toString)
++         |  def use(n: Int): Int = {
++         |    val (a, b) = pair(n)
++         |    val c = n + 1
++         |    a + b.length + c
++         |  }
++         |}
++         |""".stripMargin
++    val uri = URI.create("file:///Pat.scala")
++    val src = SourceFile.virtual(uri, code)
++    val (fully, atA) = withDriver { d =>
++      d.runUpTo(uri, src, Span(code.indexOf("n + 1") + 2))
++      d.run(uri, src)
++      val unit = d.compilationUnits(uri)
++      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
++      val path = Interactive.pathTo(unit.tpdTree, Span(code.indexOf("val (a, b)") + 6))
++      (d.isFullyTyped(uri), path.headOption.map(t => s"${t.getClass.getSimpleName} ${t.symbol.name}"))
++    }
++    println(s"[a-pattern-definition-in-a-block-is-spliced] fully typed: $fully; at a: $atA")
++    assert(fully, "the whole-file run completes the session")
++    assert(atA.exists(_.endsWith(" a")), s"the pattern's val is in the tree: $atA")
 +
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
