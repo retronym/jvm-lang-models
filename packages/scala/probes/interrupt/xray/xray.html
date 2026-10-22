@@ -249,7 +249,8 @@
   }
   $('go').onclick = () => gotoObject(+$('goto').value);
   function gotoGiant() {
-    const text = cm.getValue(), at = text.indexOf('def giant('), m = text.indexOf('.filter', at) + '.fil'.length;
+    // the last statement of giant: it depends on the whole chain, and the chain on the latch
+    const text = cm.getValue(), at = text.indexOf('val a199 ='), m = text.indexOf('.filter', at) + '.fil'.length;
     cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor();
   }
 
@@ -259,6 +260,7 @@
     render(r); logRow(r); last = r; return r;
   }
   async function send(kind, cancelAfterMs) {
+    for (let i = 0; i < 300 && busy; i++) await sleep(100); // a demo started while a request runs waits for it
     if (busy) return null;
     if (hover.inFlight) { await cancelInFlight(); for (let i = 0; i < 100 && hover.inFlight; i++) await sleep(30); } setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
     const code = cm.getValue(), offset = offsetOf();
@@ -515,13 +517,13 @@
   $('demoCancel').onclick = async () => {
     if (needsGenerated()) return;
     storyStart('Demo: a cancellation lands exactly where we want it');
-    let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
+    let li = storyStep('Complete at the last statement of `giant` in object 59, latched', 'the statement depends on the 199 before it and the first of those on the `tests.macros.Latch.await` macro, so the typer types the chain in order and blocks at the macro, with the rest of the file untouched');
     gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
     storyResult(li, true, `blocked: ${$('latchTrees').textContent} trees typed so far`);
     li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; giant is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
     await fetch('/cancel', { method: 'POST' }); const r = await p;
     storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(1200);
-    li = storyStep('Complete there again', 'the same run types giant whole this time (the latch is not armed)');
+    li = storyStep('Complete there again', 'the same run types the chain this time (the latch is not armed); a request anywhere else in giant would type only its own statement');
     gotoGiant(); const r2 = await send('complete', -1);
     storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
   };

@@ -125,15 +125,18 @@ object XrayServer:
     else sourcesRoot.map(_.resolve(file).toUri).getOrElse(generatedUri)
 
   /** The same shape as `CompletionSessionSuite.bigSource`, without the marker;
-   *  the last object also has a `giant` method of 200 local vals, big enough
-   *  for a cancellation to land inside it (the typer polls every 1024 trees),
-   *  that starts with `tests.macros.Latch.await`, a macro that blocks the typer while
-   *  the latch file exists (see `Latch` in the testcases project).
+   *  the last object also has a `giant` method of 200 local vals, each
+   *  depending on the one before and the first on `tests.macros.Latch.await`,
+   *  a macro that blocks the typer while the latch file exists (see `Latch`
+   *  in the testcases project): a request at the last statement types the
+   *  whole chain in order (big enough for a cancellation to land, the typer
+   *  polls every 1024 trees) and blocks at the macro first; a request
+   *  anywhere else does neither.
    */
   def generatedSource(tag: String, n: Int = objectCount): String =
     val objects = (0 until n).map { i =>
       val giant =
-        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer only when the statement at the cursor depends on it\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum${if j == 199 then " + latched" else ""}").mkString("\n") + "\n    a0 + a199\n  }"
+        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer only when the statement at the cursor depends on it\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum + ${if j == 0 then "latched" else s"a${j - 1}"}").mkString("\n") + "\n    a0 + a199\n  }"
         else ""
       s"""|object M$i {
           |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum$giant
