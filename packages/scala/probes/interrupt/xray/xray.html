@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dotc session x-ray</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  /* palette and editor theme borrowed from greffier's viewer (retronym/greffier, viewer/index.html) */
+  :root { --bg:#f6f7f9; --panel:#fff; --fg:#1b1f24; --dim:#7a828e; --line:#dde1e7; --acc:#1c7ed6; --new:#d9f2d9; --newu:#2f9e44; --cur:#f08c00; --code:#f1f3f5;
+          --typed:#c7e9ff; --typednow:#b2f2bb; --untyped:#f1f3f5; --cancel:#ffe3e3; --cancelu:#e03131; --warn:#fff3bf; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --panel:#1c2027; --fg:#e4e7ec; --dim:#8b94a3; --line:#2c323c; --new:#1d3a22; --code:#252a33; --newu:#51cf66;
+          --typed:#1c3a52; --typednow:#1d4a2a; --untyped:#252a33; --cancel:#4a1d1d; --warn:#4a3a10; } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; display: flex; flex-direction: column; }
+  code, pre, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 14px; margin: 0; }
+  .dim { color: var(--dim); }
+  main { flex: 1; display: grid; grid-template-columns: minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
+  section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+  section:last-child { border-right: 0; }
+  section > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 0; padding: 8px 12px 4px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); align-items: center; }
+  button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); cursor: pointer; }
+  button:hover { border-color: var(--acc); } button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=number] { width: 64px; font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+  #ed { flex: 1; min-height: 0; }
+  #ed .CodeMirror { height: 100%; background: #0f1520; color: #d4deef; font: 12px/17px ui-monospace, Menlo, monospace; }
+  #ed .CodeMirror-gutters { background: #0f1520; border-right: 1px solid #222e43; } #ed .CodeMirror-linenumber { color: #4a586f; }
+  #ed .CodeMirror-cursor { border-left: 2px solid #fff; } #ed .CodeMirror-selected { background: #254065 !important; }
+  #ed .cm-keyword { color: #c792ea; } #ed .cm-def { color: #82aaff; } #ed .cm-string { color: #c3e88d; } #ed .cm-number { color: #f78c6c; } #ed .cm-comment { color: #637088; }
+  #ed .cm-type, #ed .cm-variable-3 { color: #82aaff; } #ed .cm-atom, #ed .cm-builtin { color: #f78c6c; }
+  .line-typed { background: rgba(28,126,214,.18); } .line-typednow { background: rgba(47,158,68,.25); } .line-cancel { background: rgba(224,49,49,.25); }
+  .pad { padding: 8px 12px; overflow: auto; }
+  #xray { flex: 1; overflow: auto; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; align-items: baseline; margin: 0 0 8px; }
+  .kv dt { color: var(--dim); } .kv dd { margin: 0; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
+  .o-from-prefix { background: var(--typed); } .o-resumed { background: var(--typednow); } .o-fresh { background: var(--warn); }
+  .o-full { background: var(--warn); } .o-cancelled-resume, .o-cancelled-fresh, .o-error { background: var(--cancel); color: var(--cancelu); }
+  .same { color: var(--newu); font-weight: 600; } .changed { color: var(--cur); font-weight: 600; }
+  #stats { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 10px; }
+  .st { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--untyped); border: 1px solid transparent; cursor: pointer; }
+  .st.typed { background: var(--typed); } .st.typed-now { background: var(--typednow); } .st.cursor { border-color: var(--cur); } .st.aborted { background: var(--cancel); color: var(--cancelu); }
+  .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin: 0 3px 0 8px; }
+  #log { flex: 1; overflow: auto; font-size: 12px; }
+  #log table { border-collapse: collapse; width: 100%; } #log td, #log th { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+  #log th { color: var(--dim); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+  #log tr.cancelled td { color: var(--cancelu); } #log tr:first-child td { font-weight: 600; }
+  pre.hljs { margin: 4px 0 8px; padding: 6px 8px; border-radius: 6px; font-size: 11px; max-height: 120px; overflow: auto; }
+  #busy { color: var(--cur); font-weight: 600; }
+  ul.compl { margin: 2px 0 8px; padding-left: 18px; max-height: 110px; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>dotc session x-ray</h1>
+  <span class="dim">the patched <code>InteractiveDriver</code>: targeted typing (<code>runUpTo</code>), resumable runs, cancellation that unwinds. Every number below is read from the driver.</span>
+  <span id="busy"></span>
+</header>
+<main>
+  <section>
+    <h2>Editor: A.scala</h2>
+    <div class="toolbar">
+      <button id="complete" class="primary" title="runUpTo at the cursor, then Completion.completions">Complete at cursor</button>
+      <button id="full" title="driver.run: type the whole file">Type whole file</button>
+      <label>Cancel next request after <input id="cancelms" type="number" min="0" step="5" placeholder="off"> ms</label>
+      <span class="dim">cursor: <span id="cur" class="mono">–</span></span>
+    </div>
+    <div class="toolbar">
+      <span class="dim">Go to object</span>
+      <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
+      <button id="demoSession" title="complete at object 10, then 40, then 20">Demo: session</button>
+      <button id="demoCancel" title="fresh content, complete at object 10, then at object 55 with a 10 ms cancel, then at 55 again">Demo: cancel</button>
+      <button id="demoEdit" title="type a character into object 0, then complete at object 10">Demo: edit</button>
+    </div>
+    <div id="ed"></div>
+  </section>
+  <section>
+    <h2>X-ray of the last request</h2>
+    <div id="xray" class="pad"><p class="dim">No request yet. Place the cursor after a <code>this.meth</code> and press <b>Complete at cursor</b>.</p></div>
+  </section>
+  <section>
+    <h2>Request log (newest first)</h2>
+    <div id="log"><table><thead><tr><th>#</th><th>request</th><th>outcome</th><th>run</th><th>prefix</th><th>trees</th><th>touched</th><th>ms</th></tr></thead><tbody id="logbody"></tbody></table></div>
+  </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/scala.min.js"></script>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const src = await (await fetch('/source')).json();
+  const cm = CodeMirror($('ed'), { value: src.source, mode: 'text/x-scala', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
+    extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') } });
+  cm.setSize('100%', '100%');
+  let seq = 0, busy = false, last = null, lineMarks = [];
+  const offsetOf = () => cm.indexFromPos(cm.getCursor());
+  const showCursor = () => { const p = cm.getCursor(); $('cur').textContent = `${p.line + 1}:${p.ch + 1} (offset ${offsetOf()})`; };
+  cm.on('cursorActivity', showCursor); showCursor();
+
+  function gotoObject(i) {
+    const text = cm.getValue(), at = text.indexOf(`object M${i} {`);
+    if (at < 0) return false;
+    const m = text.indexOf('this.meth', at) + 'this.meth'.length;
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor(); return true;
+  }
+  $('go').onclick = () => gotoObject(+$('goto').value);
+
+  async function send(kind, cancelAfterMs) {
+    if (busy) return null; busy = true; $('busy').textContent = `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`;
+    document.querySelectorAll('button').forEach((b) => b.disabled = true);
+    const code = cm.getValue(), offset = offsetOf();
+    const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs) });
+    let r;
+    try { r = await (await fetch('/request', { method: 'POST', body })).json(); }
+    catch (e) { r = { outcome: 'error', error: String(e) }; }
+    busy = false; $('busy').textContent = ''; document.querySelectorAll('button').forEach((b) => b.disabled = false);
+    r.seq = ++seq; r.cancelRequested = cancelAfterMs; r.code = code;
+    render(r); logRow(r); last = r;
+    return r;
+  }
+  function cancelMs() { const v = $('cancelms').value; $('cancelms').value = ''; return v === '' ? -1 : +v; }
+  $('complete').onclick = () => send('complete', cancelMs());
+  $('full').onclick = () => send('full', cancelMs());
+  cm.on('keydown', (c, e) => { if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); send('complete', cancelMs()); } });
+
+  const OUT = { 'from-prefix': 'answered from the typed prefix: nothing typed', resumed: 'resumed the same run: the prefix grew', fresh: 'fresh run (content changed or no session)',
+    full: 'whole file typed by driver.run (no session left)', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
+
+  function render(r) {
+    const x = $('xray');
+    if (r.outcome === 'error') { x.innerHTML = `<p class="badge o-error">error</p><pre>${esc(r.error || '')}</pre>`; return; }
+    const runCls = r.runChanged ? 'changed' : 'same';
+    const stats = (r.statements || []).map((s, i) => {
+      const cls = ['st', s.state, i === r.cursorStatement ? 'cursor' : '', r.outcome === 'cancelled-resume' && s.state === 'untyped' && i === (r.statements.findIndex((t) => t.state === 'untyped')) ? 'aborted' : ''].join(' ');
+      return `<span class="${cls}" data-i="${i}" title="${esc(s.name)} [${s.start}, ${s.end}) ${s.state}">${esc(s.name.replace(/^object /, ''))}</span>`;
+    }).join('');
+    const compl = (r.completions || []);
+    const cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '';
+    x.innerHTML = `
+      <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
+      <dl class="kv">
+        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}</dd>
+        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun})</span></dd>
+        <dt>typed prefix</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">top-level trees of the session (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
+        <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b></dd>
+        <dt>typedTreeCount</dt><dd><b>${r.typedTrees}</b> <span class="dim">trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)</span></dd>
+        <dt>wall time</dt><dd><b>${r.ms} ms</b></dd>
+        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the empty package's scope after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
+        <dt>diagnostics</dt><dd>${r.diagnostics}</dd>
+      </dl>
+      <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in</div>
+      <div id="stats">${stats}</div>
+      ${r.kind !== 'full' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
+      ${cursorSrc ? `<div class="dim">statement at the cursor</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>` : ''}`;
+    x.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+    x.querySelectorAll('.st').forEach((el) => el.onclick = () => { const s = r.statements[+el.dataset.i]; cm.setCursor(cm.posFromIndex(s.start)); cm.scrollIntoView(null, 120); cm.focus(); });
+    lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
+    const firstUntyped = r.statements.findIndex((t) => t.state === 'untyped');
+    r.statements.forEach((s, i) => {
+      const cls = s.state === 'typed-now' ? 'line-typednow' : s.state === 'typed' ? 'line-typed' : (r.outcome === 'cancelled-resume' && i === firstUntyped ? 'line-cancel' : null);
+      if (!cls) return;
+      const from = cm.posFromIndex(s.start).line, to = cm.posFromIndex(s.end).line;
+      for (let l = from; l <= to; l++) { cm.addLineClass(l, 'background', cls); lineMarks.push({ line: l, cls }); }
+    });
+  }
+  function logRow(r) {
+    const tr = document.createElement('tr'); tr.className = r.outcome.startsWith('cancelled') ? 'cancelled' : '';
+    const req = r.kind === 'full' ? 'type whole file' : `complete @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
+    tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}</td><td>${esc(r.outcome)}</td>
+      <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
+    $('logbody').prepend(tr);
+  }
+
+  const sleep = (ms) => new Promise((f) => setTimeout(f, ms));
+  $('demoSession').onclick = async () => { for (const i of [10, 40, 20]) { gotoObject(i); await send('complete', -1); await sleep(300); } };
+  // Fresh content first (a new tag on line 1), so that the prefix starts at object 10 and the cancel lands while resuming towards 55.
+  let demoTag = 0;
+  $('demoCancel').onclick = async () => {
+    cm.replaceRange(`// x-ray demo, cancel run ${++demoTag}`, { line: 0, ch: 0 }, { line: 0, ch: cm.getLine(0).length });
+    gotoObject(10); await send('complete', -1); await sleep(400);
+    gotoObject(55); await send('complete', 10); await sleep(800);
+    gotoObject(55); await send('complete', -1);
+  };
+  $('demoEdit').onclick = async () => {
+    const text = cm.getValue(), at = text.indexOf('object M0 {') + 'object M0 {'.length;
+    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(200); gotoObject(10); await send('complete', -1);
+  };
+  gotoObject(10);
+})();
+</script>
+</body>
+</html>
