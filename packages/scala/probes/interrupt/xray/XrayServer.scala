@@ -20,8 +20,8 @@ import dotty.tools.dotc.util.{SourceFile, SourcePosition}
 import dotty.tools.dotc.util.Spans.Span
 import dotty.tools.pc.tests.buildinfo.BuildInfo
 
-/** A toy IDE over the patched `InteractiveDriver` (targeted typing, resumable
- *  runs, cancellation that unwinds): one page, one virtual file `A.scala`,
+/** A toy IDE over the patched `InteractiveDriver` (targeted typing along the
+ *  path to the target, resumable runs, cancellation that unwinds): one page, one virtual file `A.scala`,
  *  and an x-ray of what the driver did for each request. Every number in the
  *  x-ray is read from the driver; nothing is simulated.
  *
@@ -34,11 +34,19 @@ object XrayServer:
   val uri: URI = URI.create("file:///A.scala")
   val objectCount = 60
 
-  /** The same shape as `CompletionSessionSuite.bigSource`, without the marker. */
+  /** The same shape as `CompletionSessionSuite.bigSource`, without the marker;
+   *  the last object also has a `giant` method of 200 local vals, big enough
+   *  for a cancellation to land inside it (the typer polls every 1024 trees),
+   *  that starts with `tests.macros.Latch.await`, a macro that blocks the typer while
+   *  the latch file exists (see `Latch` in the testcases project).
+   */
   def generatedSource(tag: String, n: Int = objectCount): String =
     val objects = (0 until n).map { i =>
+      val giant =
+        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer while the server's latch is armed\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum").mkString("\n") + "\n    a0 + a199\n  }"
+        else ""
       s"""|object M$i {
-          |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum
+          |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum$giant
           |  val r = this.meth
           |}""".stripMargin
     }.mkString("\n")
@@ -130,12 +138,63 @@ object XrayServer:
 
   private val lock = new Object
 
+  /** The latch file `xray.Latch.await` polls, armed for a latched request. */
+  private val latchFile: Option[java.io.File] = sys.props.get("xray.latch").map(new java.io.File(_))
+  private def armLatch(): Unit = latchFile.foreach { f => f.getParentFile.mkdirs(); f.createNewFile() }
+  private def releaseLatch(): Unit = latchFile.foreach(_.delete())
+  private def latched: Boolean = latchFile.exists(_.exists())
+
+  /** The request in flight (a latched one runs on its own thread), its
+   *  result once done, and the cancel flag the checker polls.
+   */
+  @volatile private var inFlight: Map[String, Any] | Null = null
+  @volatile private var lastResult: Map[String, Any] | Null = null
+  @volatile private var cancelNow = false
+  @volatile private var countAtStart = 0
+  @volatile private var runAtStart: Run | Null = null
+  @volatile private var startedAt = 0L
+
+  /** Trees typed by the request in flight: the run's counter less what it
+   *  was at the start, or the whole counter if the request started a run.
+   */
+  private def treesSoFar: Int =
+    val run = driver.currentCtx.run
+    if run == null then 0
+    else if run eq runAtStart then typedTreeCount(run) - countAtStart
+    else typedTreeCount(run)
+
+  private def status(): Map[String, Any] =
+    val f = inFlight
+    Map("inFlight" -> (f != null), "request" -> f, "latched" -> latched, "cancelRequested" -> cancelNow,
+      "treesSoFar" -> (if f != null then treesSoFar else 0),
+      "elapsedMs" -> (if f != null then (System.nanoTime() - startedAt) / 1000000 else 0),
+      "result" -> lastResult)
+
   /** One request against the driver, with its x-ray. `kind` is `complete`
    *  (`runUpTo` at `offset`, then the completions there) or `full` (`run`);
    *  `cancelAfterMs >= 0` installs a cancel checker that fires that long after
    *  the request started.
    */
-  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = lock.synchronized {
+  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false): Map[String, Any] = lock.synchronized {
+    cancelNow = false
+    if latch then armLatch() else releaseLatch()
+    inFlight = Map("kind" -> kind, "offset" -> offset, "cancelAfterMs" -> cancelAfterMs, "latch" -> latch)
+    startedAt = System.nanoTime()
+    locally {
+      val run = driver.currentCtx.run
+      runAtStart = run
+      countAtStart = if run == null then 0 else typedTreeCount(run)
+    }
+    try
+      val r = request0(kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow)
+      lastResult = r
+      r
+    finally
+      inFlight = null
+      releaseLatch()
+  }
+
+  private def request0(kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
     val source = SourceFile.virtual(uri, code)
     val stats = statements(source)
     val typedBefore = typedSpans(source)
@@ -157,7 +216,7 @@ object XrayServer:
       if run != null then
         polledRun = run
         polledCount = typedTreeCount(run)
-      System.nanoTime() >= deadline
+      cancelNow || System.nanoTime() >= deadline
 
     val countBefore =
       val run = driver.currentCtx.run
@@ -189,6 +248,7 @@ object XrayServer:
     val sessionRunAfter = driver.runIdOf(uri)
     val prefixAfter = driver.typedPrefixLength(uri)
     val typedAfter = typedSpans(source)
+    val untypedAfter = driver.untypedSpans(uri)
     val (touched, completed, total) = scopeCounts()
     val runAfter = driver.currentCtx.run
     val countAfter = if runAfter != null then typedTreeCount(runAfter) else 0
@@ -202,7 +262,10 @@ object XrayServer:
       val before = isTyped(st, typedBefore)
       val after = isTyped(st, typedAfter)
       val state = if after && before then "typed" else if after then "typed-now" else "untyped"
-      Map("name" -> st.name, "start" -> st.start, "end" -> st.end, "state" -> state)
+      // Members of this statement the targeted run skipped (typed statements only)
+      val skippedMembers = untypedAfter.filter(sp => st.start <= sp.start && sp.end <= st.end && !(sp.start == st.start && sp.end == st.end))
+      Map("name" -> st.name, "start" -> st.start, "end" -> st.end, "state" -> state,
+        "skippedMembers" -> skippedMembers.map(sp => Map("start" -> sp.start, "end" -> sp.end, "text" -> code.substring(sp.start, math.min(sp.end, sp.start + 40)).takeWhile(_ != '\n'))))
     }
     val cursorStat = stats.indexWhere(st => st.start <= offset && offset <= st.end)
     val firstUntyped = stats.indexWhere(st => !isTyped(st, typedAfter))
@@ -220,8 +283,8 @@ object XrayServer:
     val where =
       if !cancelled then null
       else if sessionRunAfter == -1 then "a fresh run, discarded whole (the driver restored the previous context)"
-      else if firstUntyped >= 0 then s"while typing ${stats(firstUntyped).name}: the prefix keeps the ${prefixAfter} trees typed before it"
-      else "after the last statement"
+      else if cursorStat >= 0 then s"while typing ${stats(cursorStat).name}: it is re-parsed and re-indexed, everything typed before stays"
+      else "outside any statement"
 
     Map(
       "kind" -> kind, "offset" -> offset, "cancelAfterMs" -> cancelAfterMs,
@@ -234,6 +297,7 @@ object XrayServer:
       "typedStatements" -> statRows.count(_("state") != "untyped"),
       "typedNow" -> statRows.count(_("state") == "typed-now"),
       "typedTrees" -> typedTrees, "polls" -> polls,
+      "untypedSpans" -> untypedAfter.size,
       "ms" -> math.round(ms * 10) / 10.0,
       "touched" -> touched, "touchedBefore" -> touchedBefore, "completed" -> completed, "scopeSize" -> total,
       "diagnostics" -> diagnostics,
@@ -269,6 +333,8 @@ object XrayServer:
     val port = sys.props.get("xray.port").map(_.toInt).getOrElse(8791)
     val page = findPage()
     println(s"[xray] page: $page")
+    println(s"[xray] latch file: ${latchFile.map(_.getPath).getOrElse("none (-Dxray.latch not set: latched requests disabled)")}")
+    releaseLatch()
     println(s"[xray] warming up the driver on other content")
     val t0 = System.nanoTime()
     driver.run(uri, SourceFile.virtual(uri, generatedSource("warmup", 5)))
@@ -285,11 +351,32 @@ object XrayServer:
         val code = field(body, "code").getOrElse("")
         val offset = field(body, "offset").map(_.toInt).getOrElse(0)
         val cancel = field(body, "cancelAfterMs").map(_.toLong).getOrElse(-1L)
-        val result =
-          try request(kind, code, offset, cancel)
-          catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
-        println(s"[xray] $kind@$offset cancel=$cancel -> ${result("outcome")} run=${result.getOrElse("runId", "?")} prefix=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
-        reply(ex, 200, "application/json", json(result))
+        val latch = field(body, "latch").contains("1")
+        def go(): Map[String, Any] =
+          val result =
+            try request(kind, code, offset, cancel, latch)
+            catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
+          println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
+          result
+        if latch then
+          // Runs on its own thread; the page polls /status and releases or cancels.
+          if latchFile.isEmpty then reply(ex, 400, "text/plain", "the server was started without -Dxray.latch")
+          else
+            val t = new Thread((() => { lastResult = null; go(); () }): Runnable, "xray-latched-request")
+            t.setDaemon(true); t.start()
+            while inFlight == null && t.isAlive do Thread.sleep(5)
+            reply(ex, 202, "application/json", json(status()))
+        else reply(ex, 200, "application/json", json(go()))
+      case "/status" =>
+        reply(ex, 200, "application/json", json(status()))
+      case "/release" if ex.getRequestMethod == "POST" =>
+        releaseLatch()
+        reply(ex, 200, "application/json", json(status()))
+      case "/cancel" if ex.getRequestMethod == "POST" =>
+        // The checker sees the flag at the next checkpoint (every 1024 typed trees); the latch is released so that typing gets there.
+        cancelNow = true
+        releaseLatch()
+        reply(ex, 200, "application/json", json(status()))
       case _ =>
         reply(ex, 404, "text/plain", "not found"))
     server.start()

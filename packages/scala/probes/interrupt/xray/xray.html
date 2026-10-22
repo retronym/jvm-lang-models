@@ -46,7 +46,7 @@
   .same { color: var(--newu); font-weight: 600; } .changed { color: var(--cur); font-weight: 600; }
   #stats { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 10px; }
   .st { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--untyped); border: 1px solid transparent; cursor: pointer; }
-  .st.typed { background: var(--typed); } .st.typed-now { background: var(--typednow); } .st.cursor { border-color: var(--cur); } .st.aborted { background: var(--cancel); color: var(--cancelu); }
+  .st.typed { background: var(--typed); } .st.partial { border-style: dashed; border-color: var(--dim); } .st sup { font-size: 9px; color: var(--dim); } .st.typed-now { background: var(--typednow); } .st.cursor { border-color: var(--cur); } .st.aborted { background: var(--cancel); color: var(--cancelu); }
   .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin: 0 3px 0 8px; }
   #log { flex: 1; overflow: auto; font-size: 12px; }
   #log table { border-collapse: collapse; width: 100%; } #log td, #log th { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
@@ -54,13 +54,17 @@
   #log tr.cancelled td { color: var(--cancelu); } #log tr:first-child td { font-weight: 600; }
   pre.hljs { margin: 4px 0 8px; padding: 6px 8px; border-radius: 6px; font-size: 11px; max-height: 120px; overflow: auto; }
   #busy { color: var(--cur); font-weight: 600; }
+  #latch { background: var(--warn); padding: 3px 8px; border-radius: 6px; }
+  #story { border-bottom: 1px solid var(--line); background: var(--panel); padding: 6px 12px; font-size: 12px; max-height: 190px; overflow: auto; }
+  #story h3 { margin: 0 0 4px; font-size: 12px; } #story ol { margin: 0; padding-left: 20px; } #story li { margin: 2px 0; }
+  #story .ok { color: var(--newu); font-weight: 600; } #story .no { color: var(--cancelu); font-weight: 600; } #story .exp { color: var(--dim); }
   ul.compl { margin: 2px 0 8px; padding-left: 18px; max-height: 110px; overflow: auto; }
 </style>
 </head>
 <body>
 <header>
   <h1>dotc session x-ray</h1>
-  <span class="dim">the patched <code>InteractiveDriver</code>: targeted typing (<code>runUpTo</code>), resumable runs, cancellation that unwinds. Every number below is read from the driver.</span>
+  <span class="dim">the patched <code>InteractiveDriver</code>: typing only the path to the cursor (<code>runUpTo</code>: of each statement list, the statement containing it), resumable runs, cancellation that unwinds. Every number below is read from the driver.</span>
   <span id="busy"></span>
 </header>
 <main>
@@ -75,10 +79,20 @@
     <div class="toolbar">
       <span class="dim">Go to object</span>
       <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
-      <button id="demoSession" title="complete at object 10, then 40, then 20">Demo: session</button>
-      <button id="demoCancel" title="fresh content, complete at object 10, then at object 55 with a 10 ms cancel, then at 55 again">Demo: cancel</button>
-      <button id="demoEdit" title="type a character into object 0, then complete at object 10">Demo: edit</button>
     </div>
+    <div class="toolbar">
+      <button id="latchGo" title="complete inside giant of object 59: the typer blocks at the Latch.await macro until you release or cancel">Complete at the latch (giant of M59)</button>
+      <span id="latch" hidden>⏳ <b>typer blocked</b> at <code>tests.macros.Latch.await</code> inside <code>giant</code> of M59, <span id="latchTrees">0</span> trees typed so far, <span id="latchMs">0</span> ms
+        <button id="release" class="primary">Release: let it finish</button> <button id="cancelNow">Cancel this request</button></span>
+    </div>
+    <div class="toolbar">
+      <span class="dim">Stories</span>
+      <button id="demoSession" title="complete at object 10, then 40, then 10 again, then inside method20">Session</button>
+      <button id="demoCancel" title="complete at the latch, cancel while the typer is blocked, then complete there again">Cancel, deterministically</button>
+      <button id="demoEdit" title="type a character into object 0, then complete at object 10">Edit</button>
+      <button id="demoFull" title="type the whole file, then complete: no session, everything typed">Whole file</button>
+    </div>
+    <div id="story" hidden></div>
     <div id="ed"></div>
   </section>
   <section>
@@ -103,6 +117,7 @@
     extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') } });
   cm.setSize('100%', '100%');
   let seq = 0, busy = false, last = null, lineMarks = [];
+  const sleep = (ms) => new Promise((f) => setTimeout(f, ms));
   const offsetOf = () => cm.indexFromPos(cm.getCursor());
   const showCursor = () => { const p = cm.getCursor(); $('cur').textContent = `${p.line + 1}:${p.ch + 1} (offset ${offsetOf()})`; };
   cm.on('cursorActivity', showCursor); showCursor();
@@ -114,26 +129,56 @@
     cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor(); return true;
   }
   $('go').onclick = () => gotoObject(+$('goto').value);
+  function gotoGiant() {
+    const text = cm.getValue(), at = text.indexOf('def giant('), m = text.indexOf('.filter', at) + '.fil'.length;
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
+  }
 
+  const setBusy = (on, text) => { busy = on; $('busy').textContent = on ? text : ''; document.querySelectorAll('button').forEach((b) => { if (b.id !== 'release' && b.id !== 'cancelNow') b.disabled = on; }); };
+  function finish(r, code, cancelAfterMs) {
+    r.seq = ++seq; r.cancelRequested = cancelAfterMs; r.code = code;
+    render(r); logRow(r); last = r; return r;
+  }
   async function send(kind, cancelAfterMs) {
-    if (busy) return null; busy = true; $('busy').textContent = `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`;
-    document.querySelectorAll('button').forEach((b) => b.disabled = true);
+    if (busy) return null; setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
     const code = cm.getValue(), offset = offsetOf();
     const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs) });
     let r;
     try { r = await (await fetch('/request', { method: 'POST', body })).json(); }
     catch (e) { r = { outcome: 'error', error: String(e) }; }
-    busy = false; $('busy').textContent = ''; document.querySelectorAll('button').forEach((b) => b.disabled = false);
-    r.seq = ++seq; r.cancelRequested = cancelAfterMs; r.code = code;
-    render(r); logRow(r); last = r;
-    return r;
+    setBusy(false);
+    return finish(r, code, cancelAfterMs);
   }
+  // A latched request: the server runs it on its own thread, the typer blocks at the macro, the page polls until it is done.
+  let latchWaiters = [];
+  async function sendLatched() {
+    if (busy) return null; setBusy(true, '… completing (latched)');
+    const code = cm.getValue(), offset = offsetOf();
+    const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1' });
+    let st;
+    try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { setBusy(false); return finish({ outcome: 'error', error: String(e) }, code, -1); }
+    if (st.outcome) { setBusy(false); return finish(st, code, -1); }
+    $('latch').hidden = false;
+    while (true) {
+      await sleep(100);
+      try { st = await (await fetch('/status')).json(); } catch (e) { continue; }
+      $('latchTrees').textContent = st.treesSoFar; $('latchMs').textContent = st.elapsedMs;
+      if (st.latched) latchWaiters.splice(0).forEach((f) => f());
+      if (!st.inFlight && st.result) break;
+    }
+    $('latch').hidden = true; setBusy(false);
+    return finish(st.result, code, -1);
+  }
+  const whenLatched = () => new Promise((f) => latchWaiters.push(f));
+  $('latchGo').onclick = () => { gotoGiant(); sendLatched(); };
+  $('release').onclick = () => fetch('/release', { method: 'POST' });
+  $('cancelNow').onclick = () => fetch('/cancel', { method: 'POST' });
   function cancelMs() { const v = $('cancelms').value; $('cancelms').value = ''; return v === '' ? -1 : +v; }
   $('complete').onclick = () => send('complete', cancelMs());
   $('full').onclick = () => send('full', cancelMs());
   cm.on('keydown', (c, e) => { if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); send('complete', cancelMs()); } });
 
-  const OUT = { 'from-prefix': 'answered from the typed prefix: nothing typed', resumed: 'resumed the same run: the prefix grew', fresh: 'fresh run (content changed or no session)',
+  const OUT = { 'from-prefix': 'answered from what is typed: nothing typed', resumed: 'resumed the same run: the statement at the cursor was typed', fresh: 'fresh run (content changed or no session): only the path to the cursor typed',
     full: 'whole file typed by driver.run (no session left)', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
 
   function render(r) {
@@ -141,24 +186,26 @@
     if (r.outcome === 'error') { x.innerHTML = `<p class="badge o-error">error</p><pre>${esc(r.error || '')}</pre>`; return; }
     const runCls = r.runChanged ? 'changed' : 'same';
     const stats = (r.statements || []).map((s, i) => {
-      const cls = ['st', s.state, i === r.cursorStatement ? 'cursor' : '', r.outcome === 'cancelled-resume' && s.state === 'untyped' && i === (r.statements.findIndex((t) => t.state === 'untyped')) ? 'aborted' : ''].join(' ');
-      return `<span class="${cls}" data-i="${i}" title="${esc(s.name)} [${s.start}, ${s.end}) ${s.state}">${esc(s.name.replace(/^object /, ''))}</span>`;
+      const partial = s.state !== 'untyped' && (s.skippedMembers || []).length > 0;
+      const cls = ['st', s.state, i === r.cursorStatement ? 'cursor' : '', partial ? 'partial' : '', r.outcome === 'cancelled-resume' && s.state === 'untyped' && i === r.cursorStatement ? 'aborted' : ''].join(' ');
+      const tip = `${s.name} [${s.start}, ${s.end}) ${s.state}` + (partial ? `, members skipped: ${s.skippedMembers.map((m) => m.text).join(' | ')}` : '');
+      return `<span class="${cls}" data-i="${i}" title="${esc(tip)}">${esc(s.name.replace(/^object /, ''))}${partial ? '<sup>' + s.skippedMembers.length + '</sup>' : ''}</span>`;
     }).join('');
     const compl = (r.completions || []);
     const cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '';
     x.innerHTML = `
       <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
       <dl class="kv">
-        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}</dd>
+        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
         <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun})</span></dd>
-        <dt>typed prefix</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">top-level trees of the session (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
-        <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b></dd>
+        <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
+        <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
         <dt>typedTreeCount</dt><dd><b>${r.typedTrees}</b> <span class="dim">trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)</span></dd>
         <dt>wall time</dt><dd><b>${r.ms} ms</b></dd>
         <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the empty package's scope after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
         <dt>diagnostics</dt><dd>${r.diagnostics}</dd>
       </dl>
-      <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in</div>
+      <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
       <div id="stats">${stats}</div>
       ${r.kind !== 'full' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
       ${cursorSrc ? `<div class="dim">statement at the cursor</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>` : ''}`;
@@ -167,33 +214,74 @@
     lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
     const firstUntyped = r.statements.findIndex((t) => t.state === 'untyped');
     r.statements.forEach((s, i) => {
-      const cls = s.state === 'typed-now' ? 'line-typednow' : s.state === 'typed' ? 'line-typed' : (r.outcome === 'cancelled-resume' && i === firstUntyped ? 'line-cancel' : null);
+      const cls = s.state === 'typed-now' ? 'line-typednow' : s.state === 'typed' ? 'line-typed' : (r.outcome === 'cancelled-resume' && i === r.cursorStatement ? 'line-cancel' : null);
       if (!cls) return;
       const from = cm.posFromIndex(s.start).line, to = cm.posFromIndex(s.end).line;
-      for (let l = from; l <= to; l++) { cm.addLineClass(l, 'background', cls); lineMarks.push({ line: l, cls }); }
+      const skippedLines = new Set();
+      (s.skippedMembers || []).forEach((m) => { const a = cm.posFromIndex(m.start).line, b = cm.posFromIndex(m.end).line; for (let l = a; l <= b; l++) skippedLines.add(l); });
+      for (let l = from; l <= to; l++) { if (skippedLines.has(l)) continue; cm.addLineClass(l, 'background', cls); lineMarks.push({ line: l, cls }); }
     });
   }
   function logRow(r) {
     const tr = document.createElement('tr'); tr.className = r.outcome.startsWith('cancelled') ? 'cancelled' : '';
     const req = r.kind === 'full' ? 'type whole file' : `complete @${r.offset}` + (r.cursorStatement >= 0 ? ` (${r.statements[r.cursorStatement].name})` : '');
-    tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}</td><td>${esc(r.outcome)}</td>
+    tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}${r.latch ? ' <span class="dim">latched' + (r.cancelledByButton ? ', cancelled' : ', released') + '</span>' : ''}</td><td>${esc(r.outcome)}</td>
       <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
     $('logbody').prepend(tr);
   }
 
-  const sleep = (ms) => new Promise((f) => setTimeout(f, ms));
-  $('demoSession').onclick = async () => { for (const i of [10, 40, 20]) { gotoObject(i); await send('complete', -1); await sleep(300); } };
-  // Fresh content first (a new tag on line 1), so that the prefix starts at object 10 and the cancel lands while resuming towards 55.
-  let demoTag = 0;
+  function gotoMethod(i) {
+    const text = cm.getValue(), at = text.indexOf(`def method${i}(`), m = text.indexOf('.fil', at) + '.fil'.length;
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
+  }
+  // ---- stories: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
+  const story = { steps: [] };
+  function storyStart(title) { story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; }
+  function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
+  function storyResult(li, ok, text) { li.innerHTML += ` <span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; li.scrollIntoView({ block: 'nearest' }); }
+  const typedOf = (r) => `${r.typedStatements}/${r.statements.length} statements typed, ${r.typedTrees} trees, ${r.ms} ms`;
+  $('demoSession').onclick = async () => {
+    storyStart('Story: one run serves a session of requests');
+    let li = storyStep('Complete at `this.meth` in object 10', 'a fresh run; of 60 objects only M10 is typed, and in M10 only `val r`: method10 is skipped');
+    gotoObject(10); let r = await send('complete', -1);
+    storyResult(li, r.outcome === 'fresh' && r.typedStatements === 1, `${r.outcome}, run ${r.runId}, ${typedOf(r)}; skipped members in M10: ${(r.statements[r.cursorStatement].skippedMembers || []).length}`); await sleep(400);
+    li = storyStep('Complete in object 40', 'same run id, M40 typed in addition (a resume), nothing else');
+    gotoObject(40); const r2 = await send('complete', -1);
+    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged && r2.typedNow === 1, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`); await sleep(400);
+    li = storyStep('Complete in object 10 again', 'answered from what is typed: nothing typed, a few trees for the completion itself');
+    gotoObject(10); const r3 = await send('complete', -1);
+    storyResult(li, r3.outcome === 'from-prefix' && r3.typedNow === 0, `${r3.outcome}, ${typedOf(r3)}`); await sleep(400);
+    li = storyStep('Complete inside the body of method20', 'M20 was skipped: typed now, in the same run; its other members stay skipped');
+    gotoMethod(20); const r4 = await send('complete', -1);
+    storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
+  };
   $('demoCancel').onclick = async () => {
-    cm.replaceRange(`// x-ray demo, cancel run ${++demoTag}`, { line: 0, ch: 0 }, { line: 0, ch: cm.getLine(0).length });
-    gotoObject(10); await send('complete', -1); await sleep(400);
-    gotoObject(55); await send('complete', 10); await sleep(800);
-    gotoObject(55); await send('complete', -1);
+    storyStart('Story: a cancellation lands exactly where we want it');
+    let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
+    gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
+    storyResult(li, true, `blocked: ${$('latchTrees').textContent} trees typed so far`);
+    li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; giant is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
+    await fetch('/cancel', { method: 'POST' }); const r = await p;
+    storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(600);
+    li = storyStep('Complete there again', 'the same run types giant whole this time (the latch is not armed)');
+    gotoGiant(); const r2 = await send('complete', -1);
+    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
   };
   $('demoEdit').onclick = async () => {
+    storyStart('Story: an edit starts a fresh run');
+    let li = storyStep('Complete in object 10', 'whatever the session state, M10 is typed or already was');
+    gotoObject(10); const r0 = await send('complete', -1); storyResult(li, r0.outcome !== 'error', `${r0.outcome}, run ${r0.runId}`); await sleep(300);
+    li = storyStep('Type a comment into object 0, complete in object 10', 'the content changed: a new run id, and again only the path to the cursor is typed');
     const text = cm.getValue(), at = text.indexOf('object M0 {') + 'object M0 {'.length;
-    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(200); gotoObject(10); await send('complete', -1);
+    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(300); gotoObject(10); const r = await send('complete', -1);
+    storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
+  };
+  $('demoFull').onclick = async () => {
+    storyStart('Story: the whole file, for comparison');
+    let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
+    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(300);
+    li = storyStep('Complete in object 10', 'a fresh targeted run: the whole-file run left no session to resume');
+    gotoObject(10); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'fresh', `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
   };
   gotoObject(10);
 })();
