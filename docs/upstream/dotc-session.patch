@@ -31,7 +31,7 @@ index db34dbc88e..d196455401 100644
    def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
      val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
 diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
-index 2fdf622325..e77a346b50 100644
+index 2fdf622325..df803712cd 100644
 --- a/compiler/src/dotty/tools/dotc/Run.scala
 +++ b/compiler/src/dotty/tools/dotc/Run.scala
 @@ -32,6 +32,7 @@ import java.io.{BufferedWriter, OutputStreamWriter}
@@ -42,7 +42,7 @@ index 2fdf622325..e77a346b50 100644
  import scala.io.Codec
  
  import Run.Progress
-@@ -231,6 +232,141 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -231,6 +232,153 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
    def canProgress()(using Context): Boolean =
      foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
  
@@ -88,12 +88,24 @@ index 2fdf622325..e77a346b50 100644
 +    assert(!targetedStatsOwner.exists, i"targeting of $targetedStatsOwner not consumed before $owner")
 +    targetedStatsOwner = owner
 +    targetedStatsInBlock = inBlock
++    if !inBlock then targetingTyperState = ctx.typerState
++
++  /** The typer state of the statement list targeting started from: a package
++   *  or class body, or the recorded context of a resumed statement. A block
++   *  is targeted only when it is typed in this state: a block typed under a
++   *  nested state (a closure argument, typed in the state `tryEither` makes
++   *  for the application) or an explore state (an overload or implicit
++   *  candidate) may be typed again or thrown away, and what it skipped would
++   *  be recorded in a context that does not last. Such blocks are typed whole.
++   */
++  var targetingTyperState: TyperState | Null = null
 +
 +  /** Back to the defaults: no target, no pending mark, nothing skipped. */
 +  def clearTargeting(): Unit =
 +    typingTarget = Spans.NoSpan
 +    targetedStatsOwner = NoSymbol
 +    targetedStatsInBlock = false
++    targetingTyperState = null
 +    skippedStats.clear()
 +
 +  /** Interactive mode only: the symbols whose completion was prevented as a
@@ -184,7 +196,7 @@ index 2fdf622325..e77a346b50 100644
    def doAdvanceUnit()(using Context): Unit =
      trackProgress: progress =>
        progress.currentUnitCount += 1 // trace that we completed a unit in the current (sub)phase
-@@ -636,6 +772,45 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -636,6 +784,45 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
  }
  
  object Run {
@@ -494,7 +506,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..f50ed33315 100644
+index 5b78dc804b..4670e046c3 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,14 @@ import scala.collection.*
@@ -558,7 +570,7 @@ index 5b78dc804b..f50ed33315 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +108,568 @@ class InteractiveDriver(
+@@ -78,37 +108,570 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -710,6 +722,8 @@ index 5b78dc804b..f50ed33315 100644
 +      run.typingTarget = target
 +      try
 +        run.targetNextStats(sk.owner, sk.inBlock)(using ctx0)
++        // a resumed block statement continues the targeting of its block
++        run.targetingTyperState = ctx0.typerState
 +        val (stats, _) = ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)
 +        collectSkipped()
 +        assert(!skipped.exists(_.stat.span.contains(target)), s"target $target is still skipped in $uri after the resume of ${sk.stat.span}")
@@ -1131,7 +1145,7 @@ index 5b78dc804b..f50ed33315 100644
      }
    }
  
-@@ -140,13 +701,15 @@ class InteractiveDriver(
+@@ -140,13 +703,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -1149,7 +1163,7 @@ index 5b78dc804b..f50ed33315 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +741,6 @@ class InteractiveDriver(
+@@ -178,3 +743,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1207,10 +1221,10 @@ index 635a30ba96..57ae708251 100644
        else
          try
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-index d85b5bcc1b..11d3ea8a3b 100644
+index d85b5bcc1b..e4ebae8235 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
 +++ b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-@@ -1599,13 +1599,21 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -1599,13 +1599,24 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
            }
      }
  
@@ -1220,9 +1234,12 @@ index d85b5bcc1b..11d3ea8a3b 100644
 +    // Targeted typing applies to the statements of a block that contains the
 +    // target (see `Targeting`): a skipped one's symbol, indexed just above,
 +    // completes lazily if a later statement refers to it. A block typed for
-+    // another reason is typed whole, and never inside an inline method.
++    // another reason is typed whole, and so is one inside an inline method
++    // (its body is kept whole for its callers) or one typed speculatively
++    // (see `Run.targetingTyperState`).
 +    val run = ctx.run
 +    if run != null && run.typingTarget.exists && blockSpan.exists && blockSpan.contains(run.typingTarget)
++       && (ctx.typerState eq run.targetingTyperState)
 +       && !ctx.owner.ownersIterator.exists(_.isInlineMethod)
 +    then run.targetNextStats(ctx.owner, inBlock = true)
      typedStats(stats, ctx.owner)
@@ -1234,18 +1251,20 @@ index d85b5bcc1b..11d3ea8a3b 100644
      }
  
      var expr1 = typedExpr(tree.expr, pt.dropIfProto)(using exprCtx)
-@@ -3556,6 +3564,10 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3556,6 +3567,12 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        cdef.withType(UnspecifiedErrorType)
      else {
        val dummy = localDummy(cls, impl)
-+      // only a class that contains the target is typed along the path to it
++      // only a class that contains the target is typed along the path to it,
++      // and not one typed speculatively (a local class in a closure argument)
 +      val run = ctx.run.nn
-+      if run.typingTarget.exists && cdef.span.contains(run.typingTarget) then
-+        run.targetNextStats(dummy)
++      if run.typingTarget.exists && cdef.span.contains(run.typingTarget)
++         && (run.targetingTyperState == null || (ctx.typerState eq run.targetingTyperState))
++      then run.targetNextStats(dummy)
        val body1 =
          implementDeferredGivens(
            addParentRefinements(
-@@ -3739,6 +3751,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3739,6 +3756,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                    if !pobj.symbol.isCompleting then
                      pobj.symbol.ensureCompleted()
                case _ =>
@@ -1255,7 +1274,7 @@ index d85b5bcc1b..11d3ea8a3b 100644
            var stats1 = typedStats(tree.stats, pkg.moduleClass)._1
            if (!ctx.isAfterTyper)
              stats1 = stats1 ++ typedBlockStats(MainProxies.proxies(stats1))._1
-@@ -4150,9 +4165,11 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4150,9 +4170,11 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        record("typed total")
        if ctx.phase.isTyper then
          assertPositioned(tree)
@@ -1268,7 +1287,7 @@ index d85b5bcc1b..11d3ea8a3b 100644
          tree.withType(WildcardType)
        else adapt(typedUnadapted(tree, pt, locked), pt, locked)
      }
-@@ -4169,11 +4186,21 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4169,11 +4191,21 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
      var enumContexts: SimpleIdentityMap[Symbol, Context] = SimpleIdentityMap.empty
      val initialNotNullInfos = ctx.notNullInfos
        // A map from `enum` symbols to the contexts enclosing their definitions
@@ -1290,7 +1309,7 @@ index d85b5bcc1b..11d3ea8a3b 100644
        case (mdef: untpd.DefTree) :: rest =>
          mdef.removeAttachment(ExpandedTree) match {
            case Some(xtree) =>
-@@ -4197,13 +4224,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4197,13 +4229,6 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
              }
              traverse(rest)
          }
@@ -1835,10 +1854,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..12cacf7f47
+index 0000000000..1c6b1b65a1
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,740 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -2343,11 +2362,11 @@ index 0000000000..12cacf7f47
 +       |}
 +       |""".stripMargin
 +
-+  @Test def `a-resume-into-a-closure-body-types-under-a-live-typer-state` =
-+    // A statement skipped in a closure body is recorded under the typer state
-+    // that tryEither made for the enclosing application, which is committed
-+    // when the application succeeds. A resume into it must not type under that
-+    // state: committing into a committed state is an assertion (I24).
++  @Test def `a-closure-argument-is-typed-whole` =
++    // A closure argument is typed in the typer state that tryEither makes for
++    // the application, which may be retried or abandoned: its body is not
++    // targeted, so nothing in it is recorded in a state that does not last
++    // (I24 resumed under such a state once it had been committed).
 +    val code = closureBody
 +    val uri = URI.create("file:///Com.scala")
 +    val src = SourceFile.virtual(uri, code)
@@ -2364,14 +2383,13 @@ index 0000000000..12cacf7f47
 +      val path = Interactive.pathTo(unit.tpdTree, Span(atInner))
 +      (d.runIdOf(uri) == run0, before, after, path.headOption.map(t => if t.hasType then t.tpe.widenTermRefExpr.show else "<untyped>"))
 +    }
-+    println(s"[a-resume-into-a-closure-body] same run: $sameRun; before: $before; after: $after; at List(x, x): $at")
-+    assert(before.exists(_.startsWith("if (x > 0)")), s"the if is skipped by the first request: $before")
-+    assert(sameRun, "the second request resumes the first request's run")
-+    assert(!after.exists(_.startsWith("if (x > 0)")), s"the if is typed by the second: $after")
-+    assert(at.exists(_.contains("List")), s"the resumed statement is typed: $at")
++    println(s"[a-closure-argument-is-typed-whole] same run: $sameRun; before: $before; after: $after; at List(x, x): $at")
++    assert(!before.exists(_.startsWith("if (x > 0)")), s"the closure body is typed whole by the first request: $before")
++    assert(sameRun, "the second request is served from the first request's run")
++    assert(at.exists(_.contains("List")), s"the statement in the closure body is typed: $at")
 +
 +  @Test def `the-completing-run-types-a-closure-body-under-a-live-typer-state` =
-+    // The same statement, typed by the whole-file run that completes the session (I24).
++    // The completing run over a file whose closure body is typed whole (I24).
 +    val code = closureBody
 +    val uri = URI.create("file:///Com2.scala")
 +    val src = SourceFile.virtual(uri, code)
@@ -2450,6 +2468,30 @@ index 0000000000..12cacf7f47
 +    println(s"[a-pattern-definition-in-a-block-is-spliced] fully typed: $fully; at a: $atA")
 +    assert(fully, "the whole-file run completes the session")
 +    assert(atA.exists(_.endsWith(" a")), s"the pattern's val is in the tree: $atA")
++
++  @Test def `a-block-in-a-method-body-is-still-targeted` =
++    // The rule types closure arguments whole; the blocks of a method body are
++    // typed in the class body's typer state and keep being targeted.
++    val code =
++      """|object Tgt {
++         |  def big(xs: List[Int]): Int = {
++         |    val a = xs.map(_ + 1).sum
++         |    if (a > 0) {
++         |      val b = xs.map(_ + 2).sum
++         |      val c = xs.map(_ + 3).filter(_ > 0).sum
++         |      b + c
++         |    } else 0
++         |  }
++         |}
++         |""".stripMargin
++    val uri = URI.create("file:///Tgt.scala")
++    val src = SourceFile.virtual(uri, code)
++    val skipped = withDriver { d =>
++      d.runUpTo(uri, src, Span(code.indexOf(".filter(_ > 0)") + 4))
++      d.untypedSpans(uri).map(sp => code.substring(sp.start, math.min(sp.end, sp.start + 9)).trim)
++    }
++    println(s"[a-block-in-a-method-body-is-still-targeted] skipped: $skipped")
++    assert(skipped.exists(_.startsWith("val b")), s"a statement of the if's block is skipped: $skipped")
 +
 +  @Test def `cancel-inside-a-member-driver-only` =
 +    // the same sequence as `cancel-inside-a-member`, on the driver, with any exception printed
