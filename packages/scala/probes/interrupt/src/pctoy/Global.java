@@ -134,7 +134,7 @@ public abstract class Global {
     for (Sym s : toplevel.syms()) if (s.file.equals(file) && s.defRunId != runId) toplevel.unlink(s);
   }
 
-  private Sym newSym(String name, Kind kind, String file) { return new Sym(name, kind, file, nextId++); }
+  Sym newSym(String name, Kind kind, String file) { return new Sym(name, kind, file, nextId++); }
 
   private static Kind kindOf(Ast.Decl d) {
     return switch (d.kind()) { case "object" -> Kind.OBJECT; case "trait" -> Kind.TRAIT; default -> Kind.CLASS; };
@@ -285,15 +285,18 @@ public abstract class Global {
     return ci.parent != null ? lookupMember(ci.parent, name) : null;
   }
 
+  /** A top-level term by name: the one lookup of `typePath` that is not through a fact (the revisions kernel records it). */
+  protected Sym topTerm(String name) { return toplevel.term(name); }
+
   public Type typeOf(Sym m) {
     if (m.kind == Kind.OBJECT) return Type.of(m);
     return (Type) force(m);
   }
 
-  private Type typePath(Unit u, Sym owner, List<String> path, String where) {
+  Type typePath(Unit u, Sym owner, List<String> path, String where) {
     String first = path.get(0);
     Sym s = lookupMember(owner, first);
-    if (s == null) s = toplevel.term(first);
+    if (s == null) s = topTerm(first);
     if (s == null || s.kind == Kind.DEF && s.owner == null) return Type.err("not found: value " + first);
     Type t = typeOf(s);
     for (String name : path.subList(1, path.size())) {
@@ -389,6 +392,11 @@ public abstract class Global {
     for (Ast.Member m : d.members()) {
       Sym ms = ci.decls.term(m.name());
       typeOf(ms);
+      if (!m.inferred() && m.path() != null) {                 // a body typed against its declared type
+        Type b;
+        try { b = typePath(u, cls, m.path(), d.name() + "." + m.name()); } catch (CyclicReference e) { b = Type.err(e.getMessage()); }
+        if (b.isError()) u.problems.add(new Problem("error", u.name(), d.name() + "." + m.name(), b.error()));
+      }
       body.add(m.name());
       counters.membersTyped++;
       signalDone(u, "member " + d.name() + "." + m.name(), new Target(d.name(), m.name()));

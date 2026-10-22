@@ -1,6 +1,6 @@
 #!/bin/sh
 # Compiles the toy presentation compilers and runs every scenario under every kernel.
-#   run.sh [--all] [--trace] [--kernel name]...
+#   run.sh [--all] [--trace] [--sessions | --tiers] [--kernel name]...
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${TMPDIR:-/tmp}/pctoy-classes

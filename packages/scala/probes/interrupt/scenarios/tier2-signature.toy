@@ -1,0 +1,22 @@
+// event: edit A then loadedTyped A
+// note: tier 2, ToyTree's tier2_signature_edit: a declared type changes, and with it the facts whose traces hold it, and nothing of D
+// file: A
+class Int {}
+class String {}
+class C {
+  def c: Int
+  def q: C = c
+  def p = q.c
+  def s = q
+}
+class D { def c: String }
+// edit: A
+class Int {}
+class String {}
+class C {
+  def c: Int
+  def q: D = c
+  def p = q.c
+  def s = q
+}
+class D { def c: String }

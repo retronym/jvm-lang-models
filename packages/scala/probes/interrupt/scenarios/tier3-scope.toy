@@ -1,0 +1,17 @@
+// event: edit A then loadedTyped A
+// note: tier 3, ToyTree's tier3a_scope_insert: a declaration added to the top-level scope re-reads every lookup there, the failed lookup of X included
+// file: A
+class Int {}
+object Use {
+  def r = X.x
+  def s = t
+  def t: Int
+}
+// edit: A
+class Int {}
+object X { def x: Int }
+object Use {
+  def r = X.x
+  def s = t
+  def t: Int
+}

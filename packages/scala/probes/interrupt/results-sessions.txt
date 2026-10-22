@@ -1,8 +1,16 @@
-== big-file                        6 requests  work after background: fresh 609 session 216   no background: fresh 810 session 417   answers same
-== case-class-completion           6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
-== case-class-loaded               6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
-== cycle                           6 requests  work after background: fresh  42 session  39   no background: fresh  54 session  51   answers same
-== edit-cross-file                 6 requests  work after background: fresh  30 session  27   no background: fresh  41 session  38   answers same
-== implicit-class                  6 requests  work after background: fresh  57 session  54   no background: fresh  74 session  71   answers same
-== nowarn                          6 requests  work after background: fresh  48 session  35   no background: fresh  62 session  49   answers same
-== targeted-consumes-synthetics    6 requests  work after background: fresh  48 session  45   no background: fresh  62 session  59   answers same
+== big-file                        6 requests  work after background: fresh 609 session 216 revisions   6   no background: fresh 810 session 417 revisions 248   answers same
+   per request after background: fresh [0, 202, 203, 204, 0, 0] session [0, 6, 6, 6, 195, 3] revisions [0, 0, 0, 0, 0, 6]
+== case-class-completion           6 requests  work after background: fresh  42 session  39 revisions   6   no background: fresh  54 session  51 revisions  18   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 0, 0, 0, 0, 6]
+== case-class-loaded               6 requests  work after background: fresh  42 session  39 revisions   6   no background: fresh  54 session  51 revisions  18   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 0, 0, 0, 0, 6]
+== cycle                           6 requests  work after background: fresh  42 session  39 revisions   9   no background: fresh  54 session  51 revisions  23   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 1, 1, 1, 0, 6]
+== edit-cross-file                 6 requests  work after background: fresh  30 session  27 revisions  11   no background: fresh  41 session  38 revisions  25   answers same
+   per request after background: fresh [6, 7, 8, 9, 0, 0] session [6, 6, 6, 6, 0, 3] revisions [1, 0, 0, 0, 1, 9]
+== implicit-class                  6 requests  work after background: fresh  57 session  54 revisions   6   no background: fresh  74 session  71 revisions  26   answers same
+   per request after background: fresh [0, 18, 19, 20, 0, 0] session [0, 17, 17, 17, 0, 3] revisions [0, 0, 0, 0, 0, 6]
+== nowarn                          6 requests  work after background: fresh  48 session  35 revisions   6   no background: fresh  62 session  49 revisions  24   answers same
+   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 9, 9, 9, 5, 3] revisions [0, 0, 0, 0, 0, 6]
+== targeted-consumes-synthetics    6 requests  work after background: fresh  48 session  45 revisions   6   no background: fresh  62 session  59 revisions  21   answers same
+   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 14, 14, 14, 0, 3] revisions [0, 0, 0, 0, 0, 6]

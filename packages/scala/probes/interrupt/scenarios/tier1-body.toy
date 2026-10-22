@@ -1,0 +1,18 @@
+// event: edit A then loadedTyped A
+// note: tier 1, ToyTree's tier1_body_edit: an edit inside the body of a member whose type is declared re-types that member alone
+// file: A
+class Int {}
+class C {
+  def c: Int
+  def q: C = c
+  def p = q.c
+  def s = q
+}
+// edit: A
+class Int {}
+class C {
+  def c: Int
+  def q: C = p
+  def p = q.c
+  def s = q
+}

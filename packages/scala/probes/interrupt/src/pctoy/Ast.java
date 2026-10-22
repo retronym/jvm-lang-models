@@ -9,10 +9,11 @@ import java.util.regex.*;
  * file   := decl*
  * decl   := mods ('class' | 'object' | 'trait') Name ('(' Name ':' Name (',' Name ':' Name)* ')')? ('extends' Name)? '{' member* '}'
  * mods   := ('case' | 'implicit' | 'nowarn' | 'deprecated')*
- * member := mods 'def' Name (':' Name | '=' Name ('.' Name)*)
+ * member := mods 'def' Name (':' Name ('=' Name ('.' Name)*)? | '=' Name ('.' Name)*)
  * </pre>
  *
- * A member's type is declared (`def m: T`) or inferred from a path (`def m = a.b.c`): the first name is
+ * A member's type is declared (`def m: T`, with or without a body `= a.b.c` typed against it) or inferred
+ * from a path (`def m = a.b.c`): the first name is
  * a member of the enclosing class (own or inherited) or a top-level object; each further name is a member
  * of the type so far, or, failing that, a member of an implicit class in scope that takes that type.
  * Inference is what forces other facts, so this is enough for cycles, levels and interleavings.
@@ -24,8 +25,8 @@ public final class Ast {
   public record Source(String name, String text, List<Decl> decls) {}
   public record Param(String name, String tpe) {}
   public record Member(Set<String> mods, String name, String declared, List<String> path, int pos) {
-    public boolean inferred() { return path != null; }
-    @Override public String toString() { return "def " + name + (inferred() ? " = " + String.join(".", path) : ": " + declared); }
+    public boolean inferred() { return declared == null; }
+    @Override public String toString() { return "def " + name + (declared != null ? ": " + declared : "") + (path != null ? " = " + String.join(".", path) : ""); }
   }
   public record Decl(Set<String> mods, String kind, String name, List<Param> params, String parent, List<Member> members, int pos) {
     public boolean isCase() { return mods.contains("case"); }
@@ -94,12 +95,13 @@ public final class Ast {
       Set<String> mods = mods();
       expect("def");
       String name = ident();
-      if (accept(":")) return new Member(mods, name, ident(), null, pos);
-      expect("=");
+      String declared = accept(":") ? ident() : null;
+      if (declared != null && !accept("=")) return new Member(mods, name, declared, null, pos);
+      if (declared == null) expect("=");
       List<String> path = new ArrayList<>();
       path.add(ident());
       while (accept(".")) path.add(ident());
-      return new Member(mods, name, null, List.copyOf(path), pos);
+      return new Member(mods, name, declared, List.copyOf(path), pos);
     }
   }
 }

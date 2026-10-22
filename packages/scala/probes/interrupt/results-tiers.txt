@@ -1,0 +1,27 @@
+== tier1-body: edit A then loadedTyped A
+   tier 1, ToyTree's tier1_body_edit: an edit inside the body of a member whose type is declared re-types that member alone
+   inputs changed: member class C.q
+   recomputed 2: type class C.q (backdated), typed class C.q (backdated)
+   new 1: lookup class C.p
+   reused 14: decls class Int, decls class C, body class Int, body class C, type class C.c, type class C.p, type class C.s, typed class C.c, lookup <toplevel>.type Int, lookup <toplevel>.type C, lookup class C.c, typed class C.p, lookup class C.q, typed class C.s
+   tier1 check: ok
+   answers: same as dotc-metals
+
+== tier2-signature: edit A then loadedTyped A
+   tier 2, ToyTree's tier2_signature_edit: a declared type changes, and with it the facts whose traces hold it, and nothing of D
+   inputs changed: member class C.q
+   recomputed 7: body class C (backdated), type class C.q (changed), type class C.p (changed), type class C.s (changed), typed class C.q (changed), typed class C.p (changed), typed class C.s (changed)
+   new 2: lookup <toplevel>.type D, lookup class D.c
+   reused 15: decls class Int, decls class String, decls class C, decls class D, body class Int, body class String, type class C.c, typed class C.c, lookup <toplevel>.type Int, lookup class C.c, lookup class C.q, body class D, type class D.c, typed class D.c, lookup <toplevel>.type String
+   tier2 check: ok
+   answers: same as dotc-metals
+
+== tier3-scope: edit A then loadedTyped A
+   tier 3, ToyTree's tier3a_scope_insert: a declaration added to the top-level scope re-reads every lookup there, the failed lookup of X included
+   inputs changed: scope, decl object X, member object X.x
+   recomputed 5: body object Use (backdated), type object Use.r (changed), typed object Use.r (changed), lookup <toplevel>.term X (changed), lookup <toplevel>.type Int (backdated)
+   new 5: decls object X, body object X, type object X.x, typed object X.x, lookup object X.x
+   reused 9: decls class Int, decls object Use, body class Int, type object Use.s, type object Use.t, lookup object Use.X, typed object Use.s, lookup object Use.t, typed object Use.t
+   tier3 check: ok
+   answers: same as dotc-metals
+

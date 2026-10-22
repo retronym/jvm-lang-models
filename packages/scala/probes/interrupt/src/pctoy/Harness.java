@@ -21,6 +21,8 @@ public final class Harness {
     KERNELS.put("dotc-interrupted", s -> new Scala3Kernel("dotc-interrupted", true, s));
     KERNELS.put("psi", s -> new PsiKernel("psi", s));
   }
+  /** Kernels for replays only: no safepoints, so no interleavings to sweep. */
+  public static final Map<String, Factory> REPLAY_KERNELS = Map.of("dotc-revisions", s -> new Revisions("dotc-revisions", s));
 
   /** A scenario file: `// event: <event>` and `// note: ...` lines, then `// file: <Name>` sections and,
    * for an edit, an `// edit: <Name>` section with the new text. Events: `completion F Decl.member`,
@@ -110,19 +112,69 @@ public final class Harness {
     return r;
   }
 
-  /** A request sequence on a kernel, after the background: the answers and the work. */
-  public record Replay(List<String> answers, long work) {}
+  /** A request sequence on a kernel, after the background: the answers, the work, and the work of each request. */
+  public record Replay(List<String> answers, long work, List<Long> perRequest) {}
 
   public static Replay replay(Scenario sc, String kernelName, List<Event> events, boolean background) {
     Scheduler s = new Scheduler();
-    Kernel k = KERNELS.get(kernelName).make(s);
+    Kernel k = KERNELS.getOrDefault(kernelName, REPLAY_KERNELS.get(kernelName)).make(s);
     s.reset(-1, null);
     k.reload(sc.sources());
     if (background) k.drain();
     long w0 = k.work();
     List<String> answers = new ArrayList<>();
-    for (Event e : events) { k.send(e); answers.addAll(k.drain()); }
-    return new Replay(answers, k.work() - w0);
+    List<Long> per = new ArrayList<>();
+    for (Event e : events) { long w = k.work(); k.send(e); answers.addAll(k.drain()); per.add(k.work() - w); }
+    return new Replay(answers, k.work() - w0, per);
+  }
+
+  /** Stage 3's tiers: the units typed whole on `dotc-revisions`, then the scenario's edit and its request; which facts
+   * the request recomputed (changed or backdated) and which it reused, checked: a fact was recomputed iff its old trace
+   * holds a fact that changed since it was verified (dependents by trace), and per tier, `tier1` recomputes one typed
+   * form, `tier2` changes the edited member's type, `tier3` recomputes every top-level lookup it re-validates. The
+   * answers must be the fresh-run kernel's. */
+  public static String tiers(Scenario sc) {
+    StringBuilder b = new StringBuilder("== " + sc.name() + ": " + sc.event() + "\n   " + sc.note() + "\n");
+    Revisions k = new Revisions("dotc-revisions", new Scheduler());
+    k.reload(sc.sources());
+    k.drain();
+    Map<Revisions.Fact, List<Revisions.Fact>> traces = new HashMap<>();
+    Map<Revisions.Fact, Integer> verified = new HashMap<>();
+    for (Revisions.Fact f : k.facts()) if (!f.isInput()) { traces.put(f, f.trace); verified.put(f, f.verifiedAt); }
+    k.recomputed.clear();
+    k.send(sc.event());
+    List<String> got = k.drain();
+    List<String> fresh = replay(sc, "dotc-metals", List.of(sc.event()), true).answers();
+    int r = k.rev;
+    List<String> inputs = new ArrayList<>(), rec = new ArrayList<>(), fresh_ = new ArrayList<>(), reused = new ArrayList<>(), bad = new ArrayList<>();
+    for (Revisions.Fact f : k.facts()) {
+      if (f.isInput()) { if (f.changedAt == r) inputs.add(f.key); continue; }
+      if (f.verifiedAt != r) continue;
+      boolean ran = k.recomputed.contains(f);
+      if (!traces.containsKey(f)) { fresh_.add(f.key); continue; }
+      boolean dep = traces.get(f).stream().anyMatch(d -> d.changedAt > verified.get(f));
+      if (ran != dep) bad.add(f.key + (ran ? " recomputed without a changed dep" : " reused with a changed dep"));
+      if (ran) rec.add(f.key + (f.changedAt == r ? " (changed)" : " (backdated)")); else reused.add(f.key);
+    }
+    long typed = k.recomputed.stream().filter(f -> f.key.startsWith("typed ") && traces.containsKey(f)).count();
+    String tier = sc.name().substring(0, 5);
+    switch (tier) {
+      case "tier1" -> { if (typed != 1) bad.add(typed + " typed forms recomputed, not 1"); }
+      case "tier2" -> {
+        for (String in : inputs) if (in.startsWith("member ") && !rec.contains("type " + in.substring(7) + " (changed)")) bad.add("type " + in.substring(7) + " not changed");
+      }
+      default -> {
+        for (Revisions.Fact f : k.facts())
+          if (f.key.startsWith("lookup <toplevel>") && f.verifiedAt == r && traces.containsKey(f) && !k.recomputed.contains(f)) bad.add(f.key + " not recomputed");
+      }
+    }
+    b.append("   inputs changed: ").append(String.join(", ", inputs)).append('\n');
+    b.append("   recomputed ").append(rec.size()).append(": ").append(String.join(", ", rec)).append('\n');
+    b.append("   new ").append(fresh_.size()).append(": ").append(String.join(", ", fresh_)).append('\n');
+    b.append("   reused ").append(reused.size()).append(": ").append(String.join(", ", reused)).append('\n');
+    b.append("   ").append(tier).append(" check: ").append(bad.isEmpty() ? "ok" : "FAILED " + bad).append('\n');
+    b.append("   answers: ").append(got.equals(fresh) ? "same as dotc-metals" : "DIFFER\n" + diff(fresh, got)).append('\n');
+    return b.toString();
   }
 
   /** An editing session on the scenario's first file: a completion at its first inferred member, then three times an
