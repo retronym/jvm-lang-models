@@ -15,3 +15,4 @@ import ScalaTypes.LubArgs
 import ScalaTypes.ToyNamer
 import ScalaTypes.ToyKernel
 import ScalaTypes.ToySpace
+import ScalaTypes.ToyTree

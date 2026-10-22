@@ -57,12 +57,15 @@ open Query.Lazy
 
 variable {Q V : Type} [DecidableEq Q] [DecidableEq V]
 
-/-- A finished fact: its value, the facts its rule asked, and the revision that computed it (a
-reused entry keeps its `since`; dotc's `validFor` extended by `bringForward`). -/
+/-- A finished fact: its value, the facts its rule asked, the revision since which it has had this
+value (a reused entry keeps its `since`, dotc's `validFor` extended by `bringForward`; so does a
+recomputed one whose value came out equal, Salsa's backdating), and the revision that last ran its
+rule, which is the work done. -/
 structure Entry (Q V : Type) where
   value : V
   deps : List Q
   since : Nat
+  computed : Nat
   deriving DecidableEq, Repr
 
 /-- The store of a revision. -/
@@ -95,11 +98,14 @@ def checkDeps (f : Memo Q V → Q → Out Q V × Memo Q V) (old : Memo Q V) :
     | (.cyc x, m') => (.cyc x, m')
     | (.fuel, m') => (.fuel, m')
 
-/-- Compute `q` from its rule, storing the value with its trace at revision `rev`. -/
-def recomputeWith (f : Memo Q V → Q → Out Q V × Memo Q V) (R : Rules Q V) (rev : Nat) (q : Q)
-    (m : Memo Q V) : Out Q V × Memo Q V :=
+/-- Compute `q` from its rule, storing the value with its trace at revision `rev`; a value equal
+to the old revision's keeps that revision's `since`. -/
+def recomputeWith (f : Memo Q V → Q → Out Q V × Memo Q V) (R : Rules Q V) (old : Memo Q V)
+    (rev : Nat) (q : Q) (m : Memo Q V) : Out Q V × Memo Q V :=
   match runWithT f (R q) m with
-  | (.ok v, tr, m') => (.ok v, upd m' q ⟨v, tr, rev⟩)
+  | (.ok v, tr, m') =>
+    let since := match old q with | some e => if e.value = v then e.since else rev | none => rev
+    (.ok v, upd m' q ⟨v, tr, since, rev⟩)
   | (e, _, m') => (e, m')
 
 /-- Force `q` at revision `rev` with rules `R`, over the store `old` of the previous revision:
@@ -121,11 +127,11 @@ def reval (R : Rules Q V) (same : Q → Bool) (old : Memo Q V) (rev : Nat) :
             match checkDeps (fun m' q' => reval R same old rev n (q :: stk) m' q') old e.deps m with
             | (.ok true, m') => (.ok e.value, upd m' q e)
             | (.ok false, m') =>
-              recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R rev q m'
+              recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R old rev q m'
             | (.cyc x, m') => (.cyc x, m')
             | (.fuel, m') => (.fuel, m')
-          else recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R rev q m
-        | none => recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R rev q m
+          else recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R old rev q m
+        | none => recomputeWith (fun m' q' => reval R same old rev n (q :: stk) m' q') R old rev q m
 
 /-- A session: requests in order on one revision, threading the store. -/
 def revalAll (R : Rules Q V) (same : Q → Bool) (old : Memo Q V) (rev : Nat) (n : Nat) :
@@ -140,13 +146,14 @@ def revalAll (R : Rules Q V) (same : Q → Bool) (old : Memo Q V) (rev : Nat) (n
 def fresh (R : Rules Q V) (rev n : Nat) (qs : List Q) : List (Out Q V) × Memo Q V :=
   revalAll R (fun _ => false) empty rev n qs empty
 
-/-- The facts of `qs` that revision `rev` computed itself. -/
+/-- The facts of `qs` whose rules revision `rev` ran: its work. -/
 def computedAt (m : Memo Q V) (rev : Nat) (qs : List Q) : List Q :=
-  qs.filter fun q => match m q with | some e => e.since == rev | none => false
+  qs.filter fun q => match m q with | some e => e.computed == rev | none => false
 
-/-- The facts of `qs` that revision `rev` reused from an earlier one. -/
-def reusedAt (m : Memo Q V) (rev : Nat) (qs : List Q) : List Q :=
-  qs.filter fun q => match m q with | some e => e.since < rev | none => false
+/-- The facts of `qs` whose values revision `rev` changed (or first computed): what it invalidated
+for the revisions after it. -/
+def changedAt (m : Memo Q V) (rev : Nat) (qs : List Q) : List Q :=
+  qs.filter fun q => match m q with | some e => e.since == rev | none => false
 
 /-! ## Soundness -/
 
@@ -255,11 +262,13 @@ theorem reuse_sound (R R' : Rules Q V) (ρ ρ' : Q → V) (r : Q → Nat) (same 
             · have := hr q q' hq'; have := hstk x hx; omega)
       -- recomputing from any store reached so far is `force_ok`'s argument
       have hrec : ∀ m₁, AgreeM R' ρ' m₁ → Ext m m₁ →
-          ∃ m', recomputeWith (fun m' q' => reval R' same old rev n (q :: stk) m' q') R' rev q m₁ =
+          ∃ m', recomputeWith (fun m' q' => reval R' same old rev n (q :: stk) m' q') R' old rev q m₁ =
             (.ok (ρ' q), m') ∧ AgreeM R' ρ' m' ∧ Ext m m' := by
         intro m₁ hm₁ hext
         obtain ⟨m₂, h₂, p₂, e₂⟩ := runWithT_ok ρ' _ (AgreeM R' ρ') (R' q) hf m₁ hm₁
-        refine ⟨upd m₂ q ⟨(R' q).run ρ', (R' q).trace ρ', rev⟩, ?_, ?_, ?_⟩
+        refine ⟨upd m₂ q ⟨(R' q).run ρ', (R' q).trace ρ',
+          match old q with | some e => if e.value = (R' q).run ρ' then e.since else rev | none => rev, rev⟩,
+          ?_, ?_, ?_⟩
         · simp only [recomputeWith, h₂]
           rw [← hfix q]
         · intro x e hx
