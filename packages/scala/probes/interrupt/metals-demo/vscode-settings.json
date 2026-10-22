@@ -1,8 +1,9 @@
 {
   "metals.serverVersion": "1.6.9",
   "metals.verboseCompilation": false,
-  "metals.enableSemanticHighlighting": true,
+  "metals.enableSemanticHighlighting": false,
   "files.watcherExclude": {
     "**/target/**": true
-  }
+  },
+  "metals.superMethodLensesEnabled": false
 }
