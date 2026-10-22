@@ -167,7 +167,7 @@ What exists to build on: `createOrRefine` and `lateCompile` (keep a symbol, swap
 - [x] The checkpoint inside implicit search, with the evidence that the typer's tick never reaches it (§6).
 - [x] Targeting and the session on dotc (§5): the spike, four tests, 250/250 with the existing suites.
 - [x] The path version of targeting (skip siblings at every level, resume into any skipped statement, re-parse a poisoned member), six session tests, the soak suite, the whole PC suite green: [track-i-dotc-session-design.md](track-i-dotc-session-design.md).
-- [ ] Graceful degradation of cycles and other failures in interactive mode (design doc §5): the measurements first, then the per-item handlers in the providers, `untouchIfIncomplete` for every unwinding exception, taint → poisoned session.
+- [x] Graceful degradation of cycles and other failures in interactive mode (design doc §5): measured (one cycle in 1,074 completions over `Typer.scala` and `Namer.scala`; the provider already degrades per member), then built: `Touched` cleared on every interactive unwind, the run tainted and not resumed (I16).
 - [ ] Stage 3 on dotc in the order §7 gives: non-destructive attachments (I8), the re-enter mode, trace recording; `TestingWorkspaceSearch` made parse-only so the suite's timings measure the PC (I9).
 - [ ] The dotc kernel in Lean with abort, so that `abort_*` have dotc-shaped twins (facts dropped per run, diagnostics per run).
 - [ ] Upstream: a scala/scala3 issue that the 3.8.0 `InteractiveDriver` cancellation is never sticky (the interrupt bit is consumed by `checkCancellation`), with the spike's test; then the patch as the "future change" #24133 named, framed against #9429's graceful-exit position with #23191's evidence.

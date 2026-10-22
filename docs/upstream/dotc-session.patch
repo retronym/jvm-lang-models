@@ -31,7 +31,7 @@ index db34dbc88e..d196455401 100644
    def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
      val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
 diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
-index 2fdf622325..e8536c2574 100644
+index 2fdf622325..8f6169cf91 100644
 --- a/compiler/src/dotty/tools/dotc/Run.scala
 +++ b/compiler/src/dotty/tools/dotc/Run.scala
 @@ -32,6 +32,7 @@ import java.io.{BufferedWriter, OutputStreamWriter}
@@ -42,7 +42,7 @@ index 2fdf622325..e8536c2574 100644
  import scala.io.Codec
  
  import Run.Progress
-@@ -231,6 +232,41 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -231,6 +232,83 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
    def canProgress()(using Context): Boolean =
      foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
  
@@ -66,6 +66,48 @@ index 2fdf622325..e8536c2574 100644
 +   */
 +  var targetedStatsOwner: Symbol = NoSymbol
 +
++  /** Interactive mode only: the symbols whose completion was prevented as a
++   *  cyclic reference during this run (`SymDenotation.completeFrom` found
++   *  `Touched` set), and the completions an exception other than a cyclic
++   *  reference unwound through. A request that met either has a degraded
++   *  result somewhere (an error type, a dropped item), and what was computed
++   *  on top of it must not outlive the request: `InteractiveDriver.runUpTo`
++   *  starts a fresh run instead of resuming a run that recorded one (the
++   *  session is tainted). IntelliJ's `RecursionManager` has the same rule
++   *  (`markStack` / `mayCacheNow`).
++   */
++  val cyclesPrevented: ListBuffer[Symbol] = ListBuffer.empty
++  val completionsUnwound: ListBuffer[(Symbol, Throwable)] = ListBuffer.empty
++  val leaksHealed: ListBuffer[Symbol] = ListBuffer.empty
++
++  /** The symbols whose completion is in progress (interactive mode only): a
++   *  `Touched` flag on a symbol not in this set is a leak from an earlier
++   *  unwind, not a cycle, and `completeFrom` clears it instead of reporting
++   *  a cyclic reference.
++   */
++  val completing: mutable.HashSet[Symbol] = mutable.HashSet.empty
++
++  /** A run with a degraded completion whose state is unknown (an exception
++   *  other than a cyclic reference or a cancellation unwound through it) is
++   *  not resumed: the next request on the same content starts fresh. A
++   *  prevented cyclic reference does not taint: the symbols it unwound
++   *  through are left recomputable (`Touched` cleared), the request's own
++   *  answer degrades at its handlers, and the run's state is as before.
++   */
++  def isTainted: Boolean = completionsUnwound.nonEmpty
++
++  def recordCyclePrevented(sym: Symbol)(using Context): Unit =
++    cyclesPrevented += sym
++    Run.CycleStats.prevented(sym)
++
++  def recordLeakHealed(sym: Symbol)(using Context): Unit =
++    leaksHealed += sym
++    Run.CycleStats.healed(sym)
++
++  def recordCompletionUnwound(sym: Symbol, ex: Throwable)(using Context): Unit =
++    completionsUnwound += ((sym, ex))
++    Run.CycleStats.unwound(sym, ex)
++
 +  private var typedTreeCount = 0
 +
 +  /** Called by `Typer.typed` for every tree. Every 1024 trees, in interactive
@@ -84,7 +126,7 @@ index 2fdf622325..e8536c2574 100644
    def doAdvanceUnit()(using Context): Unit =
      trackProgress: progress =>
        progress.currentUnitCount += 1 // trace that we completed a unit in the current (sub)phase
-@@ -636,6 +672,15 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -636,6 +714,44 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
  }
  
  object Run {
@@ -93,6 +135,35 @@ index 2fdf622325..e8536c2574 100644
 +   *  cancellation land inside small statements.
 +   */
 +  @sharable @volatile var typerCheckpointMask: Int = 1023
++
++  /** Process-wide counts of the cyclic references prevented and the
++   *  completions unwound in interactive mode, printed at exit when
++   *  `-Ddotty.interactive.cycleStats=true`: the measurement behind the
++   *  graceful-degradation design.
++   */
++  object CycleStats:
++    private val enabled = java.lang.Boolean.getBoolean("dotty.interactive.cycleStats")
++    @sharable private val preventedBy = new java.util.concurrent.ConcurrentHashMap[String, Integer]
++    @sharable private val unwoundBy = new java.util.concurrent.ConcurrentHashMap[String, Integer]
++    @sharable private val preventedCount = new java.util.concurrent.atomic.AtomicInteger
++    @sharable private val unwoundCount = new java.util.concurrent.atomic.AtomicInteger
++    @sharable private val healedCount = new java.util.concurrent.atomic.AtomicInteger
++    if enabled then
++      Runtime.getRuntime.addShutdownHook(new Thread(() => {
++        val top = (m: java.util.concurrent.ConcurrentHashMap[String, Integer]) =>
++          m.entrySet.toArray(Array.empty[java.util.Map.Entry[String, Integer]]).sortBy(-_.getValue.intValue).take(12).map(e => s"${e.getKey}=${e.getValue}").mkString(", ")
++        System.err.println(s"[interactive cycleStats] cyclic references prevented: ${preventedCount.get} (${top(preventedBy)}); leaked Touched flags healed: ${healedCount.get}; completions unwound by other exceptions: ${unwoundCount.get} (${top(unwoundBy)})")
++      }))
++    def prevented(sym: Symbol)(using Context): Unit =
++      if enabled then
++        preventedCount.incrementAndGet()
++        preventedBy.merge(sym.name.toString, 1, (a, b) => a + b)
++    def healed(sym: Symbol)(using Context): Unit =
++      if enabled then healedCount.incrementAndGet()
++    def unwound(sym: Symbol, ex: Throwable)(using Context): Unit =
++      if enabled then
++        unwoundCount.incrementAndGet()
++        unwoundBy.merge(s"${sym.name}:${ex.getClass.getSimpleName}", 1, (a, b) => a + b)
 +
 +  /** A statement left untyped by a targeted run (see `typingTarget`). */
 +  case class SkippedStat(stat: ast.untpd.Tree, ctx: Context, owner: Symbol)
@@ -141,40 +212,122 @@ index 36c16d9769..addd278b98 100644
        }
        myTree.asInstanceOf[Tree]
 diff --git a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
-index 4d2fa848c2..71db7b2852 100644
+index 4d2fa848c2..0b80bcf83c 100644
 --- a/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
 +++ b/compiler/src/dotty/tools/dotc/core/SymDenotations.scala
-@@ -163,6 +163,9 @@ object SymDenotations {
+@@ -153,28 +153,108 @@ object SymDenotations {
+           println(i"${"  " * indent}completing ${if (isType) "type" else "val"} $name")
+           indent += 1
+ 
+-          if myFlags.is(Touched) then
++          if myFlags.is(Touched) && !healLeakedTouched() then
++            recordCyclePrevented()
+             throw CyclicReference(this)(using ctx.withOwner(symbol))
+           myFlags |= Touched
++          enterCompleting()
+ 
+           // completions.println(s"completing ${this.debugString}")
+           try atPhase(validFor.firstPhaseId)(completer.complete(this))
+           catch {
              case ex: CyclicReference =>
                println(s"error while completing ${this.debugString}")
-               throw ex
-+            case ex: CompilationUnit.CancelledCompilation =>
-+              untouchIfIncomplete()
++              unwindsInteractive(ex)
 +              throw ex
++            case ex if unwindsInteractive(ex) =>
+               throw ex
            }
            finally {
++            leaveCompleting()
              indent -= 1
-@@ -174,7 +177,18 @@ object SymDenotations {
-             if myFlags.is(Touched) then
+             println(i"${"  " * indent}completed ${if (isType) "type" else "val"} $name in $owner")
+           }
+         }
+         else
+           CyclicReference.trace("compute the signature of ", symbol):
+-            if myFlags.is(Touched) then
++            if myFlags.is(Touched) && !healLeakedTouched() then
++              recordCyclePrevented()
                throw CyclicReference(this)(using ctx.withOwner(symbol))
              myFlags |= Touched
 -            atPhase(validFor.firstPhaseId)(completer.complete(this))
++            enterCompleting()
 +            try atPhase(validFor.firstPhaseId)(completer.complete(this))
-+            catch case ex: CompilationUnit.CancelledCompilation =>
-+              untouchIfIncomplete()
++            catch case ex if unwindsInteractive(ex) =>
 +              throw ex
++            finally leaveCompleting()
 +
-+    /** A cancelled run unwound through this completion before it finished:
-+     *  clear `Touched` so that the next run can complete the symbol instead of
-+     *  reporting a cyclic reference. Only for `CancelledCompilation`; any other
-+     *  exception leaves the flag set, as before.
++    /** Interactive mode keeps the set of symbols whose completion is in
++     *  progress on the run (`Run.completing`), so that a `Touched` flag can be
++     *  told from a cycle: see `healLeakedTouched`.
 +     */
++    private def enterCompleting()(using Context): Unit =
++      if ctx.mode.is(Mode.Interactive) then
++        val run = ctx.run
++        if run != null then run.completing += symbol
++    private def leaveCompleting()(using Context): Unit =
++      if ctx.mode.is(Mode.Interactive) then
++        val run = ctx.run
++        if run != null then run.completing -= symbol
++
++    /** `Touched` is set but, in interactive mode, no completion of this
++     *  symbol is in progress: the flag is what an exception unwinding through
++     *  an earlier completion left (a stale lock, not a cycle). Clear it and
++     *  complete; record the healing on the run. In batch mode, or when the
++     *  completion is in progress, it is a cycle.
++     */
++    private def healLeakedTouched()(using Context): Boolean =
++      ctx.mode.is(Mode.Interactive) && {
++        val run = ctx.run
++        run != null && !run.completing.contains(symbol) && {
++          myFlags &~= Touched
++          run.recordLeakHealed(symbol)
++          true
++        }
++      }
++
++    /** In interactive mode, a cyclic reference prevented here is recorded on
++     *  the run (see `Run.cyclesPrevented`): the request degrades, and what
++     *  it computed must not be resumed from.
++     */
++    private def recordCyclePrevented()(using Context): Unit =
++      if ctx.mode.is(Mode.Interactive) then
++        val run = ctx.run
++        if run != null then run.recordCyclePrevented(symbol)
++
++    /** An exception unwound through this completion before it finished. For
++     *  a cancellation, in any mode, clear `Touched` so that the next run can
++     *  complete the symbol instead of reporting a cyclic reference. In
++     *  interactive mode do the same for a cyclic reference (the result of a
++     *  computation that met a cycle below it must not be kept: IntelliJ's
++     *  `mayCacheNow` rule; the request's answer degrades where the exception
++     *  is handled, and the symbol is completable again afterwards) and for
++     *  any other exception (a stack overflow, an assertion in a partial tree),
++     *  which is also recorded on the run as a completion of unknown state
++     *  (`Run.isTainted`). Batch compilation keeps its behaviour: the flag
++     *  stays set, as before, and the exception propagates. Returns true when
++     *  the caller is to rethrow (a guard: the exception always propagates).
++     */
++    private def unwindsInteractive(ex: Throwable)(using Context): Boolean =
++      ex match
++        case _: CompilationUnit.CancelledCompilation =>
++          untouchIfIncomplete()
++          true
++        case _: CyclicReference =>
++          if ctx.mode.is(Mode.Interactive) then untouchIfIncomplete()
++          ctx.mode.is(Mode.Interactive)
++        case _ if ctx.mode.is(Mode.Interactive) =>
++          untouchIfIncomplete()
++          val run = ctx.run
++          if run != null then run.recordCompletionUnwound(symbol, ex)
++          true
++        case _ => false
++
 +    private def untouchIfIncomplete(): Unit =
 +      if !isCompleted then myFlags &~= Touched
  
      protected[dotc] def info_=(tp: Type): Unit = {
        /* // DEBUG
-@@ -1845,6 +1859,37 @@ object SymDenotations {
+@@ -1845,6 +1925,37 @@ object SymDenotations {
              c.ensureCompleted()
        end completeChildrenIn
  
@@ -212,7 +365,7 @@ index 4d2fa848c2..71db7b2852 100644
        if is(Sealed) || isAllOf(JavaEnum) && isClass then
          if !is(ChildrenQueried) then
            // Make sure all visible children are completed, so that
-@@ -1852,6 +1897,7 @@ object SymDenotations {
+@@ -1852,6 +1963,7 @@ object SymDenotations {
            // is defined in the same scope as `cls` or in the companion object of `cls`.
            completeChildrenIn(owner)
            completeChildrenIn(companionClass)
@@ -270,7 +423,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..8720f8662b 100644
+index 5b78dc804b..9fd21e4f85 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -320,7 +473,7 @@ index 5b78dc804b..8720f8662b 100644
  
    private val myInitCtx: Context = {
      val rootCtx = initCtx.fresh.addMode(Mode.ReadPositions).addMode(Mode.Interactive)
-@@ -78,37 +101,233 @@ class InteractiveDriver(
+@@ -78,37 +101,249 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -352,10 +505,21 @@ index 5b78dc804b..8720f8662b 100644
 +   */
 +  def typedPrefixLength(uri: URI): Int = mySession match
 +    case s: Session if s.uri == uri =>
-+      s.unit.tpdTree match
++      // through a package clause that wraps the whole file
++      def count(t: Tree): Int = t match
++        case PackageDef(_, (inner: PackageDef) :: Nil) => count(inner)
 +        case PackageDef(_, stats) => stats.length
 +        case _ => 0
++      count(s.unit.tpdTree)
 +    case _ => -1
++
++  /** Is the targeted run of `uri` tainted: did an exception of unknown effect
++   *  unwind through a completion (see `Run.isTainted`)? The next request on
++   *  it starts a fresh run.
++   */
++  def isTainted(uri: URI): Boolean = mySession match
++    case s: Session if s.uri == uri => s.run.isTainted
++    case _ => false
 +
 +  /** The spans of the statements the targeted run of `uri` has not typed. */
 +  def untypedSpans(uri: URI): List[Span] = mySession match
@@ -387,7 +551,12 @@ index 5b78dc804b..8720f8662b 100644
 +  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
 +    mySession match
 +      case s: Session if s.uri == uri && s.source.textContent() == source.textContent() =>
-+        s.skippedAt(target) match
++        // A run that had a completion unwound by an exception of unknown
++        // effect (not a cycle, not a cancellation) holds state nothing should
++        // be served or resumed from: the session is tainted, and the request
++        // starts a fresh run, which is cheap for a targeted run.
++        if s.run.isTainted then run(uri, source, target)
++        else s.skippedAt(target) match
 +          case None => s.diagnostics
 +          case Some(sk) =>
 +            if s.poisoned then run(uri, source, target)
@@ -558,7 +727,7 @@ index 5b78dc804b..8720f8662b 100644
      }
    }
  
-@@ -140,13 +359,15 @@ class InteractiveDriver(
+@@ -140,13 +375,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -576,7 +745,7 @@ index 5b78dc804b..8720f8662b 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +399,6 @@ class InteractiveDriver(
+@@ -178,3 +415,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1539,12 +1708,234 @@ index 0000000000..74b20a1cb4
 +  @Test def `objects-seed-2` = soak("objects", objectsFile(_), 2, 300)
 +  @Test def `shapes-seed-1` = soak("shapes", shapesFile, 1, 300)
 +  @Test def `shapes-seed-2` = soak("shapes", shapesFile, 2, 300)
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionDegradeSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionDegradeSuite.scala
+new file mode 100644
+index 0000000000..1651b37749
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionDegradeSuite.scala
+@@ -0,0 +1,114 @@
++package dotty.tools.pc.tests.completion
++
++import java.net.URI
++
++import scala.collection.mutable
++import scala.language.unsafeNulls
++import scala.meta.internal.jdk.CollectionConverters.*
++import scala.meta.internal.metals.{CompilerOffsetParams, EmptyCancelToken, PcQueryContext}
++import scala.meta.internal.pc.PresentationCompilerConfigImpl
++import scala.meta.pc.reports.EmptyReportContext
++
++import dotty.tools.dotc.core.Contexts.*
++import dotty.tools.dotc.core.Flags
++import dotty.tools.dotc.core.Decorators.*
++import dotty.tools.dotc.core.Symbols.*
++import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
++import dotty.tools.pc.{CachingDriver, ScalaPresentationCompiler}
++import dotty.tools.pc.base.BaseCompletionSuite
++
++import org.junit.Test
++
++/** Graceful degradation in interactive mode: a cyclic reference, or a
++ *  symbol left `Touched` by an earlier unwind, costs the request the one
++ *  symbol, not the whole answer, and taints the run so that the next request
++ *  on the same content starts fresh instead of resuming from degraded state.
++ */
++class CompletionDegradeSuite extends BaseCompletionSuite:
++
++  private val uri = URI.create("file:///A.scala")
++
++  override protected def config: PresentationCompilerConfigImpl =
++    super.config.copy(timeoutDelay = 120)
++
++  private def pc = presentationCompiler.asInstanceOf[ScalaPresentationCompiler]
++  private given PcQueryContext = PcQueryContext(None, () => "")(using EmptyReportContext())
++
++  private def withDriver[T](f: CachingDriver => T): T =
++    pc.compilerAccess.withNonInterruptableCompiler(null.asInstanceOf[T], EmptyCancelToken) { access =>
++      f(access.compiler())
++    }.get(60, java.util.concurrent.TimeUnit.SECONDS)
++
++  private def complete(query: String): List[String] =
++    val (code, offset) = params(query)
++    presentationCompiler
++      .complete(CompilerOffsetParams(uri, code, offset, EmptyCancelToken))
++      .get(60, java.util.concurrent.TimeUnit.SECONDS)
++      .getItems.asScala.map(_.getLabel).toList.sorted
++
++  private val source =
++    """|object Cyc {
++       |  def pAlpha(x: Int): Int = x
++       |  def pBeta = pGamma
++       |  def pGamma = pBeta
++       |  def pDelta(s: String): String = s
++       |}
++       |object Main {
++       |  Cyc.p@@
++       |}
++       |""".stripMargin
++
++  @Test def `a-true-cycle-costs-the-cyclic-members-only` =
++    val items = complete(source)
++    println(s"[degrade] true cycle: $items")
++    val labels = items.map(_.takeWhile(c => c.isLetter))
++    assert(labels.contains("pAlpha") && labels.contains("pDelta"), s"the other members must be listed: $items")
++    val (runId, tainted, cycles) = withDriver(d => (d.runIdOf(uri), d.isTainted(uri), d.currentCtx.run.nn.cyclesPrevented.size))
++    println(s"[degrade] after the cycle: runId=$runId tainted=$tainted cyclesPrevented=$cycles")
++    assert(cycles > 0, "the cycle is recorded on the run")
++    assert(!tainted, "a prevented cyclic reference does not taint the run: its symbols are left recomputable")
++    // The same content again: the same run serves it, with the same answer
++    val items2 = complete(source)
++    val runId2 = withDriver(_.runIdOf(uri))
++    println(s"[degrade] the next request on the same content: runId=$runId2")
++    assert(runId2 == runId, "the run is resumed")
++    assert(items == items2, "the same answer")
++
++  @Test def `a-leaked-touched-flag-costs-one-item` =
++    val plain =
++      """|object Leak {
++         |  def pAlpha(x: Int): Int = x
++         |  def pBeta(y: Int): Int = y
++         |  def pGamma(z: Int): Int = z
++         |}
++         |object Main {
++         |  Leak.p@@
++         |}
++         |""".stripMargin
++    val all = complete(plain)
++    println(s"[degrade] before the leak: $all")
++    // Plant the leak: `beta` is marked as being completed, as an exception that
++    // unwound through its completer would have left it before this change
++    withDriver { d =>
++      given Context = d.currentCtx
++      val leak = defn.EmptyPackageClass.info.decls.lookup("Leak".toTermName).moduleClass
++      val beta = leak.info.decls.lookup("pBeta".toTermName)
++      dotty.tools.dotc.interactive.TestLeaks.leaveTouched(beta)
++      println(s"[degrade] planted on run ${ctx.runId}: pBeta isCompleting=${beta.isCompleting}")
++    }
++    // The same content (and a non-empty prefix: for an empty one the provider
++    // uses a fresh driver): served by the same run, which meets the leaked flag
++    val degraded =
++      try complete(plain)
++      catch case scala.util.control.NonFatal(ex) => List(s"<request failed: ${ex.getClass.getSimpleName}>")
++    println(s"[degrade] with pBeta Touched: $degraded")
++    val labels = degraded.map(_.takeWhile(c => c.isLetter))
++    assert(labels.contains("pAlpha") && labels.contains("pGamma"), s"the request must still list the other members: $degraded")
++    // No completion of pBeta was in progress: the flag was a leak, healed on the spot, and pBeta
++    // completed through the planted completer (which gives it `Int`) instead of being dropped
++    assert(degraded.exists(_.startsWith("pBeta: Int")), s"the leaked flag is healed, not reported as a cycle: $degraded")
++    val (tainted, healed) = withDriver(d => (d.isTainted(uri), d.currentCtx.run.nn.leaksHealed.size))
++    println(s"[degrade] tainted=$tainted leaksHealed=$healed")
++    assert(healed > 0, "the healing is recorded on the run")
++    assert(!tainted, "a healed leak does not taint the run")
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CycleMeasureSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CycleMeasureSuite.scala
+new file mode 100644
+index 0000000000..32a2652754
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CycleMeasureSuite.scala
+@@ -0,0 +1,73 @@
++package dotty.tools.pc.tests.completion
++
++import java.io.File
++import java.net.URI
++import java.nio.file.{Files, Path, Paths}
++
++import scala.language.unsafeNulls
++
++import dotty.tools.dotc.core.Contexts.*
++import dotty.tools.dotc.core.Phases
++import dotty.tools.dotc.interactive.{CachedLogicalPackage, Completion, InteractiveDriver}
++import dotty.tools.dotc.util.{SourceFile, SourcePosition}
++import dotty.tools.dotc.util.Spans.Span
++import dotty.tools.pc.base.BasePCSuite
++
++import org.junit.Test
++
++/** A measurement, not a check: targeted completions at many points of real
++ *  compiler sources (`Typer.scala`, `Namer.scala` of this very checkout,
++ *  against the compiler's own classes on the test JVM's classpath), counting
++ *  the cyclic references prevented and the completions unwound per request,
++ *  the failures, and the time. Skipped when the sources are not found.
++ */
++class CycleMeasureSuite extends BasePCSuite:
++
++  private def sourceRoot: Option[Path] =
++    Iterator.iterate(Paths.get("").toAbsolutePath)(_.getParent).takeWhile(_ != null)
++      .map(_.resolve("compiler/src/dotty/tools/dotc/typer")).find(Files.isDirectory(_))
++
++  @Test def `measure` =
++    sourceRoot match
++      case None => println("[cycle-measure] compiler sources not found, skipped")
++      case Some(root) =>
++        val settings = List("-color:never", "-Ximport-suggestion-timeout", "0",
++          "-classpath", sys.props("java.class.path"))
++        val driver = new InteractiveDriver(settings, CachedLogicalPackage.none)
++        for name <- List("Typer.scala", "Namer.scala") do
++          val path = root.resolve(name)
++          val code = Files.readString(path)
++          val uri = path.toUri
++          val source = SourceFile.virtual(uri, code)
++          // every 40th identifier end: a completion of that identifier's prefix
++          val idents = raw"[A-Za-z_][A-Za-z0-9_]*".r.findAllMatchIn(code).map(_.end).toList
++          val points = idents.grouped(40).map(_.head).toList
++          var cycles = 0; var unwound = 0; var failed = 0; var empty = 0; var requests = 0
++          var ms = 0L; var maxMs = 0L
++          var runId = -1; var fresh = 0
++          val cyclic = scala.collection.mutable.Map.empty[String, Int]
++          for p <- points do
++            requests += 1
++            val t0 = System.nanoTime()
++            try
++              driver.runUpTo(uri, source, Span(p))
++              val id = driver.runIdOf(uri)
++              if id != runId then { fresh += 1; runId = id }
++              val run = driver.currentCtx.run
++              val before = (run.cyclesPrevented.size, run.completionsUnwound.size)
++              val items = driver.compilationUnits.get(uri) match
++                case Some(unit) =>
++                  given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
++                  Completion.completions(SourcePosition(source, Span(p)))._2
++                case None => Nil
++              if items.isEmpty then empty += 1
++              val after = (run.cyclesPrevented.size, run.completionsUnwound.size)
++              cycles += after._1 - before._1; unwound += after._2 - before._2
++              given Context = driver.currentCtx
++              run.cyclesPrevented.drop(before._1).foreach(s => cyclic(s.name.toString) = cyclic.getOrElse(s.name.toString, 0) + 1)
++            catch case scala.util.control.NonFatal(ex) =>
++              failed += 1
++              if failed <= 5 then println(s"[cycle-measure] $name@$p failed: ${ex.getClass.getName}: ${ex.getMessage.take(120)}")
++            val d = (System.nanoTime() - t0) / 1000000
++            ms += d; maxMs = math.max(maxMs, d)
++          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
+diff --git a/presentation-compiler/test/dotty/tools/dotc/interactive/TestLeaks.scala b/presentation-compiler/test/dotty/tools/dotc/interactive/TestLeaks.scala
+new file mode 100644
+index 0000000000..acc2e21970
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/dotc/interactive/TestLeaks.scala
+@@ -0,0 +1,17 @@
++package dotty.tools.dotc.interactive
++
++import dotty.tools.dotc.core.Contexts.*
++import dotty.tools.dotc.core.Flags
++import dotty.tools.dotc.core.SymDenotations.*
++import dotty.tools.dotc.core.Symbols.*
++import dotty.tools.dotc.core.Types.*
++
++/** Test access to compiler-private state (`info_=` is `protected[dotc]`). */
++object TestLeaks:
++  /** Leave `sym` as an exception unwinding through its completer would have
++   *  before `unwindsInteractive`: `Touched` set, info a completer again.
++   */
++  def leaveTouched(sym: Symbol)(using Context): Unit =
++    sym.denot.info = new LazyType:
++      def complete(denot: SymDenotation)(using Context): Unit = denot.info = defn.IntType
++    sym.setFlag(Flags.Touched)
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
 new file mode 100644
-index 0000000000..5e60980ba8
+index 0000000000..ac42dd3206
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
-@@ -0,0 +1,384 @@
+@@ -0,0 +1,437 @@
 +package dotty.tools.pc.xray
 +
 +import java.io.File
@@ -1553,6 +1944,7 @@ index 0000000000..5e60980ba8
 +import java.nio.file.{Files, Path, Paths}
 +
 +import scala.language.unsafeNulls
++import scala.jdk.CollectionConverters.*
 +
 +import com.sun.net.httpserver.{HttpExchange, HttpServer}
 +
@@ -1578,8 +1970,33 @@ index 0000000000..5e60980ba8
 + */
 +object XrayServer:
 +
-+  val uri: URI = URI.create("file:///A.scala")
++  val generatedUri: URI = URI.create("file:///A.scala")
 +  val objectCount = 60
++
++  /** A snapshot of the compiler's sources at the base commit, for the
++   *  real-sources mode: `out/xray-sources`, made from the worktree root with
++   *  `git archive d168df2a76 compiler/src/dotty/tools/dotc | tar -x -C out/xray-sources`
++   *  (found by walking up from the working directory), or `-Dxray.sources=<dir>`.
++   *  A snapshot rather than the live checkout, so that the files do not move
++   *  under the page and the patch's own edits are not what is shown.
++   */
++  private val sourcesRoot: Option[Path] =
++    sys.props.get("xray.sources").map(Paths.get(_)).filter(Files.isDirectory(_)).orElse(
++      Iterator.iterate(Paths.get("").toAbsolutePath)(_.getParent).takeWhile(_ != null)
++        .map(_.resolve("out/xray-sources/compiler/src/dotty/tools/dotc")).find(Files.isDirectory(_)))
++
++  /** Paths of the snapshot's sources, relative to the root, package by package. */
++  private def sourceFiles(): List[String] = sourcesRoot match
++    case None => Nil
++    case Some(root) =>
++      val s = Files.walk(root)
++      try s.iterator().asScala.filter(f => f.toString.endsWith(".scala")).map(f => root.relativize(f).toString).toList.sorted
++      finally s.close()
++
++  /** The uri of the file a request is on: the generated one, or a real source. */
++  private def uriOf(file: String): URI =
++    if file.isEmpty then generatedUri
++    else sourcesRoot.map(_.resolve(file).toUri).getOrElse(generatedUri)
 +
 +  /** The same shape as `CompletionSessionSuite.bigSource`, without the marker;
 +   *  the last object also has a `giant` method of 200 local vals, big enough
@@ -1599,9 +2016,12 @@ index 0000000000..5e60980ba8
 +    }.mkString("\n")
 +    s"// $tag\n$objects\n"
 +
++  /** The whole test JVM's classpath, so that the compiler's own sources
++   *  resolve against its classes (the generated file sees it too).
++   */
 +  private val settings =
 +    List("-color:never", "-Ximport-suggestion-timeout", "0",
-+      "-classpath", BuildInfo.ideTestsDependencyClasspath.map(_.toPath.toString).mkString(File.pathSeparator))
++      "-classpath", sys.props.getOrElse("java.class.path", BuildInfo.ideTestsDependencyClasspath.map(_.toPath.toString).mkString(File.pathSeparator)))
 +
 +  private val driver = new InteractiveDriver(settings, CachedLogicalPackage.none)
 +
@@ -1619,15 +2039,20 @@ index 0000000000..5e60980ba8
 +  private def statements(source: SourceFile): List[Stat] =
 +    given Context = driver.currentCtx.fresh.setSource(source)
 +    val tree = new Parsers.Parser(source).parse()
-+    val stats = tree match
++    // `package a.b.c` at the top wraps the whole file in a nested PackageDef: show its statements
++    def statsOf(t: untpd.Tree): List[untpd.Tree] = t match
++      case untpd.PackageDef(_, (inner: untpd.PackageDef) :: Nil) => statsOf(inner)
 +      case untpd.PackageDef(_, stats) => stats
 +      case _ => Nil
++    val stats = statsOf(tree)
 +    stats.map { s =>
 +      val name = s match
 +        case m: untpd.ModuleDef => s"object ${m.name}"
 +        case t: untpd.TypeDef => s"${if t.mods.is(dotty.tools.dotc.core.Flags.Trait) then "trait" else "class"} ${t.name}"
 +        case d: untpd.DefDef => s"def ${d.name}"
 +        case v: untpd.ValDef => s"val ${v.name}"
++        case i: untpd.Import => s"import ${i.expr.show.take(30)}"
++        case p: untpd.PackageDef => s"package ${p.pid.show}"
 +        case other => other.getClass.getSimpleName
 +      Stat(name, s.span.start, s.span.end)
 +    }
@@ -1636,12 +2061,13 @@ index 0000000000..5e60980ba8
 +   *  unit is for `source` (after an aborted fresh run the previous unit stays
 +   *  current, and must not be read as typed state of the new content).
 +   */
-+  private def typedSpans(source: SourceFile): List[Span] =
++  private def typedSpans(uri: URI, source: SourceFile): List[Span] =
++    def spansOf(t: tpd.Tree): List[Span] = t match
++      case tpd.PackageDef(_, (inner: tpd.PackageDef) :: Nil) => spansOf(inner)
++      case tpd.PackageDef(_, stats) => stats.map(_.span)
++      case _ => Nil
 +    driver.compilationUnits.get(uri) match
-+      case Some(unit) if unit.source.textContent() == source.textContent() =>
-+        unit.tpdTree match
-+          case tpd.PackageDef(_, stats) => stats.map(_.span)
-+          case _ => Nil
++      case Some(unit) if unit.source.textContent() == source.textContent() => spansOf(unit.tpdTree)
 +      case _ => Nil
 +
 +  private def isTyped(stat: Stat, spans: List[Span]): Boolean =
@@ -1650,11 +2076,18 @@ index 0000000000..5e60980ba8
 +  /** Symbols of this file in the empty package's scope: how many have `Touched`
 +   *  set without being completed (`isCompleting`), and how many are completed.
 +   */
-+  private def scopeCounts(): (Int, Int, Int) =
++  private def scopeCounts(uri: URI): (Int, Int, Int) =
 +    given Context = driver.currentCtx
-+    val pkg = defn.EmptyPackageClass
 +    val file = driver.openedFiles.get(uri).map(_.file)
-+    val syms = pkg.info.decls.toList.filter(s => file.exists(f => s.associatedFile != null && s.associatedFile.path == f.path))
++    def ofFile(s: Symbol) = file.exists(f => s.associatedFile != null && s.associatedFile.path == f.path)
++    // The packages the file's symbols live in: from the root, through the package clause
++    def walk(pkg: Symbol): List[Symbol] =
++      pkg.info.decls.toList.flatMap { s =>
++        if s.is(dotty.tools.dotc.core.Flags.Package) then walk(s.moduleClass)
++        else if ofFile(s) then List(s)
++        else Nil
++      }
++    val syms = walk(defn.RootClass)
 +    (syms.count(_.isCompleting), syms.count(_.isCompleted), syms.size)
 +
 +  private val sb = new StringBuilder
@@ -1722,7 +2155,7 @@ index 0000000000..5e60980ba8
 +   *  `cancelAfterMs >= 0` installs a cancel checker that fires that long after
 +   *  the request started.
 +   */
-+  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false): Map[String, Any] = lock.synchronized {
++  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false, file: String = ""): Map[String, Any] = lock.synchronized {
 +    cancelNow = false
 +    if latch then armLatch() else releaseLatch()
 +    inFlight = Map("kind" -> kind, "offset" -> offset, "cancelAfterMs" -> cancelAfterMs, "latch" -> latch)
@@ -1733,7 +2166,7 @@ index 0000000000..5e60980ba8
 +      countAtStart = if run == null then 0 else typedTreeCount(run)
 +    }
 +    try
-+      val r = request0(kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow)
++      val r = request0(uriOf(file), kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow) + ("file" -> file)
 +      lastResult = r
 +      r
 +    finally
@@ -1741,14 +2174,14 @@ index 0000000000..5e60980ba8
 +      releaseLatch()
 +  }
 +
-+  private def request0(kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
++  private def request0(uri: URI, kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
 +    val source = SourceFile.virtual(uri, code)
 +    val stats = statements(source)
-+    val typedBefore = typedSpans(source)
++    val typedBefore = typedSpans(uri, source)
 +    val runIdBefore = driver.currentCtx.runId
 +    val sessionRunBefore = driver.runIdOf(uri)
 +    val prefixBefore = driver.typedPrefixLength(uri)
-+    val (touchedBefore, _, _) = scopeCounts()
++    val (touchedBefore, _, _) = scopeCounts(uri)
 +
 +    // The run whose typer polled the checker, and its tree count at the last poll:
 +    // for a fresh run that is aborted this is the only trace of it.
@@ -1794,9 +2227,9 @@ index 0000000000..5e60980ba8
 +    val runIdAfter = driver.currentCtx.runId
 +    val sessionRunAfter = driver.runIdOf(uri)
 +    val prefixAfter = driver.typedPrefixLength(uri)
-+    val typedAfter = typedSpans(source)
++    val typedAfter = typedSpans(uri, source)
 +    val untypedAfter = driver.untypedSpans(uri)
-+    val (touched, completed, total) = scopeCounts()
++    val (touched, completed, total) = scopeCounts(uri)
 +    val runAfter = driver.currentCtx.run
 +    val countAfter = if runAfter != null then typedTreeCount(runAfter) else 0
 +    val sameRun = runIdAfter == runIdBefore
@@ -1840,6 +2273,8 @@ index 0000000000..5e60980ba8
 +      "sessionRunBefore" -> sessionRunBefore, "sessionRun" -> sessionRunAfter,
 +      "prefixBefore" -> prefixBefore, "prefix" -> prefixAfter,
 +      "fullyTyped" -> driver.isFullyTyped(uri),
++      "tainted" -> driver.isTainted(uri),
++      "cyclesPrevented" -> (if runAfter != null then runAfter.cyclesPrevented.size else 0),
 +      "statements" -> statRows, "cursorStatement" -> cursorStat,
 +      "typedStatements" -> statRows.count(_("state") != "untyped"),
 +      "typedNow" -> statRows.count(_("state") == "typed-now"),
@@ -1884,14 +2319,22 @@ index 0000000000..5e60980ba8
 +    releaseLatch()
 +    println(s"[xray] warming up the driver on other content")
 +    val t0 = System.nanoTime()
-+    driver.run(uri, SourceFile.virtual(uri, generatedSource("warmup", 5)))
++    driver.run(generatedUri, SourceFile.virtual(generatedUri, generatedSource("warmup", 5)))
++    println(s"[xray] compiler sources: ${sourcesRoot.map(r => s"$r (${sourceFiles().size} files)").getOrElse("not found")}")
 +    println(f"[xray] warm-up full run: ${(System.nanoTime() - t0) / 1e6}%.0f ms")
 +    val server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0)
 +    server.createContext("/", ex => ex.getRequestURI.getPath match
 +      case "/" | "/index.html" =>
 +        reply(ex, 200, "text/html; charset=utf-8", Files.readString(page))
 +      case "/source" =>
-+        reply(ex, 200, "application/json", json(Map("source" -> generatedSource("x-ray demo"), "objects" -> objectCount)))
++        val query = Option(ex.getRequestURI.getRawQuery).getOrElse("")
++        val file = field(query, "file").getOrElse("")
++        val source =
++          if file.isEmpty then generatedSource("x-ray demo")
++          else sourcesRoot.map(root => Files.readString(root.resolve(file))).getOrElse("// no compiler sources found")
++        reply(ex, 200, "application/json", json(Map("source" -> source, "file" -> file, "objects" -> objectCount)))
++      case "/files" =>
++        reply(ex, 200, "application/json", json(Map("root" -> sourcesRoot.map(_.toString).getOrElse(""), "files" -> sourceFiles())))
 +      case "/request" if ex.getRequestMethod == "POST" =>
 +        val body = readBody(ex)
 +        val kind = field(body, "kind").getOrElse("complete")
@@ -1899,9 +2342,10 @@ index 0000000000..5e60980ba8
 +        val offset = field(body, "offset").map(_.toInt).getOrElse(0)
 +        val cancel = field(body, "cancelAfterMs").map(_.toLong).getOrElse(-1L)
 +        val latch = field(body, "latch").contains("1")
++        val file = field(body, "file").getOrElse("")
 +        def go(): Map[String, Any] =
 +          val result =
-+            try request(kind, code, offset, cancel, latch)
++            try request(kind, code, offset, cancel, latch, file)
 +            catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
 +          println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
 +          result
@@ -1931,10 +2375,10 @@ index 0000000000..5e60980ba8
 +    Thread.currentThread.join()
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/xray.html b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
 new file mode 100644
-index 0000000000..4dd47a5bb2
+index 0000000000..1863ca800e
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,334 @@
 +<!doctype html>
 +<html lang="en">
 +<head>
@@ -1957,7 +2401,11 @@ index 0000000000..4dd47a5bb2
 +  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 +  header h1 { font-size: 14px; margin: 0; }
 +  .dim { color: var(--dim); }
-+  main { flex: 1; display: grid; grid-template-columns: minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
++  main { flex: 1; display: grid; grid-template-columns: 200px minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
++  #explorer { font-size: 12px; } #tree { padding: 4px 8px; }
++  #tree .dir > .name { cursor: pointer; padding: 2px 4px; color: var(--fg); font-weight: 600; } #tree .dir > .name::before { content: '▸ '; color: var(--dim); } #tree .dir.open > .name::before { content: '▾ '; }
++  #tree .dir > .kids { display: none; padding-left: 12px; } #tree .dir.open > .kids { display: block; }
++  #tree .file { cursor: pointer; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; } #tree .file:hover { background: var(--code); } #tree .file.sel { background: var(--typed); }
 +  section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
 +  section:last-child { border-right: 0; }
 +  section > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 0; padding: 8px 12px 4px; }
@@ -2005,8 +2453,12 @@ index 0000000000..4dd47a5bb2
 +  <span id="busy"></span>
 +</header>
 +<main>
++  <section id="explorer">
++    <h2>Project</h2>
++    <div class="pad" id="tree"><div class="file sel" data-file="">A.scala <span class="dim">(generated)</span></div><div id="treeroot" class="dim">no snapshot of the compiler sources found</div></div>
++  </section>
 +  <section>
-+    <h2>Editor: A.scala</h2>
++    <h2>Editor: <span id="fname">A.scala</span></h2>
 +    <div class="toolbar">
 +      <button id="complete" class="primary" title="runUpTo at the cursor, then Completion.completions">Complete at cursor</button>
 +      <button id="full" title="driver.run: type the whole file">Type whole file</button>
@@ -2053,6 +2505,37 @@ index 0000000000..4dd47a5bb2
 +  const cm = CodeMirror($('ed'), { value: src.source, mode: 'text/x-scala', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
 +    extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') } });
 +  cm.setSize('100%', '100%');
++  // Real compiler sources: the server lists a snapshot of compiler/src/dotty/tools/dotc (the explorer panel)
++  let currentFile = '';
++  async function loadFile(file) {
++    currentFile = file;
++    document.querySelectorAll('#tree .file').forEach((el) => el.classList.toggle('sel', el.dataset.file === file));
++    const r = await (await fetch('/source?file=' + encodeURIComponent(file))).json();
++    cm.setValue(r.source); $('fname').textContent = file || 'A.scala';
++    lineMarks = []; $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
++    if (file) gotoFirstMethodBody(); else gotoObject(10);
++  }
++  try {
++    const fl = await (await fetch('/files')).json();
++    if (fl.files.length) {
++      const root = {};
++      fl.files.forEach((f) => { const parts = f.split('/'); let n = root; parts.slice(0, -1).forEach((p) => { n = n[p] = n[p] || {}; }); (n.__files = n.__files || []).push(f); });
++      const render = (node, name) => {
++        const dirs = Object.keys(node).filter((k) => k !== '__files').sort();
++        const kids = dirs.map((d) => render(node[d], d)).join('') + (node.__files || []).map((f) => `<div class="file" data-file="${esc(f)}" title="${esc(f)}">${esc(f.split('/').pop())}</div>`).join('');
++        return name == null ? kids : `<div class="dir"><div class="name">${esc(name)}</div><div class="kids">${kids}</div></div>`;
++      };
++      $('treeroot').className = ''; $('treeroot').innerHTML = `<div class="dim" style="margin:6px 0 2px">dotc at d168df2a76, snapshot</div>` + render(root, null);
++      $('treeroot').querySelectorAll('.dir > .name').forEach((el) => el.onclick = () => el.parentElement.classList.toggle('open'));
++    }
++  } catch (e) { /* no sources */ }
++  document.querySelectorAll('#tree .file').forEach((el) => el.onclick = () => loadFile(el.dataset.file));
++  function gotoFirstMethodBody() {
++    const text = cm.getValue(), m = text.search(/\n  def [a-zA-Z]+\(.*=\s*\n/);
++    if (m < 0) return;
++    const eol = text.indexOf('\n', m + 1), next = text.indexOf('\n', eol + 1);
++    cm.setCursor(cm.posFromIndex(next > 0 ? next : eol)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
++  }
 +  let seq = 0, busy = false, last = null, lineMarks = [];
 +  const sleep = (ms) => new Promise((f) => setTimeout(f, ms));
 +  const offsetOf = () => cm.indexFromPos(cm.getCursor());
@@ -2079,7 +2562,7 @@ index 0000000000..4dd47a5bb2
 +  async function send(kind, cancelAfterMs) {
 +    if (busy) return null; setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
 +    const code = cm.getValue(), offset = offsetOf();
-+    const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs) });
++    const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs), file: currentFile });
 +    let r;
 +    try { r = await (await fetch('/request', { method: 'POST', body })).json(); }
 +    catch (e) { r = { outcome: 'error', error: String(e) }; }
@@ -2091,7 +2574,7 @@ index 0000000000..4dd47a5bb2
 +  async function sendLatched() {
 +    if (busy) return null; setBusy(true, '… completing (latched)');
 +    const code = cm.getValue(), offset = offsetOf();
-+    const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1' });
++    const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1', file: currentFile });
 +    let st;
 +    try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { setBusy(false); return finish({ outcome: 'error', error: String(e) }, code, -1); }
 +    if (st.outcome) { setBusy(false); return finish(st, code, -1); }
@@ -2134,12 +2617,12 @@ index 0000000000..4dd47a5bb2
 +      <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
 +      <dl class="kv">
 +        <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
-+        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun})</span></dd>
++        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''})</span></dd>
 +        <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
 +        <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
 +        <dt>typedTreeCount</dt><dd><b>${r.typedTrees}</b> <span class="dim">trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)</span></dd>
 +        <dt>wall time</dt><dd><b>${r.ms} ms</b></dd>
-+        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the empty package's scope after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
++        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the file's packages after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
 +        <dt>diagnostics</dt><dd>${r.diagnostics}</dd>
 +      </dl>
 +      <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
@@ -2177,7 +2660,9 @@ index 0000000000..4dd47a5bb2
 +  function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
 +  function storyResult(li, ok, text) { li.innerHTML += ` <span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; li.scrollIntoView({ block: 'nearest' }); }
 +  const typedOf = (r) => `${r.typedStatements}/${r.statements.length} statements typed, ${r.typedTrees} trees, ${r.ms} ms`;
++  const needsGenerated = () => { if (currentFile) { storyStart('The stories run on the generated file: pick "A.scala (generated)" first.'); return true; } return false; };
 +  $('demoSession').onclick = async () => {
++    if (needsGenerated()) return;
 +    storyStart('Story: one run serves a session of requests');
 +    let li = storyStep('Complete at `this.meth` in object 10', 'a fresh run; of 60 objects only M10 is typed, and in M10 only `val r`: method10 is skipped');
 +    gotoObject(10); let r = await send('complete', -1);
@@ -2193,6 +2678,7 @@ index 0000000000..4dd47a5bb2
 +    storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
 +  };
 +  $('demoCancel').onclick = async () => {
++    if (needsGenerated()) return;
 +    storyStart('Story: a cancellation lands exactly where we want it');
 +    let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
 +    gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
@@ -2205,6 +2691,7 @@ index 0000000000..4dd47a5bb2
 +    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
 +  };
 +  $('demoEdit').onclick = async () => {
++    if (needsGenerated()) return;
 +    storyStart('Story: an edit starts a fresh run');
 +    let li = storyStep('Complete in object 10', 'whatever the session state, M10 is typed or already was');
 +    gotoObject(10); const r0 = await send('complete', -1); storyResult(li, r0.outcome !== 'error', `${r0.outcome}, run ${r0.runId}`); await sleep(300);
@@ -2214,6 +2701,7 @@ index 0000000000..4dd47a5bb2
 +    storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
 +  };
 +  $('demoFull').onclick = async () => {
++    if (needsGenerated()) return;
 +    storyStart('Story: the whole file, for comparison');
 +    let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
 +    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(300);

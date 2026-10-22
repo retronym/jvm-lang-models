@@ -20,7 +20,11 @@
   header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { font-size: 14px; margin: 0; }
   .dim { color: var(--dim); }
-  main { flex: 1; display: grid; grid-template-columns: minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
+  main { flex: 1; display: grid; grid-template-columns: 200px minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
+  #explorer { font-size: 12px; } #tree { padding: 4px 8px; }
+  #tree .dir > .name { cursor: pointer; padding: 2px 4px; color: var(--fg); font-weight: 600; } #tree .dir > .name::before { content: '▸ '; color: var(--dim); } #tree .dir.open > .name::before { content: '▾ '; }
+  #tree .dir > .kids { display: none; padding-left: 12px; } #tree .dir.open > .kids { display: block; }
+  #tree .file { cursor: pointer; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; } #tree .file:hover { background: var(--code); } #tree .file.sel { background: var(--typed); }
   section { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
   section:last-child { border-right: 0; }
   section > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 0; padding: 8px 12px 4px; }
@@ -68,8 +72,12 @@
   <span id="busy"></span>
 </header>
 <main>
+  <section id="explorer">
+    <h2>Project</h2>
+    <div class="pad" id="tree"><div class="file sel" data-file="">A.scala <span class="dim">(generated)</span></div><div id="treeroot" class="dim">no snapshot of the compiler sources found</div></div>
+  </section>
   <section>
-    <h2>Editor: A.scala</h2>
+    <h2>Editor: <span id="fname">A.scala</span></h2>
     <div class="toolbar">
       <button id="complete" class="primary" title="runUpTo at the cursor, then Completion.completions">Complete at cursor</button>
       <button id="full" title="driver.run: type the whole file">Type whole file</button>
@@ -116,6 +124,37 @@
   const cm = CodeMirror($('ed'), { value: src.source, mode: 'text/x-scala', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
     extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') } });
   cm.setSize('100%', '100%');
+  // Real compiler sources: the server lists a snapshot of compiler/src/dotty/tools/dotc (the explorer panel)
+  let currentFile = '';
+  async function loadFile(file) {
+    currentFile = file;
+    document.querySelectorAll('#tree .file').forEach((el) => el.classList.toggle('sel', el.dataset.file === file));
+    const r = await (await fetch('/source?file=' + encodeURIComponent(file))).json();
+    cm.setValue(r.source); $('fname').textContent = file || 'A.scala';
+    lineMarks = []; $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
+    if (file) gotoFirstMethodBody(); else gotoObject(10);
+  }
+  try {
+    const fl = await (await fetch('/files')).json();
+    if (fl.files.length) {
+      const root = {};
+      fl.files.forEach((f) => { const parts = f.split('/'); let n = root; parts.slice(0, -1).forEach((p) => { n = n[p] = n[p] || {}; }); (n.__files = n.__files || []).push(f); });
+      const render = (node, name) => {
+        const dirs = Object.keys(node).filter((k) => k !== '__files').sort();
+        const kids = dirs.map((d) => render(node[d], d)).join('') + (node.__files || []).map((f) => `<div class="file" data-file="${esc(f)}" title="${esc(f)}">${esc(f.split('/').pop())}</div>`).join('');
+        return name == null ? kids : `<div class="dir"><div class="name">${esc(name)}</div><div class="kids">${kids}</div></div>`;
+      };
+      $('treeroot').className = ''; $('treeroot').innerHTML = `<div class="dim" style="margin:6px 0 2px">dotc at d168df2a76, snapshot</div>` + render(root, null);
+      $('treeroot').querySelectorAll('.dir > .name').forEach((el) => el.onclick = () => el.parentElement.classList.toggle('open'));
+    }
+  } catch (e) { /* no sources */ }
+  document.querySelectorAll('#tree .file').forEach((el) => el.onclick = () => loadFile(el.dataset.file));
+  function gotoFirstMethodBody() {
+    const text = cm.getValue(), m = text.search(/\n  def [a-zA-Z]+\(.*=\s*\n/);
+    if (m < 0) return;
+    const eol = text.indexOf('\n', m + 1), next = text.indexOf('\n', eol + 1);
+    cm.setCursor(cm.posFromIndex(next > 0 ? next : eol)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
+  }
   let seq = 0, busy = false, last = null, lineMarks = [];
   const sleep = (ms) => new Promise((f) => setTimeout(f, ms));
   const offsetOf = () => cm.indexFromPos(cm.getCursor());
@@ -142,7 +181,7 @@
   async function send(kind, cancelAfterMs) {
     if (busy) return null; setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
     const code = cm.getValue(), offset = offsetOf();
-    const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs) });
+    const body = new URLSearchParams({ kind, code, offset: String(offset), cancelAfterMs: String(cancelAfterMs), file: currentFile });
     let r;
     try { r = await (await fetch('/request', { method: 'POST', body })).json(); }
     catch (e) { r = { outcome: 'error', error: String(e) }; }
@@ -154,7 +193,7 @@
   async function sendLatched() {
     if (busy) return null; setBusy(true, '… completing (latched)');
     const code = cm.getValue(), offset = offsetOf();
-    const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1' });
+    const body = new URLSearchParams({ kind: 'complete', code, offset: String(offset), cancelAfterMs: '-1', latch: '1', file: currentFile });
     let st;
     try { st = await (await fetch('/request', { method: 'POST', body })).json(); } catch (e) { setBusy(false); return finish({ outcome: 'error', error: String(e) }, code, -1); }
     if (st.outcome) { setBusy(false); return finish(st, code, -1); }
@@ -197,12 +236,12 @@
       <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
       <dl class="kv">
         <dt>request</dt><dd>${r.kind === 'full' ? 'driver.run (whole file)' : `runUpTo(offset ${r.offset})`}${r.cancelAfterMs >= 0 ? `, cancel checker armed at ${r.cancelAfterMs} ms` : ''}${r.latch ? `, latched at the macro${r.cancelledByButton ? ', cancelled by the button' : ', released by the button'}` : ''}</dd>
-        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun})</span></dd>
+        <dt>run id</dt><dd><span class="${runCls}">${r.runId}</span> <span class="dim">(was ${r.runIdBefore}: ${r.runChanged ? 'NEW RUN' : 'same run'}; session run ${r.sessionRun === -1 ? 'none' : r.sessionRun}${r.tainted ? '; <b>tainted</b>: ' + r.cyclesPrevented + ' cyclic reference(s) prevented, the next request starts fresh' : ''})</span></dd>
         <dt>typed top-level</dt><dd><b>${r.prefixBefore === -1 ? '–' : r.prefixBefore} → ${r.prefix === -1 ? '–' : r.prefix}</b> <span class="dim">typed trees of the outermost package (an object is its module val + class)${r.fullyTyped ? '; fully typed' : ''}</span></dd>
         <dt>statements</dt><dd>${r.typedStatements} of ${r.statements.length} typed, <b>${r.typedNow} by this request</b>; <b>${r.untypedSpans}</b> skipped statements and members in the session</dd>
         <dt>typedTreeCount</dt><dd><b>${r.typedTrees}</b> <span class="dim">trees typed by this request (Run.typedTreeCount; checker polled ${r.polls}×)</span></dd>
         <dt>wall time</dt><dd><b>${r.ms} ms</b></dd>
-        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the empty package's scope after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
+        <dt>Touched</dt><dd><b>${r.touched}</b> symbol(s) of the file completing (<code>isCompleting</code>) in the file's packages after the request <span class="dim">(before: ${r.touchedBefore}; ${r.completed} completed of ${r.scopeSize})</span></dd>
         <dt>diagnostics</dt><dd>${r.diagnostics}</dd>
       </dl>
       <div class="legend dim"><span style="background:var(--untyped)"></span>untyped <span style="background:var(--typed)"></span>typed before <span style="background:var(--typednow)"></span>typed by this request <span style="border:1px solid var(--cur)"></span>cursor <span style="background:var(--cancel)"></span>aborted in; <sup>n</sup> = n members skipped (hover)</div>
@@ -240,7 +279,9 @@
   function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
   function storyResult(li, ok, text) { li.innerHTML += ` <span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; li.scrollIntoView({ block: 'nearest' }); }
   const typedOf = (r) => `${r.typedStatements}/${r.statements.length} statements typed, ${r.typedTrees} trees, ${r.ms} ms`;
+  const needsGenerated = () => { if (currentFile) { storyStart('The stories run on the generated file: pick "A.scala (generated)" first.'); return true; } return false; };
   $('demoSession').onclick = async () => {
+    if (needsGenerated()) return;
     storyStart('Story: one run serves a session of requests');
     let li = storyStep('Complete at `this.meth` in object 10', 'a fresh run; of 60 objects only M10 is typed, and in M10 only `val r`: method10 is skipped');
     gotoObject(10); let r = await send('complete', -1);
@@ -256,6 +297,7 @@
     storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
   };
   $('demoCancel').onclick = async () => {
+    if (needsGenerated()) return;
     storyStart('Story: a cancellation lands exactly where we want it');
     let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
     gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
@@ -268,6 +310,7 @@
     storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
   };
   $('demoEdit').onclick = async () => {
+    if (needsGenerated()) return;
     storyStart('Story: an edit starts a fresh run');
     let li = storyStep('Complete in object 10', 'whatever the session state, M10 is typed or already was');
     gotoObject(10); const r0 = await send('complete', -1); storyResult(li, r0.outcome !== 'error', `${r0.outcome}, run ${r0.runId}`); await sleep(300);
@@ -277,6 +320,7 @@
     storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
   };
   $('demoFull').onclick = async () => {
+    if (needsGenerated()) return;
     storyStart('Story: the whole file, for comparison');
     let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
     const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(300);

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.language.unsafeNulls
+import scala.jdk.CollectionConverters.*
 
 import com.sun.net.httpserver.{HttpExchange, HttpServer}
 
@@ -31,8 +32,33 @@ import dotty.tools.pc.tests.buildinfo.BuildInfo
  */
 object XrayServer:
 
-  val uri: URI = URI.create("file:///A.scala")
+  val generatedUri: URI = URI.create("file:///A.scala")
   val objectCount = 60
+
+  /** A snapshot of the compiler's sources at the base commit, for the
+   *  real-sources mode: `out/xray-sources`, made from the worktree root with
+   *  `git archive d168df2a76 compiler/src/dotty/tools/dotc | tar -x -C out/xray-sources`
+   *  (found by walking up from the working directory), or `-Dxray.sources=<dir>`.
+   *  A snapshot rather than the live checkout, so that the files do not move
+   *  under the page and the patch's own edits are not what is shown.
+   */
+  private val sourcesRoot: Option[Path] =
+    sys.props.get("xray.sources").map(Paths.get(_)).filter(Files.isDirectory(_)).orElse(
+      Iterator.iterate(Paths.get("").toAbsolutePath)(_.getParent).takeWhile(_ != null)
+        .map(_.resolve("out/xray-sources/compiler/src/dotty/tools/dotc")).find(Files.isDirectory(_)))
+
+  /** Paths of the snapshot's sources, relative to the root, package by package. */
+  private def sourceFiles(): List[String] = sourcesRoot match
+    case None => Nil
+    case Some(root) =>
+      val s = Files.walk(root)
+      try s.iterator().asScala.filter(f => f.toString.endsWith(".scala")).map(f => root.relativize(f).toString).toList.sorted
+      finally s.close()
+
+  /** The uri of the file a request is on: the generated one, or a real source. */
+  private def uriOf(file: String): URI =
+    if file.isEmpty then generatedUri
+    else sourcesRoot.map(_.resolve(file).toUri).getOrElse(generatedUri)
 
   /** The same shape as `CompletionSessionSuite.bigSource`, without the marker;
    *  the last object also has a `giant` method of 200 local vals, big enough
@@ -52,9 +78,12 @@ object XrayServer:
     }.mkString("\n")
     s"// $tag\n$objects\n"
 
+  /** The whole test JVM's classpath, so that the compiler's own sources
+   *  resolve against its classes (the generated file sees it too).
+   */
   private val settings =
     List("-color:never", "-Ximport-suggestion-timeout", "0",
-      "-classpath", BuildInfo.ideTestsDependencyClasspath.map(_.toPath.toString).mkString(File.pathSeparator))
+      "-classpath", sys.props.getOrElse("java.class.path", BuildInfo.ideTestsDependencyClasspath.map(_.toPath.toString).mkString(File.pathSeparator)))
 
   private val driver = new InteractiveDriver(settings, CachedLogicalPackage.none)
 
@@ -72,15 +101,20 @@ object XrayServer:
   private def statements(source: SourceFile): List[Stat] =
     given Context = driver.currentCtx.fresh.setSource(source)
     val tree = new Parsers.Parser(source).parse()
-    val stats = tree match
+    // `package a.b.c` at the top wraps the whole file in a nested PackageDef: show its statements
+    def statsOf(t: untpd.Tree): List[untpd.Tree] = t match
+      case untpd.PackageDef(_, (inner: untpd.PackageDef) :: Nil) => statsOf(inner)
       case untpd.PackageDef(_, stats) => stats
       case _ => Nil
+    val stats = statsOf(tree)
     stats.map { s =>
       val name = s match
         case m: untpd.ModuleDef => s"object ${m.name}"
         case t: untpd.TypeDef => s"${if t.mods.is(dotty.tools.dotc.core.Flags.Trait) then "trait" else "class"} ${t.name}"
         case d: untpd.DefDef => s"def ${d.name}"
         case v: untpd.ValDef => s"val ${v.name}"
+        case i: untpd.Import => s"import ${i.expr.show.take(30)}"
+        case p: untpd.PackageDef => s"package ${p.pid.show}"
         case other => other.getClass.getSimpleName
       Stat(name, s.span.start, s.span.end)
     }
@@ -89,12 +123,13 @@ object XrayServer:
    *  unit is for `source` (after an aborted fresh run the previous unit stays
    *  current, and must not be read as typed state of the new content).
    */
-  private def typedSpans(source: SourceFile): List[Span] =
+  private def typedSpans(uri: URI, source: SourceFile): List[Span] =
+    def spansOf(t: tpd.Tree): List[Span] = t match
+      case tpd.PackageDef(_, (inner: tpd.PackageDef) :: Nil) => spansOf(inner)
+      case tpd.PackageDef(_, stats) => stats.map(_.span)
+      case _ => Nil
     driver.compilationUnits.get(uri) match
-      case Some(unit) if unit.source.textContent() == source.textContent() =>
-        unit.tpdTree match
-          case tpd.PackageDef(_, stats) => stats.map(_.span)
-          case _ => Nil
+      case Some(unit) if unit.source.textContent() == source.textContent() => spansOf(unit.tpdTree)
       case _ => Nil
 
   private def isTyped(stat: Stat, spans: List[Span]): Boolean =
@@ -103,11 +138,18 @@ object XrayServer:
   /** Symbols of this file in the empty package's scope: how many have `Touched`
    *  set without being completed (`isCompleting`), and how many are completed.
    */
-  private def scopeCounts(): (Int, Int, Int) =
+  private def scopeCounts(uri: URI): (Int, Int, Int) =
     given Context = driver.currentCtx
-    val pkg = defn.EmptyPackageClass
     val file = driver.openedFiles.get(uri).map(_.file)
-    val syms = pkg.info.decls.toList.filter(s => file.exists(f => s.associatedFile != null && s.associatedFile.path == f.path))
+    def ofFile(s: Symbol) = file.exists(f => s.associatedFile != null && s.associatedFile.path == f.path)
+    // The packages the file's symbols live in: from the root, through the package clause
+    def walk(pkg: Symbol): List[Symbol] =
+      pkg.info.decls.toList.flatMap { s =>
+        if s.is(dotty.tools.dotc.core.Flags.Package) then walk(s.moduleClass)
+        else if ofFile(s) then List(s)
+        else Nil
+      }
+    val syms = walk(defn.RootClass)
     (syms.count(_.isCompleting), syms.count(_.isCompleted), syms.size)
 
   private val sb = new StringBuilder
@@ -175,7 +217,7 @@ object XrayServer:
    *  `cancelAfterMs >= 0` installs a cancel checker that fires that long after
    *  the request started.
    */
-  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false): Map[String, Any] = lock.synchronized {
+  def request(kind: String, code: String, offset: Int, cancelAfterMs: Long, latch: Boolean = false, file: String = ""): Map[String, Any] = lock.synchronized {
     cancelNow = false
     if latch then armLatch() else releaseLatch()
     inFlight = Map("kind" -> kind, "offset" -> offset, "cancelAfterMs" -> cancelAfterMs, "latch" -> latch)
@@ -186,7 +228,7 @@ object XrayServer:
       countAtStart = if run == null then 0 else typedTreeCount(run)
     }
     try
-      val r = request0(kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow)
+      val r = request0(uriOf(file), kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow) + ("file" -> file)
       lastResult = r
       r
     finally
@@ -194,14 +236,14 @@ object XrayServer:
       releaseLatch()
   }
 
-  private def request0(kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
+  private def request0(uri: URI, kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
     val source = SourceFile.virtual(uri, code)
     val stats = statements(source)
-    val typedBefore = typedSpans(source)
+    val typedBefore = typedSpans(uri, source)
     val runIdBefore = driver.currentCtx.runId
     val sessionRunBefore = driver.runIdOf(uri)
     val prefixBefore = driver.typedPrefixLength(uri)
-    val (touchedBefore, _, _) = scopeCounts()
+    val (touchedBefore, _, _) = scopeCounts(uri)
 
     // The run whose typer polled the checker, and its tree count at the last poll:
     // for a fresh run that is aborted this is the only trace of it.
@@ -247,9 +289,9 @@ object XrayServer:
     val runIdAfter = driver.currentCtx.runId
     val sessionRunAfter = driver.runIdOf(uri)
     val prefixAfter = driver.typedPrefixLength(uri)
-    val typedAfter = typedSpans(source)
+    val typedAfter = typedSpans(uri, source)
     val untypedAfter = driver.untypedSpans(uri)
-    val (touched, completed, total) = scopeCounts()
+    val (touched, completed, total) = scopeCounts(uri)
     val runAfter = driver.currentCtx.run
     val countAfter = if runAfter != null then typedTreeCount(runAfter) else 0
     val sameRun = runIdAfter == runIdBefore
@@ -293,6 +335,8 @@ object XrayServer:
       "sessionRunBefore" -> sessionRunBefore, "sessionRun" -> sessionRunAfter,
       "prefixBefore" -> prefixBefore, "prefix" -> prefixAfter,
       "fullyTyped" -> driver.isFullyTyped(uri),
+      "tainted" -> driver.isTainted(uri),
+      "cyclesPrevented" -> (if runAfter != null then runAfter.cyclesPrevented.size else 0),
       "statements" -> statRows, "cursorStatement" -> cursorStat,
       "typedStatements" -> statRows.count(_("state") != "untyped"),
       "typedNow" -> statRows.count(_("state") == "typed-now"),
@@ -337,14 +381,22 @@ object XrayServer:
     releaseLatch()
     println(s"[xray] warming up the driver on other content")
     val t0 = System.nanoTime()
-    driver.run(uri, SourceFile.virtual(uri, generatedSource("warmup", 5)))
+    driver.run(generatedUri, SourceFile.virtual(generatedUri, generatedSource("warmup", 5)))
+    println(s"[xray] compiler sources: ${sourcesRoot.map(r => s"$r (${sourceFiles().size} files)").getOrElse("not found")}")
     println(f"[xray] warm-up full run: ${(System.nanoTime() - t0) / 1e6}%.0f ms")
     val server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0)
     server.createContext("/", ex => ex.getRequestURI.getPath match
       case "/" | "/index.html" =>
         reply(ex, 200, "text/html; charset=utf-8", Files.readString(page))
       case "/source" =>
-        reply(ex, 200, "application/json", json(Map("source" -> generatedSource("x-ray demo"), "objects" -> objectCount)))
+        val query = Option(ex.getRequestURI.getRawQuery).getOrElse("")
+        val file = field(query, "file").getOrElse("")
+        val source =
+          if file.isEmpty then generatedSource("x-ray demo")
+          else sourcesRoot.map(root => Files.readString(root.resolve(file))).getOrElse("// no compiler sources found")
+        reply(ex, 200, "application/json", json(Map("source" -> source, "file" -> file, "objects" -> objectCount)))
+      case "/files" =>
+        reply(ex, 200, "application/json", json(Map("root" -> sourcesRoot.map(_.toString).getOrElse(""), "files" -> sourceFiles())))
       case "/request" if ex.getRequestMethod == "POST" =>
         val body = readBody(ex)
         val kind = field(body, "kind").getOrElse("complete")
@@ -352,9 +404,10 @@ object XrayServer:
         val offset = field(body, "offset").map(_.toInt).getOrElse(0)
         val cancel = field(body, "cancelAfterMs").map(_.toLong).getOrElse(-1L)
         val latch = field(body, "latch").contains("1")
+        val file = field(body, "file").getOrElse("")
         def go(): Map[String, Any] =
           val result =
-            try request(kind, code, offset, cancel, latch)
+            try request(kind, code, offset, cancel, latch, file)
             catch case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
           println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
           result

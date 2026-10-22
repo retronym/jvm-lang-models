@@ -1,6 +1,6 @@
 # dotc session x-ray: a toy IDE over the patched `InteractiveDriver`
 
-A web page that calls into the real Scala 3 compiler with [`dotc-session.patch`](../../../../../docs/upstream/dotc-session.patch) applied (typing only the path to the request with `runUpTo`, a resumable run per file, cancellation that unwinds with `CancelledCompilation`), and shows an x-ray of what the driver did for each request: run id, which top-level statements are typed and which of their members were skipped, where a cancellation unwound, `Run.typedTreeCount` consumed, wall time, and how many symbols of the file are still `Touched` (`isCompleting`) afterwards. Every number is read from the driver; nothing is simulated. [track-i-dotc-session-design.md](../../../docs/track-i-dotc-session-design.md) is the design these numbers illustrate.
+A web page that calls into the real Scala 3 compiler with [`dotc-session.patch`](../../../../../docs/upstream/dotc-session.patch) applied (typing only the path to the request with `runUpTo`, a resumable run per file, cancellation that unwinds with `CancelledCompilation`), and shows an x-ray of what the driver did for each request: run id, which top-level statements are typed and which of their members were skipped, where a cancellation unwound, `Run.typedTreeCount` consumed, wall time, how many symbols of the file are still `Touched` (`isCompleting`) afterwards, and whether the run is tainted (a cyclic reference prevented: the next request starts fresh). Every number is read from the driver; nothing is simulated. [track-i-dotc-session-design.md](../../../docs/track-i-dotc-session-design.md) is the design these numbers illustrate.
 
 ![the page after the cancel story](xray.png)
 
@@ -9,6 +9,18 @@ A web page that calls into the real Scala 3 compiler with [`dotc-session.patch`]
 - [`XrayServer.scala`](XrayServer.scala): a `com.sun.net.httpserver` server (no new dependencies) that owns one `InteractiveDriver` on the presentation-compiler test classpath and one virtual file `A.scala`. `GET /` serves the page, `GET /source` the generated file (60 top-level objects in the shape of `CompletionSessionSuite.bigSource`), `POST /request` runs one request (`complete`: `runUpTo` at the cursor then `Completion.completions`; `full`: `run`) with an optional cancel checker that fires after N ms, and answers with the x-ray as JSON. The driver's `typedTreeCount` is read reflectively so that the compiler patch stays exactly [`dotc-session.patch`](../../../../../docs/upstream/dotc-session.patch).
 - [`xray.html`](xray.html): the page. CodeMirror 5 for the editor and highlight.js for the statement under the cursor, both from cdnjs; the palette and editor theme are borrowed from the viewer of [retronym/greffier](https://github.com/retronym/greffier) (its compile drawer is the natural home for this page later). Four stories, each stating what the design predicts before a step and checking it against what the driver reported: *session* (complete in object 10, 40, 10 again, then inside `method20`: one run, only the statements at the cursor typed), *cancel, deterministically* (a latched request, see below, cancelled while the typer is blocked, then the same request again), *edit* (a fresh run), *whole file* (`driver.run`, for comparison).
 - `tests.macros.Latch` (in the scratch worktree's `presentation-compiler-testcases/src/tests/macros/Latch.scala`, part of the patch): a `transparent inline` macro that blocks the typer while the latch file exists. The generated file's last object has `def giant` whose first statement is `Latch.await`; a "latched" request arms the file, the page shows the typer blocked there with the tree count so far, and *Cancel* or *Release* decides what happens next. This is how a cancellation lands at a known point, deterministically, instead of at whatever the 1,024-tree checkpoint happens to hit.
+
+## Real compiler sources
+
+The explorer panel on the left lists a snapshot of `compiler/src/dotty/tools/dotc` at the base commit (478 files); a click loads the file into the editor, and every request on it runs against the compiler's own classes (the server's driver uses the whole test JVM's classpath: `scala3-compiler`, `scala3-library`, `scala-library`, `scala-reflect`, `tasty-core`, the asm jars). A completion inside `Typer.typedSelect` on `Typer.scala` (5,532 lines) is a fresh run that types the 53 imports and `class Typer` with 129 of its members skipped, `object Typer` skipped: 1,362 trees, 450 ms cold; a second request in the same method is served from the run. The snapshot is made once from the worktree root, so that the files do not move under the page and the patch's own edits are not what is shown:
+
+```bash
+mkdir -p out/xray-sources && git archive d168df2a76 compiler/src/dotty/tools/dotc | tar -x -C out/xray-sources
+```
+
+(`-Dxray.sources=<dir>` points the server elsewhere.) The stories run on the generated file only.
+
+![Typer.scala in the x-ray](xray-typer.png)
 
 ## Running it
 
