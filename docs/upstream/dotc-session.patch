@@ -447,7 +447,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..91da171a09 100644
+index 5b78dc804b..3aa45a1c04 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -510,7 +510,7 @@ index 5b78dc804b..91da171a09 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,322 @@ class InteractiveDriver(
+@@ -78,37 +107,341 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -610,6 +610,25 @@ index 5b78dc804b..91da171a09 100644
 +            else resume(s, sk, target)
 +      case _ =>
 +        run(uri, source, target)
++
++  /** Type the statement that defines `sym` if it is in the file of `uri` and
++   *  the session skipped it: a resume into it (or a fresh run for a local
++   *  definition), after which providers that read the typed tree of a
++   *  definition (`defTree`, a name position) find it. Returns whether
++   *  anything was typed, in which case the unit's tree is new.
++   */
++  def typeDefinitionOf(uri: URI, sym: Symbol): Boolean =
++    given Context = myCtx
++    mySession match
++      case s: Session if s.uri == uri && sym.exists && sym.span.exists
++          && { val f = sym.source.file; f != null && f.path == s.source.file.nn.path }
++          && s.skippedAt(Span(sym.span.point)).exists(!_.inBlock) =>
++        // a template-level statement: a resume keeps the request's own typed
++        // path (a local definition would take a fresh run and lose it; the
++        // ones the target refers to are typed by the dependency rule anyway)
++        runUpTo(uri, s.source, Span(sym.span.point))
++        true
++      case _ => false
 +
 +  /** Type the skipped statement `sk` in the run and context it was skipped
 +   *  in, with `target` as the target for the statements nested in it, and
@@ -837,7 +856,7 @@ index 5b78dc804b..91da171a09 100644
      }
    }
  
-@@ -140,13 +454,15 @@ class InteractiveDriver(
+@@ -140,13 +473,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -855,7 +874,7 @@ index 5b78dc804b..91da171a09 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +494,6 @@ class InteractiveDriver(
+@@ -178,3 +513,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -863,7 +882,7 @@ index 5b78dc804b..91da171a09 100644
 +object InteractiveDriver:
 +  private val neverCancelled: () => Boolean = () => false
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-index d85b5bcc1b..55af9091a2 100644
+index d85b5bcc1b..a110c05430 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
 +++ b/compiler/src/dotty/tools/dotc/typer/Typer.scala
 @@ -1599,13 +1599,27 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
@@ -896,23 +915,31 @@ index d85b5bcc1b..55af9091a2 100644
      }
  
      var expr1 = typedExpr(tree.expr, pt.dropIfProto)(using exprCtx)
-@@ -3556,6 +3570,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3556,6 +3570,13 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        cdef.withType(UnspecifiedErrorType)
      else {
        val dummy = localDummy(cls, impl)
-+      ctx.run.nn.targetedStatsOwner = dummy
++      // Only a class that contains the target is typed along the path to it.
++      // A class typed for another reason (the synthetic class of a refinement
++      // type, an anonymous class, both typed inside an expression that a
++      // completer types ahead) is typed whole: its members were skipped and
++      // lost, so `Sel { def foo2: Int }` lost `foo2`.
++      if cdef.span.contains(ctx.run.nn.typingTarget) then
++        ctx.run.nn.targetedStatsOwner = dummy
        val body1 =
          implementDeferredGivens(
            addParentRefinements(
-@@ -3739,6 +3754,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -3739,6 +3760,9 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
                    if !pobj.symbol.isCompleting then
                      pobj.symbol.ensureCompleted()
                case _ =>
++          // a package clause is never skipped as a statement, so one that does not
++          // contain the target is targeted too: all of its statements are skipped
 +          ctx.run.nn.targetedStatsOwner = pkg.moduleClass
            var stats1 = typedStats(tree.stats, pkg.moduleClass)._1
            if (!ctx.isAfterTyper)
              stats1 = stats1 ++ typedBlockStats(MainProxies.proxies(stats1))._1
-@@ -4150,6 +4166,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4150,6 +4174,7 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
        record("typed total")
        if ctx.phase.isTyper then
          assertPositioned(tree)
@@ -920,7 +947,7 @@ index d85b5bcc1b..55af9091a2 100644
        if tree.source != ctx.source && tree.source.exists then
          typed(tree, pt, locked)(using ctx.withSource(tree.source))
        else if ctx.run.nn.isCancelled then
-@@ -4169,12 +4186,132 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4169,12 +4194,132 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
      var enumContexts: SimpleIdentityMap[Symbol, Context] = SimpleIdentityMap.empty
      val initialNotNullInfos = ctx.notNullInfos
        // A map from `enum` symbols to the contexts enclosing their definitions
@@ -1053,7 +1080,7 @@ index d85b5bcc1b..55af9091a2 100644
          mdef.removeAttachment(ExpandedTree) match {
            case Some(xtree) =>
              traverse(xtree :: rest)
-@@ -4204,9 +4341,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4204,9 +4349,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
          buf ++= stat.attachmentOrElse(ExportForwarders, Nil)
            // no attachment can happen in case of cyclic references
          traverse(rest)
@@ -1171,7 +1198,7 @@ index ab3bad986a..022cc71a3b 100644
    val ctx = driver.currentCtx
    val pos = driver.sourcePosition(params)
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
-index 1e6cb55787..c4b7c721ee 100644
+index 1e6cb55787..dd8c175ec3 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
 +++ b/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
 @@ -19,6 +19,7 @@ import dotty.tools.dotc.interactive.Interactive
@@ -1195,6 +1222,17 @@ index 1e6cb55787..c4b7c721ee 100644
  
      val pos = driver.sourcePosition(params)
      val path =
+@@ -140,6 +139,10 @@ class PcDefinitionProvider(
+   )(using ctx: Context): List[Location] =
+     val isLocal = symbol.source == pos.source
+     if isLocal then
++      // a definition the targeted run skipped is typed now (a resume); for an
++      // export forwarder, the forwarded definition too
++      driver.typeDefinitionOf(uri, symbol)
++      if symbol.sourceSymbol != symbol then driver.typeDefinitionOf(uri, symbol.sourceSymbol)
+       val trees = driver.openedTrees(uri)
+       val include = Include.definitions | Include.local
+       val (exportedDefs, otherDefs) =
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala b/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
 index aa6237a99e..bc3f98d6da 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
@@ -1240,7 +1278,7 @@ index aa6237a99e..bc3f98d6da 100644
     *  Otherwise, we will wait until the end of the timeout, which is 20s by
     *  default.
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
-index b58ca32981..7a9ec197a8 100644
+index b58ca32981..b3423e9fb6 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
 +++ b/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
 @@ -12,6 +12,7 @@ import dotty.tools.dotc.interactive.Interactive
@@ -1261,6 +1299,26 @@ index b58ca32981..7a9ec197a8 100644
  
      driver.compilationUnits.get(uri) match
        case Some(unit) =>
+@@ -42,7 +44,18 @@ object SignatureHelpProvider:
+         given Context =
+           newctx.setPrinterFn(_ => ShortenedTypePrinter(search, IncludeDefaultParam.Never)(using indexedContext))
+ 
+-        val (paramN, callableN, alternatives) = Signatures.signatureHelp(path, pos.span)
++        val (paramN, callableN, alternatives) = locally {
++          val first @ (_, _, alternatives0) = Signatures.signatureHelp(path, pos.span)
++          // a callee defined in this file whose statement the targeted run
++          // skipped is typed now (its typed tree gives the return type of an
++          // erroneous signature); then the help is computed over the new tree
++          val typedNow = alternatives0.flatMap(_.denot).map(_.symbol).filter(sym => driver.typeDefinitionOf(uri, sym))
++          if typedNow.isEmpty then first
++          else
++            val unit1 = driver.compilationUnits(uri)
++            val ctx1 = summon[Context].fresh.setCompilationUnit(unit1)
++            Signatures.signatureHelp(Interactive.pathTo(unit1.tpdTree, pos.span)(using ctx1), pos.span)(using ctx1)
++        }
+ 
+         val infos = alternatives.flatMap: signature =>
+           signature.denot.map(signature -> _)
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
 index 93316cc544..ce003c0b87 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
