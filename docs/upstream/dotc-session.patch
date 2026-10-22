@@ -813,7 +813,7 @@ index 5b78dc804b..e0dd54681e 100644
 +object InteractiveDriver:
 +  private val neverCancelled: () => Boolean = () => false
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
-index d85b5bcc1b..193e9ad3d6 100644
+index d85b5bcc1b..a573bac61b 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
 +++ b/compiler/src/dotty/tools/dotc/typer/Typer.scala
 @@ -1601,6 +1601,15 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
@@ -856,7 +856,7 @@ index d85b5bcc1b..193e9ad3d6 100644
        if tree.source != ctx.source && tree.source.exists then
          typed(tree, pt, locked)(using ctx.withSource(tree.source))
        else if ctx.run.nn.isCancelled then
-@@ -4169,12 +4181,126 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4169,12 +4181,132 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
      var enumContexts: SimpleIdentityMap[Symbol, Context] = SimpleIdentityMap.empty
      val initialNotNullInfos = ctx.notNullInfos
        // A map from `enum` symbols to the contexts enclosing their definitions
@@ -879,7 +879,13 @@ index d85b5bcc1b..193e9ad3d6 100644
 +     *  `$anonfun` of a closure's block, a pattern's temporaries), which the
 +     *  statement after them is built on.
 +     */
-+    val targeted = run.typingTarget.exists && (exprOwner eq run.targetedStatsOwner)
++    // Only the statements of the request's own source: a span is an offset in
++    // its source, and the trees of an inlined macro body carry the macro's
++    // source (the target offset fell inside a `$anonfun` of the splice body or
++    // not depending on the file's length, and the splice broke when it did not).
++    val targeted =
++      run.typingTarget.exists && (exprOwner eq run.targetedStatsOwner)
++      && (ctx.compilationUnit ne NoCompilationUnit) && (ctx.source eq ctx.compilationUnit.source)
 +    val inBlock = run.targetedStatsInBlock
 +    run.targetedStatsOwner = NoSymbol
 +    run.targetedStatsInBlock = false
@@ -983,7 +989,7 @@ index d85b5bcc1b..193e9ad3d6 100644
          mdef.removeAttachment(ExpandedTree) match {
            case Some(xtree) =>
              traverse(xtree :: rest)
-@@ -4204,9 +4330,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
+@@ -4204,9 +4336,14 @@ class Typer(@constructorOnly nestingLevel: Int = 0) extends Namer
          buf ++= stat.attachmentOrElse(ExportForwarders, Nil)
            // no attachment can happen in case of cyclic references
          traverse(rest)
@@ -1373,10 +1379,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..be49844938
+index 0000000000..784a069c56
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,379 @@
+@@ -0,0 +1,403 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -1697,6 +1703,30 @@ index 0000000000..be49844938
 +        println(s"[driver-only] EXCEPTION ${ex}\n" + ex.getStackTrace.take(14).mkString("\n"))
 +        throw ex
 +    }
++
++  @Test def `a-macro-in-a-long-targeted-run` =
++    // I19: the trees of an inlined macro body carry the macro's source, and a
++    // skip rule comparing their spans with the target offset skipped the splice
++    // body's `$anonfun` whenever the offset fell outside it, which depended on the
++    // file's length (a chain of 30 failed, 3 worked). Targeting applies to the
++    // request's source only. The checkpoint mask is varied to show it is not that.
++    def source(tag: String, chain: Int) =
++      val stats = (0 until chain).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum + ${if j == 0 then "latched" else s"a${j - 1}"}").mkString("\n")
++      s"// $tag\nobject G {\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await\n$stats\n    a0 + a${chain - 1}\n  }\n}\n"
++    def macroErrors(diags: List[dotty.tools.dotc.reporting.Diagnostic]) = diags.map(_.msg.message).filter(_.contains("interpreted"))
++    val mask = dotty.tools.dotc.Run.typerCheckpointMask
++    try
++      withDriver { d =>
++        for (label, m, chain) <- List(("mask 1023, chain 30", 1023, 30), ("mask 1023, chain 3", 1023, 3), ("no checkpoint, chain 30", (1 << 30) - 1, 30), ("mask 15, chain 3", 15, 3)) do
++          dotty.tools.dotc.Run.typerCheckpointMask = m
++          val code = source(label, chain)
++          val uri = URI.create(s"file:///Macro${m}_$chain.scala")
++          val src = SourceFile.virtual(uri, code)
++          val diags = d.runUpTo(uri, src, Span(code.indexOf(s"val a${chain - 1} =") + 8))
++          println(s"[a-macro-in-a-long-targeted-run] $label: ${macroErrors(diags).map(_.take(70))}")
++          org.junit.Assert.assertEquals(s"$label: the macro must expand (targeting applies to the request's source only, not to the inlined body's trees)", Nil, macroErrors(diags))
++      }
++    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
 +
 +  @Test def `edit-starts-a-new-run` =
 +    assertNoDiff(expectedAt(10), complete(bigSource("edit", 10)))
@@ -2266,10 +2296,10 @@ index 0000000000..acc2e21970
 +    sym.setFlag(Flags.Touched)
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
 new file mode 100644
-index 0000000000..b6ec956c28
+index 0000000000..667bc7b9e8
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/XrayServer.scala
-@@ -0,0 +1,616 @@
+@@ -0,0 +1,619 @@
 +package dotty.tools.pc.xray
 +
 +import java.io.File
@@ -2397,15 +2427,18 @@ index 0000000000..b6ec956c28
 +    else sourcesRoot.map(_.resolve(file).toUri).getOrElse(generatedUri)
 +
 +  /** The same shape as `CompletionSessionSuite.bigSource`, without the marker;
-+   *  the last object also has a `giant` method of 200 local vals, big enough
-+   *  for a cancellation to land inside it (the typer polls every 1024 trees),
-+   *  that starts with `tests.macros.Latch.await`, a macro that blocks the typer while
-+   *  the latch file exists (see `Latch` in the testcases project).
++   *  the last object also has a `giant` method of 200 local vals, each
++   *  depending on the one before and the first on `tests.macros.Latch.await`,
++   *  a macro that blocks the typer while the latch file exists (see `Latch`
++   *  in the testcases project): a request at the last statement types the
++   *  whole chain in order (big enough for a cancellation to land, the typer
++   *  polls every 1024 trees) and blocks at the macro first; a request
++   *  anywhere else does neither.
 +   */
 +  def generatedSource(tag: String, n: Int = objectCount): String =
 +    val objects = (0 until n).map { i =>
 +      val giant =
-+        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer only when the statement at the cursor depends on it\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum${if j == 199 then " + latched" else ""}").mkString("\n") + "\n    a0 + a199\n  }"
++        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer only when the statement at the cursor depends on it\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum + ${if j == 0 then "latched" else s"a${j - 1}"}").mkString("\n") + "\n    a0 + a199\n  }"
 +        else ""
 +      s"""|object M$i {
 +          |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum$giant
@@ -2888,10 +2921,10 @@ index 0000000000..b6ec956c28
 +    Thread.currentThread.join()
 diff --git a/presentation-compiler/test/dotty/tools/pc/xray/xray.html b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
 new file mode 100644
-index 0000000000..ac451bc918
+index 0000000000..c76a52db79
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/xray/xray.html
-@@ -0,0 +1,550 @@
+@@ -0,0 +1,569 @@
 +<!doctype html>
 +<html lang="en">
 +<head>
@@ -3143,7 +3176,8 @@ index 0000000000..ac451bc918
 +  }
 +  $('go').onclick = () => gotoObject(+$('goto').value);
 +  function gotoGiant() {
-+    const text = cm.getValue(), at = text.indexOf('def giant('), m = text.indexOf('.filter', at) + '.fil'.length;
++    // the last statement of giant: it depends on the whole chain, and the chain on the latch
++    const text = cm.getValue(), at = text.indexOf('val a199 ='), m = text.indexOf('.filter', at) + '.fil'.length;
 +    cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor();
 +  }
 +
@@ -3153,6 +3187,7 @@ index 0000000000..ac451bc918
 +    render(r); logRow(r); last = r; return r;
 +  }
 +  async function send(kind, cancelAfterMs) {
++    for (let i = 0; i < 300 && busy; i++) await sleep(100); // a demo started while a request runs waits for it
 +    if (busy) return null;
 +    if (hover.inFlight) { await cancelInFlight(); for (let i = 0; i < 100 && hover.inFlight; i++) await sleep(30); } setBusy(true, `… ${kind === 'full' ? 'typing the whole file' : 'completing'}${cancelAfterMs >= 0 ? ` (cancel after ${cancelAfterMs} ms)` : ''}`);
 +    const code = cm.getValue(), offset = offsetOf();
@@ -3224,8 +3259,11 @@ index 0000000000..ac451bc918
 +    else popupAt(ev, '', `<div class="t">${esc(h.symbol || h.tree)}${h.info ? ': ' + esc(h.info) : ''}</div><div class="t dim">type: ${esc(h.type)}</div><div class="x">${esc(h.tree)} [${h.start}, ${h.end})${h.enclosing ? ' in ' + esc(h.enclosing) : ''} · ${sum}</div>`);
 +    $('hoverState').textContent = `${tok.text}: ${r.outcome} ${r.ms} ms`;
 +  }
++  // a demo suppresses hover requests for a minute from its start: a pointer left over the editor
++  // would otherwise send typeAt requests between the demo's own, and the demo's latched request would meet a busy server
++  let demoStartedAt = 0;
 +  cm.getWrapperElement().addEventListener('mousemove', (ev) => {
-+    if (!$('hoverMode').checked || busy) return;
++    if (!$('hoverMode').checked || busy || (demoStartedAt && Date.now() - demoStartedAt < 60000)) return;
 +    const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
 +    const tok = wordAt(pos);
 +    const same = tok && hover.token && tok.line === hover.token.line && tok.a === hover.token.a;
@@ -3383,7 +3421,7 @@ index 0000000000..ac451bc918
 +  }
 +  // ---- demos: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
 +  const story = { steps: [] };
-+  function storyStart(title) { story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
++  function storyStart(title) { demoStartedAt = Date.now(); if (hover.inFlight) cancelInFlight(); hidePopup(); story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
 +  // the editor shrank when the transcript appeared: scroll so the cursor sits in the upper third of what is left
 +  const reveal = () => { const info = cm.getScrollInfo(), y = cm.charCoords(cm.getCursor(), 'local').top; cm.scrollTo(null, Math.max(0, y - info.clientHeight / 3)); };
 +  function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
@@ -3398,26 +3436,39 @@ index 0000000000..ac451bc918
 +    storyResult(li, r.outcome === 'fresh' && r.typedStatements === 1, `${r.outcome}, run ${r.runId}, ${typedOf(r)}; skipped members in M10: ${(r.statements[r.cursorStatement].skippedMembers || []).length}`); await sleep(800);
 +    li = storyStep('Complete in object 40', 'same run id, M40 typed in addition (a resume), nothing else');
 +    gotoObject(40); const r2 = await send('complete', -1);
++    if (!r2) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
 +    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged && r2.typedNow === 1, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`); await sleep(800);
 +    li = storyStep('Complete in object 10 again', 'answered from what is typed: nothing typed, a few trees for the completion itself');
 +    gotoObject(10); const r3 = await send('complete', -1);
++    if (!r3) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
 +    storyResult(li, r3.outcome === 'served' && r3.typedNow === 0, `${r3.outcome}, ${typedOf(r3)}`); await sleep(800);
 +    li = storyStep('Complete inside the body of method20', 'M20 was skipped: typed now, in the same run; its other members stay skipped');
 +    gotoMethod(20); const r4 = await send('complete', -1);
++    if (!r4) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
 +    storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
 +  };
++  let demoTag = 0;
 +  $('demoCancel').onclick = async () => {
 +    if (needsGenerated()) return;
 +    storyStart('Demo: a cancellation lands exactly where we want it');
-+    let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
-+    gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
++    // fresh content (a new tag on line 1), so that giant is not already typed by an earlier run
++    cm.replaceRange(`// x-ray demo, cancel run ${++demoTag}`, { line: 0, ch: 0 }, { line: 0, ch: cm.getLine(0).length });
++    let li = storyStep('Complete in object 10 first', 'a fresh run (the content is new) that the next requests resume');
++    gotoObject(10); const r0 = await send('complete', -1);
++    if (!r0) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
++    storyResult(li, r0.outcome === 'fresh', `${r0.outcome}, run ${r0.runId}`); await sleep(800);
++    li = storyStep('Complete at the last statement of `giant` in object 59, latched', 'the statement depends on the 199 before it and the first of those on the `tests.macros.Latch.await` macro, so the typer resumes into object 59, types the chain in order and blocks at the macro, with the rest of the file untouched');
++    gotoGiant(); const p = sendLatched(); if (!p) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
++    await whenLatched(); await sleep(1500);
 +    storyResult(li, true, `blocked: ${$('latchTrees').textContent} trees typed so far`);
-+    li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; giant is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
++    li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; object 59 is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
 +    await fetch('/cancel', { method: 'POST' }); const r = await p;
++    if (!r) { storyResult(li, false, 'no result'); return; }
 +    storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(1200);
-+    li = storyStep('Complete there again', 'the same run types giant whole this time (the latch is not armed)');
++    li = storyStep('Complete there again', 'the same run types the chain this time (the latch is not armed); a request anywhere else in giant would type only its own statement');
 +    gotoGiant(); const r2 = await send('complete', -1);
-+    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
++    if (!r2) { storyResult(li, false, 'no request was sent'); return; }
++    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 2).join(', ')}`);
 +  };
 +  $('demoEdit').onclick = async () => {
 +    if (needsGenerated()) return;
@@ -3427,6 +3478,7 @@ index 0000000000..ac451bc918
 +    li = storyStep('Type a comment into object 0, complete in object 10', 'the content changed: a new run id, and again only the path to the cursor is typed');
 +    const text = cm.getValue(), at = text.indexOf('object M0 {') + 'object M0 {'.length;
 +    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(600); gotoObject(10); const r = await send('complete', -1);
++    if (!r) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
 +    storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
 +  };
 +  $('demoFull').onclick = async () => {

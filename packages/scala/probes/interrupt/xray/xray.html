@@ -332,8 +332,11 @@
     else popupAt(ev, '', `<div class="t">${esc(h.symbol || h.tree)}${h.info ? ': ' + esc(h.info) : ''}</div><div class="t dim">type: ${esc(h.type)}</div><div class="x">${esc(h.tree)} [${h.start}, ${h.end})${h.enclosing ? ' in ' + esc(h.enclosing) : ''} · ${sum}</div>`);
     $('hoverState').textContent = `${tok.text}: ${r.outcome} ${r.ms} ms`;
   }
+  // a demo suppresses hover requests for a minute from its start: a pointer left over the editor
+  // would otherwise send typeAt requests between the demo's own, and the demo's latched request would meet a busy server
+  let demoStartedAt = 0;
   cm.getWrapperElement().addEventListener('mousemove', (ev) => {
-    if (!$('hoverMode').checked || busy) return;
+    if (!$('hoverMode').checked || busy || (demoStartedAt && Date.now() - demoStartedAt < 60000)) return;
     const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
     const tok = wordAt(pos);
     const same = tok && hover.token && tok.line === hover.token.line && tok.a === hover.token.a;
@@ -491,7 +494,7 @@
   }
   // ---- demos: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
   const story = { steps: [] };
-  function storyStart(title) { story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
+  function storyStart(title) { demoStartedAt = Date.now(); if (hover.inFlight) cancelInFlight(); hidePopup(); story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
   // the editor shrank when the transcript appeared: scroll so the cursor sits in the upper third of what is left
   const reveal = () => { const info = cm.getScrollInfo(), y = cm.charCoords(cm.getCursor(), 'local').top; cm.scrollTo(null, Math.max(0, y - info.clientHeight / 3)); };
   function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
@@ -506,26 +509,39 @@
     storyResult(li, r.outcome === 'fresh' && r.typedStatements === 1, `${r.outcome}, run ${r.runId}, ${typedOf(r)}; skipped members in M10: ${(r.statements[r.cursorStatement].skippedMembers || []).length}`); await sleep(800);
     li = storyStep('Complete in object 40', 'same run id, M40 typed in addition (a resume), nothing else');
     gotoObject(40); const r2 = await send('complete', -1);
+    if (!r2) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
     storyResult(li, r2.outcome === 'resumed' && !r2.runChanged && r2.typedNow === 1, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`); await sleep(800);
     li = storyStep('Complete in object 10 again', 'answered from what is typed: nothing typed, a few trees for the completion itself');
     gotoObject(10); const r3 = await send('complete', -1);
+    if (!r3) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
     storyResult(li, r3.outcome === 'served' && r3.typedNow === 0, `${r3.outcome}, ${typedOf(r3)}`); await sleep(800);
     li = storyStep('Complete inside the body of method20', 'M20 was skipped: typed now, in the same run; its other members stay skipped');
     gotoMethod(20); const r4 = await send('complete', -1);
+    if (!r4) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
     storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
   };
+  let demoTag = 0;
   $('demoCancel').onclick = async () => {
     if (needsGenerated()) return;
     storyStart('Demo: a cancellation lands exactly where we want it');
-    let li = storyStep('Complete at the last statement of `giant` in object 59, latched', 'the statement depends on the 199 before it and the first of those on the `tests.macros.Latch.await` macro, so the typer types the chain in order and blocks at the macro, with the rest of the file untouched');
-    gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
+    // fresh content (a new tag on line 1), so that giant is not already typed by an earlier run
+    cm.replaceRange(`// x-ray demo, cancel run ${++demoTag}`, { line: 0, ch: 0 }, { line: 0, ch: cm.getLine(0).length });
+    let li = storyStep('Complete in object 10 first', 'a fresh run (the content is new) that the next requests resume');
+    gotoObject(10); const r0 = await send('complete', -1);
+    if (!r0) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
+    storyResult(li, r0.outcome === 'fresh', `${r0.outcome}, run ${r0.runId}`); await sleep(800);
+    li = storyStep('Complete at the last statement of `giant` in object 59, latched', 'the statement depends on the 199 before it and the first of those on the `tests.macros.Latch.await` macro, so the typer resumes into object 59, types the chain in order and blocks at the macro, with the rest of the file untouched');
+    gotoGiant(); const p = sendLatched(); if (!p) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
+    await whenLatched(); await sleep(1500);
     storyResult(li, true, `blocked: ${$('latchTrees').textContent} trees typed so far`);
-    li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; giant is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
+    li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; object 59 is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
     await fetch('/cancel', { method: 'POST' }); const r = await p;
+    if (!r) { storyResult(li, false, 'no result'); return; }
     storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(1200);
     li = storyStep('Complete there again', 'the same run types the chain this time (the latch is not armed); a request anywhere else in giant would type only its own statement');
     gotoGiant(); const r2 = await send('complete', -1);
-    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
+    if (!r2) { storyResult(li, false, 'no request was sent'); return; }
+    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 2).join(', ')}`);
   };
   $('demoEdit').onclick = async () => {
     if (needsGenerated()) return;
@@ -535,6 +551,7 @@
     li = storyStep('Type a comment into object 0, complete in object 10', 'the content changed: a new run id, and again only the path to the cursor is typed');
     const text = cm.getValue(), at = text.indexOf('object M0 {') + 'object M0 {'.length;
     cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(600); gotoObject(10); const r = await send('complete', -1);
+    if (!r) { storyResult(li, false, 'no request was sent (the page was busy)'); return; }
     storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
   };
   $('demoFull').onclick = async () => {
