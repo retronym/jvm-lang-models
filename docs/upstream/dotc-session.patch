@@ -31,7 +31,7 @@ index db34dbc88e..d196455401 100644
    def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
      val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
 diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
-index 2fdf622325..2b1214bb04 100644
+index 2fdf622325..ac6937e61a 100644
 --- a/compiler/src/dotty/tools/dotc/Run.scala
 +++ b/compiler/src/dotty/tools/dotc/Run.scala
 @@ -32,6 +32,7 @@ import java.io.{BufferedWriter, OutputStreamWriter}
@@ -42,7 +42,7 @@ index 2fdf622325..2b1214bb04 100644
  import scala.io.Codec
  
  import Run.Progress
-@@ -231,6 +232,89 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -231,6 +232,92 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
    def canProgress()(using Context): Boolean =
      foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
  
@@ -116,6 +116,9 @@ index 2fdf622325..2b1214bb04 100644
 +
 +  private var typedTreeCount = 0
 +
++  /** The number of trees typed in this run so far (every `Typer.typed`). */
++  def typedTrees: Int = typedTreeCount
++
 +  /** Called by `Typer.typed` for every tree. Every 1024 trees, in interactive
 +   *  mode, polls the progress callback and aborts the run with a
 +   *  `CancelledCompilation` if it reports cancellation. Batch compilation is
@@ -132,7 +135,7 @@ index 2fdf622325..2b1214bb04 100644
    def doAdvanceUnit()(using Context): Unit =
      trackProgress: progress =>
        progress.currentUnitCount += 1 // trace that we completed a unit in the current (sub)phase
-@@ -636,6 +720,44 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -636,6 +723,44 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
  }
  
  object Run {
@@ -178,13 +181,14 @@ index 2fdf622325..2b1214bb04 100644
    case class SubPhase(name: String):
      override def toString: String = name
 diff --git a/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala b/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
-index fa671e836b..6712b8086a 100644
+index fa671e836b..a43d1c8a4c 100644
 --- a/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
 +++ b/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
-@@ -549,6 +549,7 @@ private sealed trait YSettings:
+@@ -549,6 +549,8 @@ private sealed trait YSettings:
    val YcheckAllPatmat: Setting[Boolean] = BooleanSetting(ForkSetting, "Ycheck-all-patmat", "Check exhaustivity and redundancy of all pattern matching (used for testing the algorithm).")
    val YcheckConstraintDeps: Setting[Boolean] = BooleanSetting(ForkSetting, "Ycheck-constraint-deps", "Check dependency tracking in constraints (used for testing the algorithm).")
    val YretainTrees: Setting[Boolean] = BooleanSetting(ForkSetting, "Yretain-trees", "Retain trees for top-level classes, accessible from ClassSymbol#tree")
++  val YinteractiveLog: Setting[Boolean] = BooleanSetting(ForkSetting, "Yinteractive-log", "In interactive mode, print one line per request to stderr: what was typed, in which run, how long it took.")
 +  val YnoTargetedRequests: Setting[Boolean] = BooleanSetting(ForkSetting, "Yno-targeted-requests", "In interactive mode, type the whole file for every request instead of only the path to the request's position (completion, hover, definition, signature help, expected type).")
    val YshowTreeIds: Setting[Boolean] = BooleanSetting(ForkSetting, "Yshow-tree-ids", "Uniquely tag all tree nodes in debugging output.")
    val YfromTastyIgnoreList: Setting[List[String]] = MultiStringSetting(ForkSetting, "Yfrom-tasty-ignore-list", "file", "List of `tasty` files in jar files that will not be loaded when using -from-tasty.")
@@ -447,7 +451,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..3aa45a1c04 100644
+index 5b78dc804b..1ccba9c0ca 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -510,7 +514,7 @@ index 5b78dc804b..3aa45a1c04 100644
    def currentCtx: Context = myCtx
  
    private val compiler: Compiler = new InteractiveCompiler
-@@ -78,37 +107,341 @@ class InteractiveDriver(
+@@ -78,37 +107,380 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -585,7 +589,32 @@ index 5b78dc804b..3aa45a1c04 100644
 +   *  tree, without the skipped statements; providers that need the whole
 +   *  tree use `run` instead.
 +   */
++  /** `-Yinteractive-log`: one line per request on stderr (the Metals log), with
++   *  what the run did, so that the session can be observed from an editor.
++   */
++  private val logRequests: Boolean = myInitCtx.settings.YinteractiveLog.value(using myInitCtx)
++
++  private def logged[T](what: String)(body: => T)(outcome: => String): T =
++    if !logRequests then body
++    else
++      val t0 = System.nanoTime()
++      try body
++      finally System.err.println(f"[dotc-session] $what ${outcome} ${(System.nanoTime() - t0) / 1e6}%.1f ms")
++
 +  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
++    val before = mySession
++    val skippedBefore = if before == null then -1 else before.skipped.size
++    logged(s"runUpTo ${uri.getPath.nn.split('/').last}@${target.start}")(runUpTo0(uri, source, target)) {
++      val s = mySession
++      val how =
++        if s eq null then "whole-file"
++        else if !(s eq before) then "fresh"
++        else if s.skipped.size != skippedBefore then "resumed"
++        else "served"
++      s"$how run=${runIdOf(uri)} typedTop=${typedPrefixLength(uri)} skipped=${untypedSpans(uri).size}${if s != null then s" trees=${s.run.typedTrees}" else ""}"
++    }
++
++  private def runUpTo0(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
 +    if !targetedRequests then run(uri, source)
 +    else mySession match
 +      case s: Session if s.uri == uri && s.source.textContent() == source.textContent() =>
@@ -603,11 +632,10 @@ index 5b78dc804b..3aa45a1c04 100644
 +          case None => s.diagnostics
 +          case Some(sk) =>
 +            // A statement skipped inside a block left a stub in the typed
-+            // `Block`, and a typed `Block` is not spliced: resuming into it
-+            // would type the statement and leave the stub in place (a hover
-+            // on it found the block, a completion in it found nothing).
-+            if sk.inBlock then run(uri, source, target)
-+            else resume(s, sk, target)
++            // `Block`; the resume replaces the stub by the typed statement.
++            // (The first version took a fresh run instead, which made every
++            // hover on a sibling statement inside a method a new run.)
++            resume(s, sk, target)
 +      case _ =>
 +        run(uri, source, target)
 +
@@ -622,10 +650,7 @@ index 5b78dc804b..3aa45a1c04 100644
 +    mySession match
 +      case s: Session if s.uri == uri && sym.exists && sym.span.exists
 +          && { val f = sym.source.file; f != null && f.path == s.source.file.nn.path }
-+          && s.skippedAt(Span(sym.span.point)).exists(!_.inBlock) =>
-+        // a template-level statement: a resume keeps the request's own typed
-+        // path (a local definition would take a fresh run and lose it; the
-+        // ones the target refers to are typed by the dependency rule anyway)
++          && s.skippedAt(Span(sym.span.point)).isDefined =>
 +        runUpTo(uri, s.source, Span(sym.span.point))
 +        true
 +      case _ => false
@@ -642,9 +667,10 @@ index 5b78dc804b..3aa45a1c04 100644
 +    try
 +      val ctx0 = sk.ctx
 +      s.run.targetedStatsOwner = sk.owner
++      s.run.targetedStatsInBlock = sk.inBlock
 +      val (stats, _) = ctx0.typer.typedStats(sk.stat :: Nil, sk.owner)(using ctx0)
 +      s.skipped = s.skipped ++ s.run.skippedStats.toList
-+      splice(s, sk.owner, stats)(using ctx0)
++      splice(s, sk, stats)(using ctx0)
 +      s.diagnostics
 +    catch case ex: CompilationUnit.CancelledCompilation =>
 +      // The statement being typed can not be typed a second time: typing
@@ -658,6 +684,7 @@ index 5b78dc804b..3aa45a1c04 100644
 +    finally
 +      s.run.typingTarget = NoSpan
 +      s.run.targetedStatsOwner = NoSymbol
++      s.run.targetedStatsInBlock = false
 +      s.run.skippedStats.clear()
 +
 +  /** Does `owner` define `name` in this file: the companion of a statement
@@ -685,11 +712,11 @@ index 5b78dc804b..3aa45a1c04 100644
 +  private def replacePoisoned(s: Session, sk: Run.SkippedStat): Boolean =
 +    given Context = sk.ctx
 +    val head = sk.stat
-+    val replaceable = head match
++    val replaceable = !sk.inBlock && (head match
 +      case mdef: untpd.ModuleDef => !mdef.rawMods.is(Flags.Synthetic) && !hasCompanionHere(sk.owner, mdef.name.toTypeName)
 +      case tdef: untpd.TypeDef => !hasCompanionHere(sk.owner, tdef.name.toTermName)
 +      case _: untpd.DefDef | _: untpd.ValDef => true
-+      case _ => false
++      case _ => false)
 +    if !replaceable then return false
 +    val parsed = new parsing.Parsers.Parser(s.source).parse()
 +    val fresh = new untpd.UntypedTreeAccumulator[Option[untpd.Tree]]:
@@ -751,7 +778,11 @@ index 5b78dc804b..3aa45a1c04 100644
 +   *  unit's typed tree (the package for a package class, the template for
 +   *  a local dummy), in source order, and update what depends on the tree.
 +   */
-+  private def splice(s: Session, owner: Symbol, stats: List[Tree])(using Context): Unit =
++  private def splice(s: Session, sk: Run.SkippedStat, stats: List[Tree])(using Context): Unit =
++    val owner = sk.owner
++    // a skipped block statement left stubs with its span in the typed `Block`
++    // (one per symbol it defines): the typed statement takes their place
++    def isStubOf(t: Tree) = t.span == sk.stat.span && (t.source eq s.unit.source)
 +    def insert(into: List[Tree]): List[Tree] =
 +      val start = stats.headOption.map(_.span.start).getOrElse(-1)
 +      val (before, after) = into.span(t => !t.span.exists || t.span.start <= start)
@@ -760,10 +791,17 @@ index 5b78dc804b..3aa45a1c04 100644
 +      override def transform(tree: Tree)(using Context): Tree = tree match
 +        // a skipped block definition's stub has an untyped type tree: not entered
 +        case t if !t.hasType => t
-+        case t: PackageDef if owner.is(Flags.PackageClass) && t.symbol.moduleClass == owner =>
++        case t: PackageDef if !sk.inBlock && owner.is(Flags.PackageClass) && t.symbol.moduleClass == owner =>
 +          tpd.cpy.PackageDef(t)(t.pid, insert(t.stats))
-+        case t: Template if t.symbol == owner =>
++        case t: Template if !sk.inBlock && t.symbol == owner =>
 +          tpd.cpy.Template(t)(t.constr, t.parents, t.derived, t.self, insert(t.body))
++        // the innermost typed block containing the statement's span: its
++        // stubs (a definition's) go, the typed statement is inserted in order
++        // (an expression statement left no stub); a block nested in one of
++        // its statements is reached by the traversal
++        case b: Block if sk.inBlock && (b.source eq s.unit.source) && b.span.contains(sk.stat.span)
++            && !(b.stats :+ b.expr).exists(t => t.span.exists && !isStubOf(t) && t.span != sk.stat.span && t.span.contains(sk.stat.span)) =>
++          tpd.cpy.Block(b)(insert(b.stats.filterNot(isStubOf)), b.expr)
 +        case _ => super.transform(tree)
 +    val t = mapper.transform(s.unit.tpdTree)
 +    s.unit.tpdTree = t
@@ -774,7 +812,12 @@ index 5b78dc804b..3aa45a1c04 100644
 +    myOpenedTrees(s.uri) = topLevelTrees(t, s.source)
 +    s.diagnostics = s.diagnostics ++ s.reporter.removeBufferedMessages
 +
-+  private def run(uri: URI, source: SourceFile, target: Span): List[Diagnostic] = {
++  private def run(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
++    logged(s"run ${uri.getPath.nn.split('/').last}${if target.exists then s"@${target.start}" else " (whole file)"}")(run0(uri, source, target)) {
++      s"run=${runIdOf(uri)} typedTop=${typedPrefixLength(uri)} skipped=${untypedSpans(uri).size}"
++    }
++
++  private def run0(uri: URI, source: SourceFile, target: Span): List[Diagnostic] = {
      import typer.ImportInfo.*
  
      val previousCtx = myCtx
@@ -856,7 +899,7 @@ index 5b78dc804b..3aa45a1c04 100644
      }
    }
  
-@@ -140,13 +473,15 @@ class InteractiveDriver(
+@@ -140,13 +512,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -874,7 +917,7 @@ index 5b78dc804b..3aa45a1c04 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +513,6 @@ class InteractiveDriver(
+@@ -178,3 +552,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1586,10 +1629,10 @@ index 0000000000..7f4c145771
 +    assertNoDiff("greetAlpha: Any", obtained)
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
 new file mode 100644
-index 0000000000..ea97073ff9
+index 0000000000..7be696d913
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionSessionSuite.scala
-@@ -0,0 +1,442 @@
+@@ -0,0 +1,445 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.net.URI
@@ -1890,10 +1933,10 @@ index 0000000000..ea97073ff9
 +    assert(fresh.exists(_.startsWith("val b")) && fresh.exists(_.startsWith("val d")), s"b and d are skipped in a fresh run: $fresh")
 +    assert(resumed.exists(_.startsWith("val b")) && resumed.exists(_.startsWith("val d")), s"b and d are skipped in a resume: $resumed")
 +
-+  @Test def `a-target-in-a-skipped-block-statement-is-a-fresh-run` =
++  @Test def `a-target-in-a-skipped-block-statement-is-resumed` =
 +    // A request in a block statement that an earlier request skipped (a stub
-+    // in the typed `Block`) starts a fresh run: resuming would type the
-+    // statement without splicing it, and the stub would be served.
++    // in the typed `Block`) resumes the run: the statement is typed in the
++    // block's recorded context and replaces its stub in the typed tree.
 +    val code =
 +      """|object Blk2 {
 +         |  def enc(src: Array[Byte]): Array[Byte] = {
@@ -1912,17 +1955,20 @@ index 0000000000..ea97073ff9
 +    val src = SourceFile.virtual(uri, code)
 +    val atN = code.indexOf("val n =") + 5
 +    val atToByte = code.indexOf(".toByte") + 7
-+    val (before, after, resumed) = withDriver { d =>
++    val (before, after, resumed, sameRun) = withDriver { d =>
 +      d.runUpTo(uri, src, Span(atN))
++      val run0 = d.runIdOf(uri)
 +      val before = d.untypedSpans(uri).map(sp => code.substring(sp.start, math.min(sp.end, sp.start + 9)).trim)
 +      d.runUpTo(uri, src, Span(atToByte))
++      val sameRun = d.runIdOf(uri) == run0
 +      val after = d.untypedSpans(uri).map(sp => code.substring(sp.start, math.min(sp.end, sp.start + 9)).trim)
 +      val unit = d.compilationUnits(uri)
 +      given Context = d.currentCtx.fresh.setCompilationUnit(unit)
 +      val path = Interactive.pathTo(unit.tpdTree, Span(atToByte))
-+      (before, after, path.headOption.map(t => s"${t.getClass.getSimpleName} ${t.symbol.name}"))
++      (before, after, path.headOption.map(t => s"${t.getClass.getSimpleName} ${t.symbol.name}"), sameRun)
 +    }
-+    println(s"[a-target-in-a-skipped-block-statement-is-a-fresh-run] before: $before; after: $after; at toByte: $resumed")
++    println(s"[a-target-in-a-skipped-block-statement-is-resumed] before: $before; after: $after; at toByte: $resumed; same run: $sameRun")
++    assert(sameRun, "the second request resumes the first request's run")
 +    assert(before.exists(_.startsWith("while")), s"the while is skipped by the first request: $before")
 +    assert(!after.exists(_.startsWith("while")), s"the while is typed by the second: $after")
 +    assert(resumed.contains("Select toByte"), s"the tree at the target is the typed select: $resumed")
