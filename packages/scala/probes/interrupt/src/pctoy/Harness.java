@@ -8,7 +8,13 @@ import pctoy.Core.*;
  * turn, and the answers (the event's, then the fully typed units afterwards) are compared with the
  * reference, where the event arrives after the background work is done. */
 public final class Harness {
-  public record Scenario(String name, List<Ast.Source> sources, Event event, String note) {}
+  public record Scenario(String name, List<Ast.Source> sources, Event event, String note, List<Step> requests) {}
+
+  /** A request of a replay; with `cancelAt` ≥ 0 the same request is sent again at that safepoint of its job, which
+   * interrupts the job on an interruptible kernel (the user typed on); the request's answer is the last one. */
+  public record Step(Event event, int cancelAt) {
+    @Override public String toString() { return (cancelAt >= 0 ? "cancel@" + cancelAt + " " : "") + event; }
+  }
 
   public interface Factory { Kernel make(Scheduler s); }
 
@@ -18,31 +24,48 @@ public final class Harness {
     KERNELS.put("scalac-after", s -> new Scala2Kernel("scalac-after", Global.Policy.SCALAC_AFTER, s));
     KERNELS.put("dotc-metals", s -> new Scala3Kernel("dotc-metals", false, s));
     KERNELS.put("dotc-session", s -> new Scala3Kernel("dotc-session", false, true, s));
+    KERNELS.put("dotc-session-path", s -> new Scala3Kernel("dotc-session-path", true, true, Scala3Kernel.Targeting.PATH, Scala3Kernel.Fixes.ALL, s));
     KERNELS.put("dotc-interrupted", s -> new Scala3Kernel("dotc-interrupted", true, s));
     KERNELS.put("psi", s -> new PsiKernel("psi", s));
   }
   /** Kernels for replays only: no safepoints, so no interleavings to sweep. */
-  public static final Map<String, Factory> REPLAY_KERNELS = Map.of("dotc-revisions", s -> new Revisions("dotc-revisions", s));
+  public static final Map<String, Factory> REPLAY_KERNELS = Map.of(
+      "dotc-revisions", s -> new Revisions("dotc-revisions", s),
+      /* the sessions without the spike's fixes: the findings they reproduce */
+      "dotc-session-naive", s -> new Scala3Kernel("dotc-session-naive", false, true, Scala3Kernel.Targeting.PREFIX, Scala3Kernel.Fixes.NONE, s),
+      "dotc-session-path-naive", s -> new Scala3Kernel("dotc-session-path-naive", true, true, Scala3Kernel.Targeting.PATH, Scala3Kernel.Fixes.NONE, s));
 
-  /** A scenario file: `// event: <event>` and `// note: ...` lines, then `// file: <Name>` sections and,
+  /** A scenario file: `// event: <event>` and `// note: ...` lines, optionally `// requests: <step>; <step>...` (the
+   * replay of `--sessions` instead of `sweep`; a step is an event, optionally prefixed by `cancel@N`), then `// file: <Name>` sections and,
    * for an edit, an `// edit: <Name>` section with the new text. Events: `completion F Decl.member`,
    * `loadedTyped F`, `edit F then <event>`. */
   public static Scenario load(Path p) throws java.io.IOException {
     String name = p.getFileName().toString().replaceAll("\\.toy$", "");
     List<String> lines = Files.readAllLines(p);
-    String eventLine = null, note = "";
+    String eventLine = null, note = "", requestsLine = null;
     Map<String, StringBuilder> files = new LinkedHashMap<>(), edits = new LinkedHashMap<>();
     StringBuilder cur = null;
     for (String l : lines) {
       if (l.startsWith("// event:")) eventLine = l.substring(9).trim();
       else if (l.startsWith("// note:")) note = l.substring(8).trim();
+      else if (l.startsWith("// requests:")) requestsLine = l.substring(12).trim();
       else if (l.startsWith("// file:")) cur = files.computeIfAbsent(l.substring(8).trim(), k -> new StringBuilder());
       else if (l.startsWith("// edit:")) cur = edits.computeIfAbsent(l.substring(8).trim(), k -> new StringBuilder());
       else if (cur != null) cur.append(l).append('\n');
     }
     List<Ast.Source> sources = new ArrayList<>();
     for (Map.Entry<String, StringBuilder> e : files.entrySet()) sources.add(Ast.parse(e.getKey(), e.getValue().toString()));
-    return new Scenario(name, sources, parseEvent(eventLine, edits), note);
+    List<Step> requests = null;
+    if (requestsLine != null) {
+      requests = new ArrayList<>();
+      for (String r : requestsLine.split(";")) {
+        r = r.trim();
+        int cancel = -1;
+        if (r.startsWith("cancel@")) { cancel = Integer.parseInt(r.substring(7, r.indexOf(' '))); r = r.substring(r.indexOf(' ') + 1); }
+        requests.add(new Step(parseEvent(r, edits), cancel));
+      }
+    }
+    return new Scenario(name, sources, parseEvent(eventLine, edits), note, requests);
   }
 
   private static Event parseEvent(String s, Map<String, StringBuilder> edits) {
@@ -116,6 +139,12 @@ public final class Harness {
   public record Replay(List<String> answers, long work, List<Long> perRequest) {}
 
   public static Replay replay(Scenario sc, String kernelName, List<Event> events, boolean background) {
+    List<Step> steps = new ArrayList<>();
+    for (Event e : events) steps.add(new Step(e, -1));
+    return replaySteps(sc, kernelName, steps, background);
+  }
+
+  public static Replay replaySteps(Scenario sc, String kernelName, List<Step> steps, boolean background) {
     Scheduler s = new Scheduler();
     Kernel k = KERNELS.getOrDefault(kernelName, REPLAY_KERNELS.get(kernelName)).make(s);
     s.reset(-1, null);
@@ -124,7 +153,15 @@ public final class Harness {
     long w0 = k.work();
     List<String> answers = new ArrayList<>();
     List<Long> per = new ArrayList<>();
-    for (Event e : events) { long w = k.work(); k.send(e); answers.addAll(k.drain()); per.add(k.work() - w); }
+    for (Step st : steps) {
+      long w = k.work();
+      s.reset(st.cancelAt(), st.cancelAt() >= 0 ? st.event() : null);
+      k.send(st.event());
+      List<String> got = k.drain();
+      answers.add(got.isEmpty() ? "<no answer>" : got.get(got.size() - 1));
+      per.add(k.work() - w);
+    }
+    s.reset(-1, null);
     return new Replay(answers, k.work() - w0, per);
   }
 
@@ -180,6 +217,13 @@ public final class Harness {
   /** An editing session on the scenario's first file: a completion at its first inferred member, then three times an
    * edit at the end of the file (a class appended) followed by the same completion, then a completion at the last
    * inferred member, then the unit. A targeted session types the prefix per edit; a whole-file run types everything. */
+  public static List<Step> steps(Scenario sc) {
+    if (sc.requests() != null) return sc.requests();
+    List<Step> r = new ArrayList<>();
+    for (Event e : sweep(sc)) r.add(new Step(e, -1));
+    return r;
+  }
+
   public static List<Event> sweep(Scenario sc) {
     Ast.Source src = sc.sources().get(0);
     Ask first = null, last = null;

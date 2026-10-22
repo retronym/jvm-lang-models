@@ -1,0 +1,10 @@
+// event: completion A Use.f
+// note: I13 under path targeting: Use is typed and case class L skipped, so the typer's burst (equals, hashCode, toString) never happens; the completion of l lists L without it and l.hashCode does not type
+// file: A
+class Int {}
+case class L(a: Int) { def self: L }
+object Use {
+  def l: L
+  def f = l.self
+  def h = l.hashCode
+}

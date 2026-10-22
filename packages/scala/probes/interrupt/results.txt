@@ -5,6 +5,7 @@
    scalac-after             201      0/201      201/203.0
    dotc-metals              201      0/201      201/201.0
    dotc-session             201      0/201      201/201.0
+   dotc-session-path        201      0/201      201/302.8
    dotc-interrupted         201      0/201      201/302.8
    psi                      201      0/201      122/122.0
    reference:
@@ -58,6 +59,7 @@
    scalac-after              16       0/16        12/15.0
    dotc-metals               16       0/16        12/12.0
    dotc-session              16       0/16        12/12.0
+   dotc-session-path         16       0/16        12/18.3
    dotc-interrupted          16       0/16        12/18.3
    psi                       19       0/19        13/13.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6]
@@ -83,6 +85,7 @@
    scalac-after              16      16/16        12/15.0
    dotc-metals               16       0/16        12/12.0
    dotc-session              16       0/16        12/12.0
+   dotc-session-path         16       0/16        12/18.3
    dotc-interrupted          16       0/16        12/18.3
    psi                       19       0/19        12/12.4
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
@@ -120,6 +123,7 @@
    scalac-after              12       0/12        12/16.0
    dotc-metals               12       0/12        12/12.0
    dotc-session              12       0/12        12/12.0
+   dotc-session-path         12       0/12        12/19.5
    dotc-interrupted          12       0/12        12/19.5
    psi                       13       0/13          9/9.3
    reference:
@@ -136,8 +140,18 @@
    scalac-after              11       0/11        22/18.9
    dotc-metals               11       0/11        22/22.0
    dotc-session              11       0/11        22/22.0
+   dotc-session-path         11       5/11        22/17.7
    dotc-interrupted          11       5/11        22/17.7
    psi                       11       0/11        14/12.9
+   dotc-session-path diverges at k = [6, 7, 8, 9, 10]
+    k=6 (event at 'rhs B.x'):
+    answer 1:
+      + error A:A.y: not found: value B
+      + error A:A.z: not found: value B
+    answer 2:
+      + error A:A.y: not found: value B
+      + error A:A.z: not found: value B
+    ... 4 more (--all)
    dotc-interrupted diverges at k = [6, 7, 8, 9, 10]
     k=6 (event at 'rhs B.x'):
     answer 1:
@@ -161,6 +175,7 @@
    scalac-after              17       0/17        17/21.8
    dotc-metals               17       0/17        17/17.0
    dotc-session              17       0/17        17/17.0
+   dotc-session-path         17       0/17        17/26.7
    dotc-interrupted          17       0/17        17/26.7
    psi                       16       0/16        11/11.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 14, 15, 16]
@@ -183,6 +198,7 @@
    scalac-after              14       0/14        14/17.0
    dotc-metals               14       0/14        14/14.0
    dotc-session              14       0/14        14/14.0
+   dotc-session-path         14       0/14        14/22.2
    dotc-interrupted          14       0/14        14/22.2
    psi                       14       0/14        10/10.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -198,6 +214,88 @@
               object Later: bar o
               warning A:Use.foo: method m in Old is deprecated
 
+== path-leave-file: completion B:Client.g
+   I17: a targeted run of A skips Lib, whose completers belong to that run; a request on B starts another run, in which Lib's class completer refuses to run, so Lib.w is not found
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             14       0/14        14/15.0
+   scalac-after              14       0/14        14/15.0
+   dotc-metals               14       0/14        28/28.0
+   dotc-session              14       0/14        28/28.0
+   dotc-session-path         14       9/14        28/25.2
+   dotc-interrupted          14       9/14        28/25.2
+   psi                       14       0/14        10/10.2
+   dotc-session-path diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    k=0 (event at 'class Int'):
+    answer 1:
+      - Int: 
+      + <error: value w is not a member of Lib>: <no members>
+    ... 8 more (--all)
+   dotc-interrupted diverges at k = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    k=0 (event at 'class Int'):
+    answer 1:
+      - Int: 
+      + <error: value w is not a member of Lib>: <no members>
+    ... 8 more (--all)
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              object Use: f x
+              object Lib: v w
+    answer 3: object Client: g
+
+== path-replace-companion: completion A:Use2.g
+   I22: a cancellation inside object L (resumed in the session) poisons it, and it is replaced by a fresh parse re-indexed alone, without the apply and unapply that case class L's desugaring merged into it; Use2's L.apply then fails
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             21       5/21        18/21.8
+   scalac-after              21       0/21        18/21.8
+   dotc-metals               21       0/21        36/36.0
+   dotc-session              21       0/21        36/36.0
+   dotc-session-path         21       0/21        36/27.0
+   dotc-interrupted          21       0/21        36/27.0
+   psi                       28       0/28        18/18.1
+   scalac-before diverges at k = [0, 1, 2, 3, 4]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode toString
+      - object L: apply e extra unapply
+      + class L: a
+      + object L: e extra
+    ... 4 more (--all)
+   reference:
+    answer 1: Int:
+    answer 2: class Int: 
+              class L: a copy equals hashCode toString
+              object L: apply e extra unapply
+              object Use: f
+              object Use2: g
+    answer 3: class Other:
+
+== path-sibling-burst: completion A:Use.f
+   I13 under path targeting: Use is typed and case class L skipped, so the typer's burst (equals, hashCode, toString) never happens; the completion of l lists L without it and l.hashCode does not type
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             18       7/18        14/17.0
+   scalac-after              18       0/18        14/17.0
+   dotc-metals               18       0/18        14/14.0
+   dotc-session              18       0/18        14/14.0
+   dotc-session-path         18       0/18        14/21.2
+   dotc-interrupted          18       0/18        14/21.2
+   psi                       21       0/21        14/14.1
+   scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6]
+    k=0 (event at 'class Int'):
+    answer 2:
+      - class L: a copy equals hashCode self toString
+      - synthetic companions: L
+      - object L (synthetic): apply unapply
+      + class L: a self
+    ... 6 more (--all)
+   reference:
+    answer 1: L: a copy equals hashCode self toString
+    answer 2: class Int: 
+              class L: a copy equals hashCode self toString
+              object Use: f h l
+              synthetic companions: L
+              object L (synthetic): apply unapply
+
 == targeted-consumes-synthetics: completion A:Use.f
    scala/scala#11328 local-case-class-interleaved: a targeted check types the case class and uses up its synthetics; the full check in the same run must still have them
    kernel            safepoints  divergent  work ref/mean
@@ -205,6 +303,7 @@
    scalac-after              18       0/18        14/17.0
    dotc-metals               18       0/18        14/14.0
    dotc-session              18       0/18        14/14.0
+   dotc-session-path         18       0/18        14/21.4
    dotc-interrupted          18       0/18        14/21.4
    psi                       20       0/20        14/14.2
    scalac-before diverges at k = [0, 1, 2, 3, 4, 5, 6, 7]

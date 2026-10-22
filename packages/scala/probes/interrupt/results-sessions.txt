@@ -1,16 +1,116 @@
-== big-file                        6 requests  work after background: fresh 609 session 216 revisions   6   no background: fresh 810 session 417 revisions 248   answers same
-   per request after background: fresh [0, 202, 203, 204, 0, 0] session [0, 6, 6, 6, 195, 3] revisions [0, 0, 0, 0, 0, 6]
-== case-class-completion           6 requests  work after background: fresh  42 session  39 revisions   6   no background: fresh  54 session  51 revisions  18   answers same
-   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 0, 0, 0, 0, 6]
-== case-class-loaded               6 requests  work after background: fresh  42 session  39 revisions   6   no background: fresh  54 session  51 revisions  18   answers same
-   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 0, 0, 0, 0, 6]
-== cycle                           6 requests  work after background: fresh  42 session  39 revisions   9   no background: fresh  54 session  51 revisions  23   answers same
-   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] revisions [0, 1, 1, 1, 0, 6]
-== edit-cross-file                 6 requests  work after background: fresh  30 session  27 revisions  11   no background: fresh  41 session  38 revisions  25   answers same
-   per request after background: fresh [6, 7, 8, 9, 0, 0] session [6, 6, 6, 6, 0, 3] revisions [1, 0, 0, 0, 1, 9]
-== implicit-class                  6 requests  work after background: fresh  57 session  54 revisions   6   no background: fresh  74 session  71 revisions  26   answers same
-   per request after background: fresh [0, 18, 19, 20, 0, 0] session [0, 17, 17, 17, 0, 3] revisions [0, 0, 0, 0, 0, 6]
-== nowarn                          6 requests  work after background: fresh  48 session  35 revisions   6   no background: fresh  62 session  49 revisions  24   answers same
-   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 9, 9, 9, 5, 3] revisions [0, 0, 0, 0, 0, 6]
-== targeted-consumes-synthetics    6 requests  work after background: fresh  48 session  45 revisions   6   no background: fresh  62 session  59 revisions  21   answers same
-   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 14, 14, 14, 0, 3] revisions [0, 0, 0, 0, 0, 6]
+== big-file                        6 requests  work after background: fresh 609 session 216 session-path 216 revisions   6   no background: fresh 810 session 417 session-path 417 revisions 248   answers same
+   per request after background: fresh [0, 202, 203, 204, 0, 0] session [0, 6, 6, 6, 195, 3] session-path [0, 6, 6, 6, 5, 193] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same
+== case-class-completion           6 requests  work after background: fresh  42 session  39 session-path  29 revisions   6   no background: fresh  54 session  51 session-path  41 revisions  18   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] session-path [0, 7, 7, 7, 0, 8] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): DIFFER
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+== case-class-loaded               6 requests  work after background: fresh  42 session  39 session-path  29 revisions   6   no background: fresh  54 session  51 session-path  41 revisions  18   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] session-path [0, 7, 7, 7, 0, 8] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): DIFFER
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+== cycle                           6 requests  work after background: fresh  42 session  39 session-path  37 revisions   9   no background: fresh  54 session  51 session-path  49 revisions  23   answers same
+   per request after background: fresh [0, 13, 14, 15, 0, 0] session [0, 12, 12, 12, 0, 3] session-path [0, 11, 11, 11, 1, 3] revisions [0, 1, 1, 1, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same
+== edit-cross-file                 6 requests  work after background: fresh  30 session  27 session-path  27 revisions  11   no background: fresh  41 session  38 session-path  38 revisions  25   answers same
+   per request after background: fresh [6, 7, 8, 9, 0, 0] session [6, 6, 6, 6, 0, 3] session-path [6, 6, 6, 6, 0, 3] revisions [1, 0, 0, 0, 1, 9]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same
+== implicit-class                  6 requests  work after background: fresh  57 session  54 session-path  48 revisions   6   no background: fresh  74 session  71 session-path  65 revisions  26   answers same
+   per request after background: fresh [0, 18, 19, 20, 0, 0] session [0, 17, 17, 17, 0, 3] session-path [0, 14, 14, 14, 0, 6] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same
+== nowarn                          6 requests  work after background: fresh  48 session  35 session-path  33 revisions   6   no background: fresh  62 session  49 session-path  47 revisions  24   answers same
+   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 9, 9, 9, 5, 3] session-path [0, 8, 8, 8, 5, 4] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same
+== path-leave-file                 3 requests  work after background: fresh  14 session  12 session-path  12 revisions   0   no background: fresh  28 session  26 session-path  26 revisions  18   answers same
+   per request after background: fresh [11, 3, 0] session [6, 6, 0] session-path [6, 6, 0] revisions [0, 0, 0]
+   dotc-session-naive (after background): DIFFER
+    completion B:Client.g:
+     answer 1:
+       - Int: 
+       + <error: value w is not a member of Lib>: <no members>
+    loadedTyped B:
+     answer 1:
+       + error B:Client.g: value w is not a member of Lib
+   dotc-session-path-naive (after background): DIFFER
+    completion B:Client.g:
+     answer 1:
+       - Int: 
+       + <error: value w is not a member of Lib>: <no members>
+    loadedTyped B:
+     answer 1:
+       + error B:Client.g: value w is not a member of Lib
+== path-replace-companion          4 requests  work after background: fresh  17 session  17 session-path  20 revisions   0   no background: fresh  35 session  35 session-path  38 revisions  21   answers same
+   per request after background: fresh [17, 0, 0, 0] session [14, 0, 3, 0] session-path [8, 6, 4, 2] revisions [0, 0, 0, 0]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): DIFFER
+    completion A:Use2.g:
+     answer 1:
+       - Int: 
+       + <error: value apply is not a member of L>: <no members>
+    loadedTyped A:
+     answer 1:
+       + error A:Use2.g: value apply is not a member of L
+== path-sibling-burst              6 requests  work after background: fresh  48 session  45 session-path  35 revisions   6   no background: fresh  62 session  59 session-path  49 revisions  20   answers same
+   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 14, 14, 14, 0, 3] session-path [0, 9, 9, 9, 0, 8] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): DIFFER
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    edit A then completion A:Use.f:
+     answer 1:
+       - L: a copy equals hashCode self toString
+       + L: a copy self
+    completion A:Use.h:
+     answer 1:
+       - Int: <no members>
+       + <error: value hashCode is not a member of L>: <no members>
+    loadedTyped A:
+     answer 1:
+       + error A:Use.h: value hashCode is not a member of L
+== targeted-consumes-synthetics    6 requests  work after background: fresh  48 session  45 session-path  33 revisions   6   no background: fresh  62 session  59 session-path  47 revisions  21   answers same
+   per request after background: fresh [0, 15, 16, 17, 0, 0] session [0, 14, 14, 14, 0, 3] session-path [0, 8, 8, 8, 0, 9] revisions [0, 0, 0, 0, 0, 6]
+   dotc-session-naive (after background): same
+   dotc-session-path-naive (after background): same

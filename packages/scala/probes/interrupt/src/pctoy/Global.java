@@ -23,6 +23,9 @@ public abstract class Global {
     public int defRunId;
     /** scalac's `SynthesizedMethods` attachment: synthetic trees added by a targeted check, kept for the full one. */
     public List<String> synthesized; public int synthesizedRun = -1;
+    /** Members another declaration's desugaring merged into this one (a case class's `apply`/`unapply` into its
+     * companion, `copy` into itself): dotc merges them into the tree, so a fresh symbol for the tree lacks them. */
+    public List<Sym> merged = new ArrayList<>();
     Sym(String name, Kind kind, String file, int id) { this.name = name; this.kind = kind; this.file = file; this.id = id; }
     public boolean isTerm() { return kind == Kind.OBJECT || kind == Kind.DEF; }
     @Override public String toString() { return name + "#" + id; }
@@ -61,14 +64,19 @@ public abstract class Global {
     public boolean suppressionsKnown;
     public Map<String, List<String>> bodies = new LinkedHashMap<>();
     public boolean typed;
-    /** A session's typed prefix: the declarations typed so far by targeted runs (dotc spike). */
-    public int typedUpTo;
+    /** A session's typed set: the declarations typed so far by targeted runs, by index (dotc spike: the typed
+     * statements of `Session`; the others are its `SkippedStat`s). */
+    public final BitSet typedDecls = new BitSet();
+    /** The run the session's targeted typing belongs to, or -1: a later run cannot resume it. */
+    public int sessionRun = -1;
+    /** The declaration being typed by `typeDecls`, or -1. */
+    public int typing = -1;
     public Target target;
     public List<Sym> implicitCache; public int implicitCacheRun = -1;
     public String name() { return source.name(); }
     void reset(Ast.Source s) {
       source = s; synthetics.clear(); problems.clear(); suspended.clear(); suppressions.clear();
-      suppressionsKnown = false; bodies = new LinkedHashMap<>(); typed = false; typedUpTo = 0; target = null; implicitCache = null;
+      suppressionsKnown = false; bodies = new LinkedHashMap<>(); typed = false; typedDecls.clear(); sessionRun = -1; typing = -1; target = null; implicitCache = null;
     }
   }
 
@@ -140,7 +148,7 @@ public abstract class Global {
     return switch (d.kind()) { case "object" -> Kind.OBJECT; case "trait" -> Kind.TRAIT; default -> Kind.CLASS; };
   }
 
-  private void enterDecl(Unit u, Ast.Decl d) {
+  void enterDecl(Unit u, Ast.Decl d) {
     Kind kind = kindOf(d);
     Sym existing = kind == Kind.OBJECT ? toplevel.term(d.name()) : toplevel.type(d.name());
     Sym sym;
@@ -153,13 +161,13 @@ public abstract class Global {
     }
     sym.decl = d; sym.mods = d.mods(); sym.synthetic = false; sym.defRunId = runId; sym.locked = false;
     sym.info = classCompleter(u, sym);
-    sym.synthesized = null;
+    sym.synthesized = null; sym.merged = new ArrayList<>();
     if (d.isImplicit()) enterImplicitWrapper(u, sym, d);   // the namer enters the factory (enterClassDef)
   }
 
   /** A case class without an `object` of its own gets a synthetic companion; both get `apply` and `unapply`
    * whose trees wait in `unit.synthetics` until the typer adds them to the companion's body. */
-  private void ensureCompanion(Unit u, Ast.Decl d) {
+  void ensureCompanion(Unit u, Ast.Decl d) {
     Sym cls = toplevel.type(d.name());
     Sym companion = toplevel.term(d.name());
     if (companion == null || !companion.file.equals(u.name()) || companion.kind != Kind.OBJECT) {
@@ -170,16 +178,20 @@ public abstract class Global {
       toplevel.enter(companion);
       u.synthetics.put(companion, d.pos());
     }
+    companion.merged.removeIf(s -> s.name.equals("apply") || s.name.equals("unapply"));
+    cls.merged.removeIf(s -> s.name.equals("copy"));
     for (String m : List.of("apply", "unapply")) {
       Sym s = newSym(m, Kind.DEF, u.name());
       s.owner = companion; s.synthetic = true; s.defRunId = runId;
       s.info = (Completer) self -> Type.of(cls);
       u.synthetics.put(s, d.pos());
+      companion.merged.add(s);
     }
     Sym copy = newSym("copy", Kind.DEF, u.name());              // Namers.addCopyMethod: the namer's synthetic
     copy.owner = cls; copy.synthetic = true; copy.defRunId = runId;
     copy.info = (Completer) self -> Type.of(cls);
     u.synthetics.put(copy, d.pos());
+    cls.merged.add(copy);
   }
 
   /** scalac's `enterImplicitWrapper`, run each time the enclosing template is typed: the factory method of
@@ -209,6 +221,10 @@ public abstract class Global {
    * ends, dotc only when it returns. On a cycle scalac gives the symbol `ErrorType`, dotc leaves it lazy. */
   public Object force(Sym s) {
     if (!(s.info instanceof Completer c)) return s.info;
+    if (s.defRunId != runId && refusesAcrossRuns()) {   // dotc's Namer.Completer in a later run: UnspecifiedErrorType
+      s.info = s.kind == Kind.DEF ? Type.err("unspecified") : new ClassInfo();
+      return s.info;
+    }
     if (s.locked) {
       if (policy.unlockOnUnwind) s.info = Type.err("cyclic reference involving " + s.name);
       throw new CyclicReference(s.name);
@@ -224,6 +240,10 @@ public abstract class Global {
       if (ok || policy.unlockOnUnwind) s.locked = false;
     }
   }
+
+  /** dotc: a Namer completer refuses to run in a run later than the one that indexed it (finding I7), and the
+   * symbol gets `UnspecifiedErrorType` (a class: no members). scalac re-enters instead. */
+  protected boolean refusesAcrossRuns() { return false; }
 
   public ClassInfo classInfo(Sym cls) { return (ClassInfo) force(cls); }
 
@@ -245,17 +265,17 @@ public abstract class Global {
       }
       if (d.isCase()) for (Ast.Param p : d.params()) {
         Sym m = newSym(p.name(), Kind.DEF, u.name());
-        m.owner = cls; m.member = new Ast.Member(Set.of(), p.name(), p.tpe(), null, -1);
+        m.owner = cls; m.defRunId = runId; m.member = new Ast.Member(Set.of(), p.name(), p.tpe(), null, -1);
         m.info = memberCompleter(u, m);
         ci.decls.enter(m);
       }
       for (Ast.Member mem : d.members()) {
         Sym m = newSym(mem.name(), Kind.DEF, u.name());
-        m.owner = cls; m.member = mem; m.mods = mem.mods();
+        m.owner = cls; m.defRunId = runId; m.member = mem; m.mods = mem.mods();
         m.info = memberCompleter(u, m);
         ci.decls.enter(m);
       }
-      for (Sym s : u.synthetics.keySet()) if (s.owner == cls) ci.decls.enter(s);
+      for (Sym s : cls.merged) ci.decls.enter(s);
       return ci;
     };
   }
@@ -371,16 +391,20 @@ public abstract class Global {
     }
   }
 
-  /** Targeted typing that resumes: type the declarations from the unit's typed prefix up to `upTo` (inclusive), in
-   * the same run, extending the prefix; typing the last one finishes the unit. */
-  public void typeUnitUpTo(Unit u, int upTo) {
-    for (int i = u.typedUpTo; i <= upTo && i < u.source.decls().size(); i++) {
+  /** Targeted typing that resumes: type these declarations of the unit (by index, in the order given) that are not
+   * typed yet, in the same run, adding them to the typed set; typing the last one finishes the unit. On a cancellation
+   * `u.typing` is left at the declaration it unwound. */
+  public void typeDecls(Unit u, List<Integer> idxs) {
+    for (int i : idxs) {
+      if (i >= u.source.decls().size() || u.typedDecls.get(i)) continue;
       Ast.Decl d = u.source.decls().get(i);
+      u.typing = i;
       typeDecl(u, d, u.bodies);
       addSynthetics(u, d.pos(), u.bodies);
-      u.typedUpTo = i + 1;
+      u.typedDecls.set(i);
     }
-    if (u.typedUpTo >= u.source.decls().size() && !u.typed) { reportSuspended(u); u.typed = true; }
+    u.typing = -1;
+    if (u.typedDecls.cardinality() >= u.source.decls().size() && !u.typed) { reportSuspended(u); u.typed = true; }
   }
 
   private void typeDecl(Unit u, Ast.Decl d, Map<String, List<String>> bodies) {
@@ -407,7 +431,7 @@ public abstract class Global {
       else finishMethodSynthesis(u, cls, ci, body);
     }
     counters.classesTyped++;
-    bodies.put(d.kind() + " " + d.name(), body);
+    bodies.computeIfAbsent(d.kind() + " " + d.name(), k -> new ArrayList<>()).addAll(body);  // after the merged synthetics typed with the case class
     signalDone(u, "class " + d.name(), null);
   }
 
@@ -421,16 +445,30 @@ public abstract class Global {
       }
       return;
     }
+    List<String> added = burst(u, cls, ci, true);
+    body.addAll(added);
+    if (u.target != null && policy.keepSyntheticsForTargeted) { cls.synthesized = added; cls.synthesizedRun = runId; }
+  }
+
+  private List<String> burst(Unit u, Sym cls, ClassInfo ci, boolean signal) {
     List<String> added = new ArrayList<>();
     for (String name : List.of("equals", "hashCode", "toString")) {
       Sym s = newSym(name, Kind.DEF, u.name());
-      s.owner = cls; s.synthetic = true;
+      s.owner = cls; s.synthetic = true; s.defRunId = runId;
       s.info = Type.builtin(name.equals("equals") ? "Boolean" : name.equals("hashCode") ? "Int" : "String");
       ci.decls.enter(s);
-      body.add(name); added.add(name);
-      signalDone(u, "synth " + cls.name + "." + name, null);
+      added.add(name);
+      if (signal) signalDone(u, "synth " + cls.name + "." + name, null);
     }
-    if (u.target != null && policy.keepSyntheticsForTargeted) { cls.synthesized = added; cls.synthesizedRun = runId; }
+    return added;
+  }
+
+  /** The case-class burst outside the typer, for a class whose declaration a targeted run skipped; the trees are
+   * kept for when the class is typed, as a targeted check's are (dotc spike, finding I13: `children` completes the
+   * unit's classes in interactive mode, the presentation compiler completes the applies). */
+  protected void synthesizeAhead(Unit u, Sym cls, ClassInfo ci) {
+    if (ci.decls.term("equals") != null) return;
+    cls.synthesized = burst(u, cls, ci, false); cls.synthesizedRun = runId;
   }
 
   /** `addSynthetics`: the synthetic trees from declaration `pos` join their owner's body and are consumed,

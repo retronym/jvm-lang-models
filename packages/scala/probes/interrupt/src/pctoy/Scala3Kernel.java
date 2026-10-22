@@ -12,11 +12,28 @@ import pctoy.Core.*;
  * With `interruptible`, the hypothetical: an interrupt is delivered at a checkpoint, the job unwinds, and
  * `withSharedCompiler` keeps the driver (`InterruptException => default`). */
 public final class Scala3Kernel extends Global implements Kernel {
+  /** What a session's targeted run types: every declaration up to the one containing the target (the spike's
+   * first version), or only that one (`Typer.typedStats` skipping the statements off the path to the target, §2). */
+  public enum Targeting { PREFIX, PATH }
+
+  /** The spike's fixes for what targeting and resumption broke, each a finding; off reproduces the bug.
+   * `forceSiblingFacts` (I13): a skipped case class gets the typer's burst (`equals`, `hashCode`, `toString`) when
+   * its info is asked for. `completeSkippedOnLeave` (I17): before a run of another file, the skipped declarations'
+   * signatures are completed in the session's run (`completeSymbolsOf`). `mergeOnReplace` (I22): a declaration
+   * replaced after a cancellation is re-indexed with the desugaring that merges a case class into its companion. */
+  public record Fixes(boolean forceSiblingFacts, boolean completeSkippedOnLeave, boolean mergeOnReplace) {
+    public static final Fixes ALL = new Fixes(true, true, true);
+    public static final Fixes NONE = new Fixes(false, false, false);
+  }
+
   private final String name;
   private final boolean interruptible;
-  /** The session: a completion types the file up to its target and a later one on the same content resumes
-   * the same run from the typed prefix (the second spike). */
+  /** The session: a completion types the file along its target and a later one on the same content resumes
+   * the same run (the second spike); `targeting` says how much it types. */
   private final boolean session;
+  private final Targeting targeting;
+  private final Fixes fixes;
+  private Unit sessionUnit;
   private final Deque<Event> queue = new ArrayDeque<>();
   private final List<String> answers = new ArrayList<>();
   private final Map<String, Ast.Source> sources = new LinkedHashMap<>();
@@ -27,8 +44,15 @@ public final class Scala3Kernel extends Global implements Kernel {
   public Scala3Kernel(String name, boolean interruptible, Scheduler scheduler) { this(name, interruptible, false, scheduler); }
 
   public Scala3Kernel(String name, boolean interruptible, boolean session, Scheduler scheduler) {
-    super(Policy.DOTC, scheduler); this.name = name; this.interruptible = interruptible; this.session = session;
+    this(name, interruptible, session, Targeting.PREFIX, Fixes.ALL, scheduler);
   }
+
+  public Scala3Kernel(String name, boolean interruptible, boolean session, Targeting targeting, Fixes fixes, Scheduler scheduler) {
+    super(Policy.DOTC, scheduler); this.name = name; this.interruptible = interruptible; this.session = session;
+    this.targeting = targeting; this.fixes = fixes;
+  }
+
+  @Override protected boolean refusesAcrossRuns() { return true; }
 
   @Override public String name() { return name; }
   @Override public long work() { return counters.total(); }
@@ -56,9 +80,12 @@ public final class Scala3Kernel extends Global implements Kernel {
     inJob = true;
     try {
       Unit u = units.get(file);
-      if (session && u != null && u.source.text().equals(s.text()) && u.typedUpTo > 0 && !u.typed) {
-        typeUnitUpTo(u, s.decls().size() - 1);           // finish the session's run instead of starting over
+      if (session && live(u) && u.source.text().equals(s.text())) {
+        List<Integer> all = new ArrayList<>();
+        for (int i = 0; i < s.decls().size(); i++) all.add(i);
+        typeDecls(u, all);                                 // finish the session's run instead of starting over
       } else {
+        leave(file);
         newRun(List.of(s));
         u = units.get(file);
         typeUnit(u, null);
@@ -68,8 +95,9 @@ public final class Scala3Kernel extends Global implements Kernel {
     } finally { inJob = false; }
   }
 
-  /** `runUpTo`: type the file up to the declaration that contains the target, resuming the session's run when
-   * the content is unchanged; without a session, the whole file. */
+  /** `runUpTo`: type the declaration that contains the target (with `PREFIX`, every one before it too), resuming
+   * the session's run when the content is unchanged and the run is still the current one (one `Session` per
+   * driver: a run of another file ends it); without a session, the whole file. */
   private void runUpTo(String file, String decl) {
     if (!session) { run(file); return; }
     Ast.Source s = sources.get(file);
@@ -80,13 +108,71 @@ public final class Scala3Kernel extends Global implements Kernel {
       Unit u = units.get(file);
       boolean unchanged = u != null && u.source.text().equals(s.text());
       if (unchanged && u.typed && file.equals(lastCompiled)) return;   // CachingDriver: the last whole-file run serves every target
-      if (!unchanged || u.typed) {
-        newRun(List.of(s));                                 // content changed, or an older whole-file run: fresh run
+      if (!unchanged || u.typed || !live(u)) {
+        leave(file);
+        newRun(List.of(s));                                 // content changed, an older whole-file run, or another file's run since: fresh run
         u = units.get(file);
+        u.sessionRun = runId; sessionUnit = u;
       }
-      typeUnitUpTo(u, idx);                                 // resume the session's run; nothing if the prefix covers the target
+      List<Integer> idxs = new ArrayList<>();
+      for (int i = targeting == Targeting.PREFIX ? 0 : idx; i <= idx; i++) idxs.add(i);
+      typeDecls(u, idxs);                                   // resume the session's run; nothing if the target's declaration is typed
       lastCompiled = file; lastCompiledText = s.text();
     } finally { inJob = false; }
+  }
+
+  /** The session's run is the current run and the unit is not finished: its skipped declarations can be resumed. */
+  private boolean live(Unit u) { return u != null && u.sessionRun == runId && !u.typed; }
+
+  /** Before a run of another file (I17): the skipped declarations' signatures are completed in the session's run,
+   * since a Namer completer refuses a later run. Bodies stay untyped. */
+  private void leave(String file) {
+    Unit u = sessionUnit;
+    if (u == null || u.name().equals(file) || !live(u) || !fixes.completeSkippedOnLeave) return;
+    for (int i = 0; i < u.source.decls().size(); i++) {
+      if (u.typedDecls.get(i)) continue;
+      ClassInfo ci = classInfo(symOf(u.source.decls().get(i)));
+      for (Sym m : ci.decls.syms()) try { typeOf(m); } catch (CyclicReference e) { /* the typer reports it */ }
+    }
+  }
+
+  private Sym symOf(Ast.Decl d) { return d.isObject() ? toplevel.term(d.name()) : toplevel.type(d.name()); }
+
+  /** I13: a case class whose declaration the session skipped gets its burst when its members are asked for. */
+  @Override public ClassInfo classInfo(Sym cls) {
+    ClassInfo ci = super.classInfo(cls);
+    if (session && fixes.forceSiblingFacts && cls.decl != null && cls.decl.isCase() && !cls.decl.isObject() && !cls.unlinked) {
+      Unit u = units.get(cls.file);
+      int i = cls.decl.pos();
+      if (live(u) && !u.typedDecls.get(i) && u.typing != i) synthesizeAhead(u, cls, ci);
+    }
+    return ci;
+  }
+
+  /** Poisoned statements (I8): a cancellation unwound the typing of `u.typing`, and of any declaration whose
+   * symbols it left `Touched`; each is replaced by a fresh parse, re-indexed alone (I22: without the companion
+   * merge, unless `mergeOnReplace`), and skipped again. */
+  private void recover(Unit u) {
+    for (int i = 0; i < u.source.decls().size(); i++) {
+      Ast.Decl d = u.source.decls().get(i);
+      if (u.typedDecls.get(i) || (i != u.typing && !touched(symOf(d)))) continue;
+      enterDecl(u, d);                                       // the same text, so the same tree; a fresh symbol
+      if (fixes.mergeOnReplace) {
+        Sym cc = toplevel.type(d.name());
+        if (cc != null && cc.decl != null && cc.decl.isCase() && cc.file.equals(u.name())) {
+          u.synthetics.values().removeIf(p -> p == cc.decl.pos());
+          ensureCompanion(u, cc.decl);
+        }
+      }
+    }
+    u.typing = -1;
+  }
+
+  private static boolean touched(Sym s) {
+    if (s == null) return false;
+    if (s.locked) return true;
+    if (s.info instanceof ClassInfo ci) for (Sym m : ci.decls.syms()) if (m.locked) return true;
+    return false;
   }
 
   /** `InteractiveDriver.cleanup`: a symbol of the unit still lazy after the run gets an error type. */
@@ -111,7 +197,10 @@ public final class Scala3Kernel extends Global implements Kernel {
   /** `withSharedCompiler`: an interrupt yields the default answer and keeps the driver. */
   private void job(Runnable thunk, Ask ask) {
     try { thunk.run(); }
-    catch (Cancelled c) { if (ask != null) answers.add("<interrupted>"); }
+    catch (Cancelled c) {
+      if (session) for (Unit u : units.values()) if (live(u)) recover(u);
+      if (ask != null) answers.add("<interrupted>");
+    }
   }
 
   private String serve(Ask ask) {
