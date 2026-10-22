@@ -177,6 +177,18 @@ index 2fdf622325..2b1214bb04 100644
  
    case class SubPhase(name: String):
      override def toString: String = name
+diff --git a/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala b/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
+index fa671e836b..6712b8086a 100644
+--- a/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
++++ b/compiler/src/dotty/tools/dotc/config/ScalaSettings.scala
+@@ -549,6 +549,7 @@ private sealed trait YSettings:
+   val YcheckAllPatmat: Setting[Boolean] = BooleanSetting(ForkSetting, "Ycheck-all-patmat", "Check exhaustivity and redundancy of all pattern matching (used for testing the algorithm).")
+   val YcheckConstraintDeps: Setting[Boolean] = BooleanSetting(ForkSetting, "Ycheck-constraint-deps", "Check dependency tracking in constraints (used for testing the algorithm).")
+   val YretainTrees: Setting[Boolean] = BooleanSetting(ForkSetting, "Yretain-trees", "Retain trees for top-level classes, accessible from ClassSymbol#tree")
++  val YnoTargetedRequests: Setting[Boolean] = BooleanSetting(ForkSetting, "Yno-targeted-requests", "In interactive mode, type the whole file for every request instead of only the path to the request's position (completion, hover, definition, signature help, expected type).")
+   val YshowTreeIds: Setting[Boolean] = BooleanSetting(ForkSetting, "Yshow-tree-ids", "Uniquely tag all tree nodes in debugging output.")
+   val YfromTastyIgnoreList: Setting[List[String]] = MultiStringSetting(ForkSetting, "Yfrom-tasty-ignore-list", "file", "List of `tasty` files in jar files that will not be loaded when using -from-tasty.")
+   val YlegacyLazyVals: Setting[Boolean] = BooleanSetting(ForkSetting, "Ylegacy-lazy-vals", "Use legacy (pre 3.3.0) implementation of lazy vals.")
 diff --git a/compiler/src/dotty/tools/dotc/core/Annotations.scala b/compiler/src/dotty/tools/dotc/core/Annotations.scala
 index 36c16d9769..addd278b98 100644
 --- a/compiler/src/dotty/tools/dotc/core/Annotations.scala
@@ -435,7 +447,7 @@ index da6d02b5ad..c67d7b8b0a 100644
        if qual.typeOpt.isExactlyNothing || qual.typeOpt.isNullType then
          Map.empty
 diff --git a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
-index 5b78dc804b..d796bd5629 100644
+index 5b78dc804b..91da171a09 100644
 --- a/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 +++ b/compiler/src/dotty/tools/dotc/interactive/InteractiveDriver.scala
 @@ -7,12 +7,13 @@ import scala.collection.*
@@ -485,7 +497,20 @@ index 5b78dc804b..d796bd5629 100644
  
    private val myInitCtx: Context = {
      val rootCtx = initCtx.fresh.addMode(Mode.ReadPositions).addMode(Mode.Interactive)
-@@ -78,37 +101,321 @@ class InteractiveDriver(
+@@ -61,6 +84,12 @@ class InteractiveDriver(
+   }
+ 
+   private var myCtx: Context = myInitCtx
++
++  /** Does `runUpTo` type only the path to its target? Off with
++   *  `-Yno-targeted-requests`, in which case every request types the whole
++   *  file as `run` does: the gate on the behaviour of this branch.
++   */
++  val targetedRequests: Boolean = !myInitCtx.settings.YnoTargetedRequests.value(using myInitCtx)
+   def currentCtx: Context = myCtx
+ 
+   private val compiler: Compiler = new InteractiveCompiler
+@@ -78,37 +107,322 @@ class InteractiveDriver(
  
    def run(uri: URI, sourceCode: String): List[Diagnostic] = run(uri, SourceFile.virtual(uri, sourceCode))
  
@@ -561,7 +586,8 @@ index 5b78dc804b..d796bd5629 100644
 +   *  tree use `run` instead.
 +   */
 +  def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
-+    mySession match
++    if !targetedRequests then run(uri, source)
++    else mySession match
 +      case s: Session if s.uri == uri && s.source.textContent() == source.textContent() =>
 +        // A run that had a completion unwound by an exception of unknown
 +        // effect (not a cycle, not a cancellation) holds state nothing should
@@ -811,7 +837,7 @@ index 5b78dc804b..d796bd5629 100644
      }
    }
  
-@@ -140,13 +447,15 @@ class InteractiveDriver(
+@@ -140,13 +454,15 @@ class InteractiveDriver(
     *  of a previous run. Note that typed trees can have untyped or partially
     *  typed children if the source contains errors.
     */
@@ -829,7 +855,7 @@ index 5b78dc804b..d796bd5629 100644
            t.symbol.annotations.foreach { annot =>
              /* In some cases annotations are used on themself (possibly larger cycles).
              *  This is the case with the java.lang.annotation.Target annotation, would end
-@@ -178,3 +487,6 @@ class InteractiveDriver(
+@@ -178,3 +494,6 @@ class InteractiveDriver(
      run.compileUnits(Nil, myCtx)
    }
  }
@@ -1043,7 +1069,7 @@ index d85b5bcc1b..55af9091a2 100644
          val stat1 = typed(stat)(using ctx.exprContext(stat, exprOwner))
          if !Linter.warnOnInterestingResultInStatement(stat1) then
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala b/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
-index b941b4cf7c..6695a188f6 100644
+index b941b4cf7c..f40a8ba0e5 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
 +++ b/presentation-compiler/src/main/dotty/tools/pc/CachingDriver.scala
 @@ -5,11 +5,11 @@ import java.net.URI
@@ -1067,7 +1093,7 @@ index b941b4cf7c..6695a188f6 100644
  
  /** CachingDriver is a wrapper class that provides a compilation cache for
   *  InteractiveDriver. CachingDriver skips running compilation if
-@@ -43,17 +44,36 @@ class CachingDriver private (
+@@ -43,17 +44,38 @@ class CachingDriver private (
      sourcePackage: CachedLogicalPackage
  ) extends InteractiveDriver(settings, sourcePackage):
  
@@ -1096,16 +1122,79 @@ index b941b4cf7c..6695a188f6 100644
 +   *  whole file.
 +   */
 +  override def runUpTo(uri: URI, source: SourceFile, target: Span): List[Diagnostic] =
-+    lastCompiledURI = null
-+    val diags = super.runUpTo(uri, source, target)
-+    if isFullyTyped(uri) then
-+      lastCompiledURI = uri
-+      previousDiags = diags
-+    diags
++    if !targetedRequests then run(uri, source)
++    else
++      lastCompiledURI = null
++      val diags = super.runUpTo(uri, source, target)
++      if isFullyTyped(uri) then
++        lastCompiledURI = uri
++        previousDiags = diags
++      diags
 +
    def freshDriver(): InteractiveDriver =
      new InteractiveDriver(settings, sourcePackage)
  
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/HoverProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/HoverProvider.scala
+index cae32298fd..4f9af53796 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/HoverProvider.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/HoverProvider.scala
+@@ -22,6 +22,7 @@ import dotty.tools.dotc.core.Types.*
+ import dotty.tools.dotc.interactive.Interactive
+ import dotty.tools.dotc.interactive.InteractiveDriver
+ import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
+ import dotty.tools.dotc.util.SourcePosition
+ import dotty.tools.pc.printer.ShortenedTypePrinter
+ import dotty.tools.pc.printer.ShortenedTypePrinter.IncludeDefaultParam
+@@ -38,7 +39,8 @@ object HoverProvider:
+     val uri = params.uri().nn
+     val text = params.text().nn
+     val sourceFile = SourceFile.virtual(uri, text)
+-    driver.run(uri, sourceFile)
++    // only the path to the position is typed (unless -Yno-targeted-requests)
++    driver.runUpTo(uri, sourceFile, Span(params.offset()))
+     val unit = driver.compilationUnits.get(uri)
+ 
+     given ctx: Context =
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/InferExpectedType.scala b/presentation-compiler/src/main/dotty/tools/pc/InferExpectedType.scala
+index ab3bad986a..022cc71a3b 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/InferExpectedType.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/InferExpectedType.scala
+@@ -27,7 +27,8 @@ class InferExpectedType(
+   val code: String = params.text()
+ 
+   val sourceFile = SourceFile.virtual(uri, code)
+-  driver.run(uri, sourceFile)
++  // only the path to the position is typed (unless -Yno-targeted-requests)
++  driver.runUpTo(uri, sourceFile, Span(params.offset()))
+ 
+   val ctx = driver.currentCtx
+   val pos = driver.sourcePosition(params)
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
+index 1e6cb55787..c4b7c721ee 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/PcDefinitionProvider.scala
+@@ -19,6 +19,7 @@ import dotty.tools.dotc.interactive.Interactive
+ import dotty.tools.dotc.interactive.Interactive.Include
+ import dotty.tools.dotc.interactive.InteractiveDriver
+ import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
+ import dotty.tools.dotc.util.SourcePosition
+ import dotty.tools.io.FileExtension
+ import dotty.tools.pc.utils.InteractiveEnrichments.*
+@@ -43,10 +44,8 @@ class PcDefinitionProvider(
+     val uri = params.uri().nn
+     val text = params.text().nn
+     val filePath = Paths.get(uri)
+-    driver.run(
+-      uri,
+-      SourceFile.virtual(filePath.toString, text)
+-    )
++    // only the path to the position is typed (unless -Yno-targeted-requests)
++    driver.runUpTo(uri, SourceFile.virtual(filePath.toString, text), Span(params.offset()))
+ 
+     val pos = driver.sourcePosition(params)
+     val path =
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala b/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
 index aa6237a99e..bc3f98d6da 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/Scala3CompilerAccess.scala
@@ -1150,6 +1239,28 @@ index aa6237a99e..bc3f98d6da 100644
    /** Handle the exception in order to make sure that we retry immediately.
     *  Otherwise, we will wait until the end of the timeout, which is 20s by
     *  default.
+diff --git a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
+index b58ca32981..7a9ec197a8 100644
+--- a/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
++++ b/presentation-compiler/src/main/dotty/tools/pc/SignatureHelpProvider.scala
+@@ -12,6 +12,7 @@ import dotty.tools.dotc.interactive.Interactive
+ import dotty.tools.dotc.interactive.InteractiveDriver
+ import dotty.tools.dotc.util.Signatures
+ import dotty.tools.dotc.util.SourceFile
++import dotty.tools.dotc.util.Spans.Span
+ import dotty.tools.pc.printer.ShortenedTypePrinter
+ import dotty.tools.pc.printer.ShortenedTypePrinter.IncludeDefaultParam
+ import dotty.tools.pc.utils.InteractiveEnrichments.*
+@@ -28,7 +29,8 @@ object SignatureHelpProvider:
+     val uri = params.uri().nn
+     val text = params.text().nn
+     val sourceFile = SourceFile.virtual(uri, text)
+-    driver.run(uri.nn, sourceFile)
++    // only the path to the position is typed (unless -Yno-targeted-requests)
++    driver.runUpTo(uri.nn, sourceFile, Span(params.offset()))
+ 
+     driver.compilationUnits.get(uri) match
+       case Some(unit) =>
 diff --git a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala b/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
 index 93316cc544..ce003c0b87 100644
 --- a/presentation-compiler/src/main/dotty/tools/pc/completions/CompletionProvider.scala
@@ -2350,10 +2461,10 @@ index 0000000000..32a2652754
 +          println(s"[cycle-measure] $name: ${code.linesIterator.size} lines, $requests completions, $fresh runs, ${ms}ms total (max ${maxMs}ms), $empty empty, $failed failed; cyclic references prevented: $cycles (${cyclic.toList.sortBy(-_._2).take(8).mkString(", ")}); completions unwound: $unwound")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
 new file mode 100644
-index 0000000000..c22489457d
+index 0000000000..e159a4a7e9
 --- /dev/null
 +++ b/presentation-compiler/test/dotty/tools/pc/tests/completion/SessionOracleSuite.scala
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,159 @@
 +package dotty.tools.pc.tests.completion
 +
 +import java.io.File
@@ -2490,6 +2601,22 @@ index 0000000000..c22489457d
 +          check(step, "recheck", p, idents.find(_._1 == p).map(_._2).getOrElse("?"))
 +      println(f"[oracle $rel seed=$seed] ${idents.size} identifiers, $requests requests (+$recheck rechecks each), $fresh fresh runs, $cancelled cancellations landed; whole-file oracle $tWhole%.0f ms, session ${(System.nanoTime() - t0) / 1e6 - tWhole}%.0f ms")
 +    finally dotty.tools.dotc.Run.typerCheckpointMask = mask
++
++  /** The gate: with `-Yno-targeted-requests` a `runUpTo` types the whole
++   *  file, as `run` does, and leaves no skipped statement.
++   */
++  @Test def `the-knob-turns-targeting-off` =
++    val rel = "core/classfile/ByteCodecs.scala"
++    val root = sourcesRoot.getOrElse(throw new AssertionError("compiler sources not found"))
++    val path = root.resolve(rel); val content = Files.readString(path); val uri = path.toUri
++    val source = SourceFile.virtual(uri, content)
++    val target = Span(content.indexOf("val dstlen") + 4)
++    val on = newDriver(); on.runUpTo(uri, source, target)
++    val off = new InteractiveDriver(settings :+ "-Yno-targeted-requests", CachedLogicalPackage.none); off.runUpTo(uri, source, target)
++    println(s"[knob] targeted: ${on.targetedRequests}, skipped ${on.untypedSpans(uri).size}; -Yno-targeted-requests: ${off.targetedRequests}, skipped ${off.untypedSpans(uri).size}, fully typed ${off.isFullyTyped(uri)}")
++    org.junit.Assert.assertTrue("targeting is on by default and skips something", on.targetedRequests && on.untypedSpans(uri).nonEmpty)
++    org.junit.Assert.assertTrue("-Yno-targeted-requests types the whole file", !off.targetedRequests && off.untypedSpans(uri).isEmpty && off.compilationUnits.contains(uri))
++    org.junit.Assert.assertEquals(describe(on, uri, target.start), describe(off, uri, target.start))
 +
 +  @Test def `ByteCodecs-seed-1` = oracle("core/classfile/ByteCodecs.scala", 1, 300)
 +  @Test def `ByteCodecs-seed-2` = oracle("core/classfile/ByteCodecs.scala", 2, 300)
