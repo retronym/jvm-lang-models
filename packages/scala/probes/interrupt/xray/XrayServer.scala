@@ -133,7 +133,7 @@ object XrayServer:
   def generatedSource(tag: String, n: Int = objectCount): String =
     val objects = (0 until n).map { i =>
       val giant =
-        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer while the server's latch is armed\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum").mkString("\n") + "\n    a0 + a199\n  }"
+        if i == n - 1 then "\n  def giant(xs: List[Int]): Int = {\n    val latched = tests.macros.Latch.await // a macro: blocks the typer only when the statement at the cursor depends on it\n" + (0 until 200).map(j => s"    val a$j = xs.map(_ + $j).filter(_ > $j).sum${if j == 199 then " + latched" else ""}").mkString("\n") + "\n    a0 + a199\n  }"
         else ""
       s"""|object M$i {
           |  def method$i(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum$giant
@@ -182,6 +182,30 @@ object XrayServer:
         case other => other.getClass.getSimpleName
       Stat(name, s.span.start, s.span.end)
     }
+
+  /** The innermost definition (def, val, class, object, trait) containing
+   *  `offset`, from a parse: what the page shows as the definition at the
+   *  cursor (a top-level statement of a real source is the whole file).
+   */
+  private def enclosingDef(source: SourceFile, offset: Int): Map[String, Any] | Null =
+    given Context = driver.currentCtx.fresh.setSource(source)
+    val tree = new Parsers.Parser(source).parse()
+    var best: untpd.Tree | Null = null
+    var bestName = ""
+    val finder = new untpd.UntypedTreeTraverser:
+      def traverse(t: untpd.Tree)(using Context): Unit =
+        if t.span.exists && t.span.start <= offset && offset <= t.span.end then
+          t match
+            case m: untpd.ModuleDef => best = t; bestName = s"object ${m.name}"
+            case d: untpd.TypeDef => best = t; bestName = s"${if d.mods.is(dotty.tools.dotc.core.Flags.Trait) then "trait" else "class"} ${d.name}"
+            case d: untpd.DefDef => best = t; bestName = s"def ${d.name}"
+            case v: untpd.ValDef => best = t; bestName = s"val ${v.name}"
+            case _ =>
+          traverseChildren(t)
+    finder.traverse(tree)
+    best match
+      case null => null
+      case b => Map("name" -> bestName, "start" -> b.span.start, "end" -> b.span.end)
 
   /** The spans of the typed statements of the current unit of `uri`, if that
    *  unit is for `source` (after an aborted fresh run the previous unit stays
@@ -243,6 +267,17 @@ object XrayServer:
     case other => jsonStr(other.toString)
 
   private val lock = new Object
+  private val requestSeq = new java.util.concurrent.atomic.AtomicInteger
+  /** One line per request, enough to replay it: `#n file kind@offset ... -> outcome, result`. */
+  private def logRequest(seq: Int, file: String, kind: String, offset: Int, cancel: Long, latch: Boolean, code: String, r: Map[String, Any]): Unit =
+    val h = r.get("hover").collect { case m: Map[?, ?] => m.asInstanceOf[Map[String, Any]] }
+    val tail = kind match
+      case "typeAt" => h.map(m => s"${m.getOrElse("symbol", "")} | ${String.valueOf(m.getOrElse("type", "")).take(80)}").getOrElse("")
+      case "definition" => h.map(m => if m.get("found").contains(true) then s"${m.getOrElse("symbol", "")} -> ${m.getOrElse("file", "")} [${m.getOrElse("start", "")}, ${m.getOrElse("end", "")}) ${m.getOrElse("how", "")}" else s"not found: ${m.getOrElse("reason", "")}").getOrElse("")
+      case _ => r.get("completions").collect { case l: List[?] => s"${l.size} completions, first ${l.headOption.getOrElse("-")}" }.getOrElse("")
+    val line = code.substring(0, math.min(offset, code.length)).count(_ == '\n') + 1
+    val snippet = code.substring(math.max(0, offset - 30), math.min(code.length, offset + 10)).replace("\n", "\\n")
+    println(s"[xray] #$seq ${if file.isEmpty then "A.scala" else file}:$line $kind@$offset${if cancel >= 0 then s" cancel=$cancel" else ""}${if latch then " latched" else ""} -> ${r.getOrElse("outcome", "?")} run=${r.getOrElse("runId", "?")} typedTop=${r.getOrElse("prefixBefore", "?")}->${r.getOrElse("prefix", "?")} skipped=${r.getOrElse("untypedSpans", "?")} trees=${r.getOrElse("typedTrees", "?")} ${r.getOrElse("ms", "?")}ms touched=${r.getOrElse("touched", "?")}${if r.get("tainted").contains(true) then " TAINTED" else ""} | $tail${r.get("error").collect { case e: String => s" | ERROR $e" }.getOrElse("")}${r.get("where").collect { case w: String => s" | $w" }.getOrElse("")} | «$snippet»")
 
   /** The latch file `xray.Latch.await` polls, armed for a latched request. */
   private val latchFile: Option[java.io.File] = sys.props.get("xray.latch").map(new java.io.File(_))
@@ -293,7 +328,7 @@ object XrayServer:
       countAtStart = if run == null then 0 else typedTreeCount(run)
     }
     try
-      val r = request0(uriOf(file), kind, code, offset, cancelAfterMs) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow) + ("file" -> file)
+      val r = request0(uriOf(file), kind, code, offset, cancelAfterMs, file) + ("latch" -> latch) + ("cancelledByButton" -> cancelNow) + ("file" -> file)
       lastResult = r
       r
     finally
@@ -301,13 +336,14 @@ object XrayServer:
       releaseLatch()
   }
 
-  private def request0(uri: URI, kind: String, code: String, offset: Int, cancelAfterMs: Long): Map[String, Any] = {
+  private def request0(uri: URI, kind: String, code: String, offset: Int, cancelAfterMs: Long, file: String = ""): Map[String, Any] = {
     val source = SourceFile.virtual(uri, code)
     val stats = statements(source)
     val typedBefore = typedSpans(uri, source)
     val runIdBefore = driver.currentCtx.runId
     val sessionRunBefore = driver.runIdOf(uri)
     val prefixBefore = driver.typedPrefixLength(uri)
+    val untypedBefore = driver.untypedSpans(uri)
     val (touchedBefore, _, _) = scopeCounts(uri)
 
     // The run whose typer polled the checker, and its tree count at the last poll:
@@ -353,7 +389,9 @@ object XrayServer:
             diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
             driver.compilationUnits.get(uri).foreach { unit =>
               given Context = driver.currentCtx.fresh.setCompilationUnit(unit).withPhase(Phases.typerPhase(using driver.currentCtx))
-              hover = definitionAt(unit.tpdTree, offset, source)
+              hover =
+                try definitionAt(unit.tpdTree, offset, source, file)
+                catch case scala.util.control.NonFatal(ex) => Map("found" -> false, "reason" -> s"definition failed: ${ex.toString.take(160)}")
             }
           case _ =>
             diagnostics = keep(driver.runUpTo(uri, source, Span(offset)))
@@ -401,8 +439,8 @@ object XrayServer:
         else "cancelled-resume"
       else if kind == "full" then "full"
       else if !sameRun then "fresh"
-      else if prefixAfter > prefixBefore then "resumed"
-      else "from-prefix"
+      else if prefixAfter > prefixBefore || (sessionRunBefore == sessionRunAfter && untypedAfter.size != untypedBefore.size) then "resumed"
+      else "served"
 
     val where =
       if !cancelled then null
@@ -420,6 +458,7 @@ object XrayServer:
       "tainted" -> driver.isTainted(uri),
       "cyclesPrevented" -> (if runAfter != null then runAfter.cyclesPrevented.size else 0),
       "statements" -> statRows, "cursorStatement" -> cursorStat,
+      "cursorDef" -> (try enclosingDef(source, offset) catch case scala.util.control.NonFatal(_) => null),
       "typedStatements" -> statRows.count(_("state") != "untyped"),
       "typedNow" -> statRows.count(_("state") == "typed-now"),
       "typedTrees" -> typedTrees, "polls" -> polls,
@@ -437,12 +476,14 @@ object XrayServer:
    *  through the definition index, and the member inside that file by its
    *  owner chain of names.
    */
-  private def definitionAt(tree: tpd.Tree, offset: Int, source: SourceFile)(using Context): Map[String, Any] =
+  private def definitionAt(tree: tpd.Tree, offset: Int, source: SourceFile, file: String)(using Context): Map[String, Any] =
     val path = Interactive.pathTo(tree, Span(offset))
     val sym0 = path.headOption.map(_.symbol).getOrElse(NoSymbol)
     // the member selected, not its accessor or module val
     val sym = if sym0.is(dotty.tools.dotc.core.Flags.ModuleVal) then sym0.moduleClass else sym0
     if !sym.exists then Map("found" -> false, "reason" -> "no symbol at the offset")
+    else if sym.is(dotty.tools.dotc.core.Flags.Package) then Map("found" -> false, "symbol" -> s"package ${sym.showFullName}", "reason" -> "a package has no definition to go to")
+    else if !sym.owner.exists then Map("found" -> false, "symbol" -> sym.show, "reason" -> "a symbol without an owner")
     else
       val top = sym.topLevelClass
       val pkg = top.owner
@@ -454,7 +495,7 @@ object XrayServer:
       val symbolText = s"${sym.showKind} ${sym.showFullName}"
       val inThisFile = sym.source == source || (sym.associatedFile != null && sym.associatedFile.path == source.file.path)
       if inThisFile && sym.span.exists then
-        Map("found" -> true, "symbol" -> symbolText, "file" -> "", "start" -> sym.span.start, "end" -> sym.span.end, "how" -> "the symbol's span in this file")
+        Map("found" -> true, "symbol" -> symbolText, "file" -> file, "start" -> sym.span.start, "end" -> sym.span.end, "how" -> "the symbol's span in this file")
       else definitionIndex.get(fqn) match
         case Some(rel) =>
           locateIn(rel, chainNames) match
@@ -540,13 +581,14 @@ object XrayServer:
         val async = latch || field(body, "async").contains("1")
         val file = field(body, "file").getOrElse("")
         def go(): Map[String, Any] =
+          val seq = requestSeq.incrementAndGet()
           val result =
             try request(kind, code, offset, cancel, latch, file)
             catch
               case scala.util.control.NonFatal(ex) => Map("outcome" -> "error", "error" -> ex.toString)
               case ex: StackOverflowError => Map("outcome" -> "error", "error" -> s"StackOverflowError at ${ex.getStackTrace.take(3).mkString(", ")}")
-          println(s"[xray] $kind@$offset cancel=$cancel latch=$latch -> ${result("outcome")} run=${result.getOrElse("runId", "?")} typed=${result.getOrElse("prefixBefore", "?")}->${result.getOrElse("prefix", "?")} ${result.getOrElse("ms", "?")}ms")
-          result
+          logRequest(seq, file, kind, offset, cancel, latch, code, result)
+          result + ("seq" -> seq)
         if async then
           // Runs on its own thread; the page polls /status and releases or cancels.
           if latch && latchFile.isEmpty then reply(ex, 400, "text/plain", "the server was started without -Dxray.latch")

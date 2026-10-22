@@ -20,8 +20,16 @@
   header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { font-size: 14px; margin: 0; }
   .dim { color: var(--dim); }
-  main { flex: 1; display: grid; grid-template-columns: 200px minmax(380px, 1.1fr) minmax(360px, 1fr) minmax(320px, 0.9fr); min-height: 0; }
+  main { flex: 1; display: grid; grid-template-columns: 200px 5px minmax(380px, 1.1fr) 5px minmax(360px, 1fr) 5px minmax(320px, 0.9fr); min-height: 0; min-width: 0; }
+  .gutter { cursor: col-resize; background: var(--line); touch-action: none; }
+  .gutter:hover, .gutter.active { background: var(--acc); }
+  main.logCollapsed > #logsec, main.logCollapsed > .gutter[data-i="2"] { display: none; }
+  footer#status { display: flex; gap: 18px; align-items: center; padding: 3px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 11px; white-space: nowrap; overflow: hidden; min-height: 24px; }
+  footer#status > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; } footer#status #stLast { flex: 1; } footer#status button { padding: 0 6px; font-size: 11px; }
+  footer#status #hoverState { max-width: 40%; }
+  #logToggle { float: right; padding: 0 6px; font-size: 11px; text-transform: none; letter-spacing: 0; }
   #explorer { font-size: 12px; } #tree { padding: 4px 8px; }
+  #nav { margin-left: 10px; text-transform: none; letter-spacing: 0; } #nav button { padding: 0 7px; font-size: 11px; }
   #tree .dir > .name { cursor: pointer; padding: 2px 4px; color: var(--fg); font-weight: 600; } #tree .dir > .name::before { content: '▸ '; color: var(--dim); } #tree .dir.open > .name::before { content: '▾ '; }
   #tree .dir > .kids { display: none; padding-left: 12px; } #tree .dir.open > .kids { display: block; }
   #tree .file { cursor: pointer; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; } #tree .file:hover { background: var(--code); } #tree .file.sel { background: var(--typed); }
@@ -45,7 +53,7 @@
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; align-items: baseline; margin: 0 0 8px; }
   .kv dt { color: var(--dim); } .kv dd { margin: 0; }
   .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
-  .o-from-prefix { background: var(--typed); } .o-resumed { background: var(--typednow); } .o-fresh { background: var(--warn); }
+  .o-served { background: var(--typed); } .o-resumed { background: var(--typednow); } .o-fresh { background: var(--warn); }
   .o-full { background: var(--warn); } .o-cancelled-resume, .o-cancelled-fresh, .o-error { background: var(--cancel); color: var(--cancelu); }
   .same { color: var(--newu); font-weight: 600; } .changed { color: var(--cur); font-weight: 600; }
   #stats { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0 10px; }
@@ -83,18 +91,17 @@
     <h2>Project</h2>
     <div class="pad" id="tree"><div class="file sel" data-file="">A.scala <span class="dim">(generated)</span></div><div id="treeroot" class="dim">no snapshot of the compiler sources found</div></div>
   </section>
-  <section>
-    <h2>Editor: <span id="fname">A.scala</span></h2>
+  <div class="gutter" data-i="0" title="drag to resize"></div>
+  <section id="edsec">
+    <h2>Editor:<span id="fname">A.scala</span> <span id="nav"><button id="back" title="back (Alt+←)" disabled>◀</button><button id="fwd" title="forward (Alt+→)" disabled>▶</button> <span id="navpos" class="dim"></span></span></h2>
     <div class="toolbar">
       <button id="complete" class="primary" title="runUpTo at the cursor, then Completion.completions">Complete at cursor</button>
       <button id="full" title="driver.run: type the whole file">Type whole file</button>
       <label>Cancel next request after <input id="cancelms" type="number" min="0" step="5" placeholder="off"> ms</label>
-      <span class="dim">cursor: <span id="cur" class="mono">–</span></span>
       <label title="hovering an identifier sends a typeAt request (runUpTo at the offset, then the type of the tree there); moving to another identifier before the answer cancels it"><input type="checkbox" id="hoverMode" checked> hover: type at the pointer, cancel on move</label>
-      <span id="hoverState" class="dim"></span>
     </div>
     <div id="popup" hidden></div>
-    <div id="menu" hidden><div data-act="definition">Go to definition <span class="dim">⌘/Ctrl-click</span></div><div data-act="typeAt">Type at the pointer</div><div data-act="complete">Complete here</div></div>
+    <div id="menu" hidden><div data-act="definition">Go to definition <span class="dim">⌘/Ctrl-click</span></div><div data-act="typeAt">Type at the pointer</div><div data-act="complete">Complete at the pointer <span class="dim">(prefix up to it)</span></div></div>
     <div class="toolbar">
       <span class="dim">Go to object</span>
       <input id="goto" type="number" min="0" max="59" value="10"> <button id="go">place cursor after <code>this.meth</code></button>
@@ -105,24 +112,34 @@
         <button id="release" class="primary">Release: let it finish</button> <button id="cancelNow">Cancel this request</button></span>
     </div>
     <div class="toolbar">
-      <span class="dim">Stories</span>
+      <span class="dim">Demos</span>
       <button id="demoSession" title="complete at object 10, then 40, then 10 again, then inside method20">Session</button>
       <button id="demoCancel" title="complete at the latch, cancel while the typer is blocked, then complete there again">Cancel, deterministically</button>
       <button id="demoEdit" title="type a character into object 0, then complete at object 10">Edit</button>
       <button id="demoFull" title="type the whole file, then complete: no session, everything typed">Whole file</button>
+      <button id="clear" title="clear the demo transcript, the request log and the x-ray panel">Clear</button>
     </div>
     <div id="story" hidden></div>
     <div id="ed"></div>
   </section>
-  <section>
+  <div class="gutter" data-i="1" title="drag to resize"></div>
+  <section id="xraysec">
     <h2>X-ray of the last request</h2>
     <div id="xray" class="pad"><p class="dim">No request yet. Place the cursor after a <code>this.meth</code> and press <b>Complete at cursor</b>.</p></div>
   </section>
-  <section>
-    <h2>Request log (newest first)</h2>
+  <div class="gutter" data-i="2" title="drag to resize"></div>
+  <section id="logsec">
+    <h2>Request log (newest first) <button id="logToggle" title="hide the request log; the status bar keeps the latest entry">hide</button></h2>
     <div id="log"><table><thead><tr><th>#</th><th>request</th><th>outcome</th><th>run</th><th>prefix</th><th>trees</th><th>touched</th><th>ms</th></tr></thead><tbody id="logbody"></tbody></table></div>
   </section>
 </main>
+<footer id="status">
+  <span id="stLast" class="mono dim" title="latest request log entry">no request yet</span>
+  <span><span id="stFile">A.scala</span> <span id="cur" class="mono">–</span></span>
+  <span id="stSession" class="mono dim" title="session state from the last result"></span>
+  <span id="hoverState" class="dim"></span>
+  <button id="logShow" hidden title="show the request log panel">show log</button>
+</footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -133,15 +150,67 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const src = await (await fetch('/source')).json();
   const cm = CodeMirror($('ed'), { value: src.source, mode: 'text/x-scala', lineNumbers: true, indentUnit: 2, tabSize: 2, indentWithTabs: false,
-    extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') } });
+    extraKeys: { Tab: (c) => c.replaceSelection('  ', 'end') }, configureMouse: () => ({ addNew: false }) });
   cm.setSize('100%', '100%');
+  // ---- layout: the vertical borders between the panels are drag handles; widths are kept in localStorage (xray.cols), the log panel can be collapsed (xray.logCollapsed)
+  const store = { get: (k) => { try { return localStorage.getItem('xray.' + k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem('xray.' + k, v); } catch (e) { /* ignore */ } } };
+  const mainEl = document.querySelector('main'), panels = ['explorer', 'edsec', 'xraysec', 'logsec'].map($);
+  const GUT = 5;
+  let cols = null; // px widths of explorer, editor, x-ray; the last visible panel takes the rest
+  try { const c = JSON.parse(store.get('cols') || 'null'); if (Array.isArray(c) && c.length === 3 && c.every((n) => n > 40)) cols = c; } catch (e) { /* ignore */ }
+  function applyCols() {
+    const collapsed = mainEl.classList.contains('logCollapsed');
+    if (!cols) { mainEl.style.gridTemplateColumns = collapsed ? `200px ${GUT}px minmax(380px, 1.1fr) ${GUT}px minmax(360px, 1fr)` : ''; cm.refresh(); return; }
+    const w = cols.map((n) => `${Math.round(n)}px`);
+    mainEl.style.gridTemplateColumns = collapsed ? `${w[0]} ${GUT}px ${w[1]} ${GUT}px minmax(0, 1fr)` : `${w[0]} ${GUT}px ${w[1]} ${GUT}px ${w[2]} ${GUT}px minmax(0, 1fr)`;
+    cm.refresh();
+  }
+  document.querySelectorAll('main > .gutter').forEach((g) => {
+    g.addEventListener('pointerdown', (ev) => {
+      const i = +g.dataset.i, startX = ev.clientX;
+      const px = panels.map((p) => p.getBoundingClientRect().width);
+      if (!cols) cols = px.slice(0, 3);
+      const start = cols.slice(), min = [120, 300, 240, 200];
+      try { g.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ } g.classList.add('active'); ev.preventDefault();
+      const onMove = (e) => {
+        let d = e.clientX - startX;
+        d = Math.max(min[i] - start[i], d); // left panel keeps its minimum
+        const right = i + 1 < 3 ? start[i + 1] : px[3]; d = Math.min(right - min[i + 1], d); // and so does the right one
+        cols[i] = start[i] + d; if (i + 1 < 3) cols[i + 1] = start[i + 1] - d;
+        applyCols();
+      };
+      const onUp = () => { g.classList.remove('active'); g.removeEventListener('pointermove', onMove); g.removeEventListener('pointerup', onUp); g.removeEventListener('pointercancel', onUp); store.set('cols', JSON.stringify(cols)); cm.refresh(); };
+      g.addEventListener('pointermove', onMove); g.addEventListener('pointerup', onUp); g.addEventListener('pointercancel', onUp);
+    });
+  });
+  function setLogCollapsed(on) { mainEl.classList.toggle('logCollapsed', on); $('logShow').hidden = !on; store.set('logCollapsed', on ? '1' : '0'); applyCols(); }
+  $('logToggle').onclick = () => setLogCollapsed(true); $('logShow').onclick = () => setLogCollapsed(false);
+  setLogCollapsed(store.get('logCollapsed') === '1');
+  // ---- navigation history: where the cursor was before a file load or a definition jump
+  const nav = { stack: [], at: -1, moving: false };
+  function navHere() { return { file: currentFile, pos: cm.getCursor() }; }
+  function navPush() {
+    if (nav.moving) return;
+    nav.stack = nav.stack.slice(0, nav.at + 1); nav.stack.push(navHere()); nav.at = nav.stack.length - 1; navUpdate();
+  }
+  function navUpdate() { $('back').disabled = nav.at <= 0; $('fwd').disabled = nav.at >= nav.stack.length - 1; $('navpos').textContent = nav.stack.length ? `${nav.at + 1}/${nav.stack.length}` : ''; }
+  async function navGo(delta) {
+    const target = nav.stack[nav.at + delta]; if (!target) return;
+    nav.stack[nav.at] = navHere();
+    nav.at += delta; nav.moving = true;
+    try { if (target.file !== currentFile) await loadFile(target.file); cm.setCursor(target.pos); cm.scrollIntoView(null, 160); cm.focus(); showCursor(); }
+    finally { nav.moving = false; navUpdate(); }
+  }
+  $('back').onclick = () => navGo(-1); $('fwd').onclick = () => navGo(1);
+  document.addEventListener('keydown', (ev) => { if (ev.altKey && ev.key === 'ArrowLeft') { ev.preventDefault(); navGo(-1); } else if (ev.altKey && ev.key === 'ArrowRight') { ev.preventDefault(); navGo(1); } });
   // Real compiler sources: the server lists a snapshot of compiler/src/dotty/tools/dotc (the explorer panel)
   let currentFile = '';
   async function loadFile(file) {
+    if (!nav.moving && cm.getValue()) navPush();
     currentFile = file;
     document.querySelectorAll('#tree .file').forEach((el) => el.classList.toggle('sel', el.dataset.file === file));
     const r = await (await fetch('/source?file=' + encodeURIComponent(file))).json();
-    cm.setValue(r.source); $('fname').textContent = file || 'A.scala';
+    cm.setValue(r.source); $('fname').textContent = $('stFile').textContent = file || 'A.scala';
     lineMarks = []; if (!loadFile.keepXray) $('xray').innerHTML = `<p class="dim">${file ? esc(file) + ' (' + cm.lineCount() + ' lines) loaded: place the cursor inside a method body and press Complete at cursor. Only the path to the cursor is typed, against the compiler\'s own classes; the rest of the file stays untyped (grey).' : 'The generated file.'}</p>`;
     if (file) gotoFirstMethodBody(); else gotoObject(10);
   }
@@ -176,12 +245,12 @@
     const text = cm.getValue(), at = text.indexOf(`object M${i} {`);
     if (at < 0) return false;
     const m = text.indexOf('this.meth', at) + 'this.meth'.length;
-    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor(); return true;
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor(); return true;
   }
   $('go').onclick = () => gotoObject(+$('goto').value);
   function gotoGiant() {
     const text = cm.getValue(), at = text.indexOf('def giant('), m = text.indexOf('.filter', at) + '.fil'.length;
-    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor();
   }
 
   const setBusy = (on, text) => { busy = on; $('busy').textContent = on ? text : ''; document.querySelectorAll('button').forEach((b) => { if (b.id !== 'release' && b.id !== 'cancelNow') b.disabled = on; }); };
@@ -286,19 +355,39 @@
     finish(r, code, -1);
     const d = r.hover || {};
     if (!d.found) { $('hoverState').textContent = `definition of ${tok.text}: ${d.reason || r.outcome}`; return; }
-    if (d.file !== currentFile) { loadFile.keepXray = true; try { await loadFile(d.file); } finally { loadFile.keepXray = false; } }
+    if (d.file === undefined || d.file === null) { $('hoverState').textContent = `definition of ${tok.text}: no file in the answer (${JSON.stringify(d).slice(0, 120)})`; return; }
+    navPush();
+    if (d.file !== currentFile) { loadFile.keepXray = true; nav.moving = true; try { await loadFile(d.file); } finally { loadFile.keepXray = false; nav.moving = false; } }
     if (defMark) defMark.clear();
     const from = cm.posFromIndex(d.start), to = cm.posFromIndex(d.end);
     defMark = cm.markText(from, { line: from.line, ch: cm.getLine(from.line).length }, { className: 'defhit' });
     cm.setCursor(from); cm.scrollIntoView({ from, to }, 160); cm.focus(); showCursor();
+    nav.moving = true; navPush(); nav.moving = false; nav.stack.push(navHere()); nav.at = nav.stack.length - 1; navUpdate();
     $('hoverState').textContent = `${d.symbol} → ${d.file || 'this file'} [${d.start}, ${d.end}) · ${d.how}`;
   }
-  cm.getWrapperElement().addEventListener('click', (ev) => {
-    if (!(ev.metaKey || ev.ctrlKey)) return;
+  // CodeMirror handles a modified mousedown itself (multiple cursors), so the jump is taken on mousedown in the capture phase, before it sees it
+  cm.getWrapperElement().addEventListener('mousedown', (ev) => {
+    if (!(ev.metaKey || ev.ctrlKey) || ev.button !== 0) return;
     const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
     const tok = wordAt(pos); if (!tok) return;
-    ev.preventDefault(); hidePopup(); gotoDefinition(tok);
-  });
+    ev.preventDefault(); ev.stopPropagation(); hidePopup(); clearDefLink(); gotoDefinition(tok);
+  }, true);
+  // while Cmd/Ctrl is held, the identifier under the pointer is underlined like a link (one mark at a time)
+  const deflink = { mark: null, tok: null, held: false, lastX: 0, lastY: 0 };
+  function clearDefLink() { if (deflink.mark) deflink.mark.clear(); deflink.mark = null; deflink.tok = null; }
+  function updateDefLink(x, y) {
+    if (!deflink.held) { clearDefLink(); return; }
+    const pos = cm.coordsChar({ left: x, top: y }, 'window'), tok = wordAt(pos);
+    if (tok && deflink.tok && tok.line === deflink.tok.line && tok.a === deflink.tok.a) return;
+    clearDefLink();
+    if (tok) { deflink.tok = tok; deflink.mark = cm.markText({ line: tok.line, ch: tok.a }, { line: tok.line, ch: tok.b }, { className: 'cm-deflink' }); }
+  }
+  const isMod = (ev) => ev.key === 'Meta' || ev.key === 'Control';
+  document.addEventListener('keydown', (ev) => { if (isMod(ev) && !deflink.held) { deflink.held = true; updateDefLink(deflink.lastX, deflink.lastY); } });
+  document.addEventListener('keyup', (ev) => { if (isMod(ev)) { deflink.held = false; clearDefLink(); } });
+  window.addEventListener('blur', () => { deflink.held = false; clearDefLink(); });
+  cm.getWrapperElement().addEventListener('mousemove', (ev) => { deflink.lastX = ev.clientX; deflink.lastY = ev.clientY; if (deflink.held !== (ev.metaKey || ev.ctrlKey)) deflink.held = ev.metaKey || ev.ctrlKey; updateDefLink(ev.clientX, ev.clientY); });
+  cm.getWrapperElement().addEventListener('mouseleave', clearDefLink);
   cm.getWrapperElement().addEventListener('contextmenu', (ev) => {
     const pos = cm.coordsChar({ left: ev.clientX, top: ev.clientY }, 'window');
     const tok = wordAt(pos); if (!tok) return;
@@ -307,10 +396,9 @@
     m.querySelectorAll('div').forEach((el) => el.onclick = () => {
       m.hidden = true;
       const act = el.dataset.act;
-      cm.setCursor({ line: tok.line, ch: tok.b });
-      if (act === 'definition') gotoDefinition(tok);
-      else if (act === 'typeAt') { hover.token = tok; hoverRequest(tok, ev); }
-      else send('complete', -1);
+      if (act === 'definition') { cm.setCursor({ line: tok.line, ch: tok.b }); gotoDefinition(tok); }
+      else if (act === 'typeAt') { cm.setCursor({ line: tok.line, ch: tok.b }); hover.token = tok; hoverRequest(tok, ev); }
+      else { cm.setCursor(pos); send('complete', -1); } // at the pointer: the prefix is the identifier up to it (a.foo|Bar completes foo…)
     });
   });
   document.addEventListener('click', (ev) => { if (!$('menu').contains(ev.target)) $('menu').hidden = true; });
@@ -321,11 +409,17 @@
   $('release').onclick = () => fetch('/release', { method: 'POST' });
   $('cancelNow').onclick = () => fetch('/cancel', { method: 'POST' });
   function cancelMs() { const v = $('cancelms').value; $('cancelms').value = ''; return v === '' ? -1 : +v; }
+  $('clear').onclick = () => {
+    $('story').hidden = true; $('story').innerHTML = ''; $('logbody').innerHTML = '';
+    $('xray').innerHTML = '<p class="dim">Cleared. Place the cursor and press <b>Complete at cursor</b>, or run a demo.</p>';
+    lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
+    $('stLast').textContent = 'no request yet'; $('stSession').textContent = ''; $('hoverState').textContent = ''; cm.refresh();
+  };
   $('complete').onclick = () => send('complete', cancelMs());
   $('full').onclick = () => send('full', cancelMs());
   cm.on('keydown', (c, e) => { if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); send('complete', cancelMs()); } });
 
-  const OUT = { 'from-prefix': 'answered from what is typed: nothing typed', resumed: 'resumed the same run: the statement at the cursor was typed', fresh: 'fresh run (content changed or no session): only the path to the cursor typed',
+  const OUT = { 'served': 'answered from what is typed: nothing typed', resumed: 'resumed the same run: the statement at the cursor was typed', fresh: 'fresh run (content changed or no session): only the path to the cursor typed',
     full: 'whole file typed by driver.run (no session left)', 'cancelled-resume': 'CANCELLED while resuming: the run survives', 'cancelled-fresh': 'CANCELLED during a fresh run: discarded', error: 'error' };
 
   function render(r) {
@@ -339,7 +433,13 @@
       return `<span class="${cls}" data-i="${i}" title="${esc(tip)}">${esc(s.name.replace(/^object /, ''))}${partial ? '<sup>' + s.skippedMembers.length + '</sup>' : ''}</span>`;
     }).join('');
     const compl = (r.completions || []);
-    const cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '';
+    // the innermost enclosing definition at the cursor (cursorDef, from the server), else the whole top-level statement
+    let cursorTitle = 'statement at the cursor', cursorSrc = r.cursorStatement >= 0 && r.statements[r.cursorStatement] ? r.code.slice(r.statements[r.cursorStatement].start, r.statements[r.cursorStatement].end) : '', cursorMore = 0;
+    if (r.cursorDef && typeof r.cursorDef.start === 'number') {
+      cursorTitle = `definition at the cursor: ${r.cursorDef.name}`;
+      const lines = r.code.slice(r.cursorDef.start, r.cursorDef.end).split('\n');
+      cursorMore = Math.max(0, lines.length - 20); cursorSrc = lines.slice(0, 20).join('\n');
+    }
     x.innerHTML = `
       <p><span class="badge o-${r.outcome}">${esc(r.outcome)}</span> &nbsp;<span class="dim">${esc(OUT[r.outcome] || '')}</span>${r.where ? `<br><span class="dim">where:</span> ${esc(r.where)}` : ''}</p>
       <dl class="kv">
@@ -357,7 +457,7 @@
       ${r.kind === 'definition' && r.hover ? `<div class="dim">definition</div><ul class="compl"><li class="mono">${r.hover.found ? esc(r.hover.symbol) + ' → ' + esc(r.hover.file || 'this file') + ' [' + r.hover.start + ', ' + r.hover.end + ')' : esc(r.hover.reason || 'not found')}</li>${r.hover.how ? `<li class="dim">${esc(r.hover.how)}</li>` : ''}</ul>` : ''}
       ${r.kind === 'typeAt' && r.hover ? `<div class="dim">type at the pointer</div><ul class="compl">${r.hover.found ? `<li class="mono">${esc(r.hover.symbol || r.hover.tree)}${r.hover.info ? ': ' + esc(r.hover.info) : ''}</li><li class="mono dim">type: ${esc(r.hover.type)}</li>` : '<li class="dim">no typed tree at the offset</li>'}</ul>` : ''}
       ${r.kind === 'complete' ? `<div class="dim">completions at the cursor (${compl.length})</div><ul class="compl">${compl.map((c) => `<li class="mono">${esc(c)}</li>`).join('') || '<li class="dim">none</li>'}</ul>` : ''}
-      ${cursorSrc ? `<div class="dim">statement at the cursor</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>` : ''}`;
+      ${cursorSrc ? `<div class="dim">${esc(cursorTitle)}</div><pre><code class="language-scala">${esc(cursorSrc)}</code></pre>${cursorMore ? `<div class="dim">… (${cursorMore} more line${cursorMore === 1 ? '' : 's'})</div>` : ''}` : ''}`;
     x.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
     x.querySelectorAll('.st').forEach((el) => el.onclick = () => { const s = r.statements[+el.dataset.i]; cm.setCursor(cm.posFromIndex(s.start)); cm.scrollIntoView(null, 120); cm.focus(); });
     lineMarks.forEach((m) => cm.removeLineClass(m.line, 'background', m.cls)); lineMarks = [];
@@ -377,63 +477,69 @@
     tr.innerHTML = `<td>${r.seq}</td><td>${esc(req)}${r.cancelAfterMs >= 0 ? ` <span class="dim">cancel ${r.cancelAfterMs} ms</span>` : ''}${r.latch ? ' <span class="dim">latched' + (r.cancelledByButton ? ', cancelled' : ', released') + '</span>' : ''}</td><td>${esc(r.outcome)}</td>
       <td>${r.runId}${r.runChanged ? ' <span class="changed">new</span>' : ''}</td><td>${r.prefixBefore === -1 ? '–' : r.prefixBefore}→${r.prefix === -1 ? '–' : r.prefix}</td><td>${r.typedTrees}</td><td>${r.touched}</td><td>${r.ms}</td>`;
     $('logbody').prepend(tr);
+    // the status bar: the same entry in one line, and the session state the result reports
+    $('stLast').textContent = `#${r.seq} ${req}${r.cancelAfterMs >= 0 ? ` (cancel ${r.cancelAfterMs} ms)` : ''}${r.latch ? (r.cancelledByButton ? ' (latched, cancelled)' : ' (latched, released)') : ''} · ${r.outcome}` +
+      (r.outcome === 'error' ? `: ${String(r.error || '').slice(0, 80)}` : ` · run ${r.runId}${r.runChanged ? ' (new)' : ''} · ${r.typedTrees} trees · ${r.ms} ms`);
+    if (r.outcome !== 'error') $('stSession').textContent = `run ${r.runId} · typed top-level ${r.prefix === -1 ? '–' : r.prefix} · skipped ${r.untypedSpans}${r.tainted ? ' · tainted' : ''}`;
   }
 
   function gotoMethod(i) {
     const text = cm.getValue(), at = text.indexOf(`def method${i}(`), m = text.indexOf('.fil', at) + '.fil'.length;
-    cm.setCursor(cm.posFromIndex(m)); cm.focus(); cm.scrollIntoView(null, 120); showCursor();
+    cm.setCursor(cm.posFromIndex(m)); cm.focus(); reveal(); showCursor();
   }
-  // ---- stories: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
+  // ---- demos: a narrated sequence; each step says what is done, what the design predicts, and what the driver reported
   const story = { steps: [] };
-  function storyStart(title) { story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; }
+  function storyStart(title) { story.steps = []; $('story').hidden = false; $('story').innerHTML = `<h3>${esc(title)}</h3><ol></ol>`; cm.refresh(); reveal(); }
+  // the editor shrank when the transcript appeared: scroll so the cursor sits in the upper third of what is left
+  const reveal = () => { const info = cm.getScrollInfo(), y = cm.charCoords(cm.getCursor(), 'local').top; cm.scrollTo(null, Math.max(0, y - info.clientHeight / 3)); };
   function storyStep(doing, expect) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(doing)}</b> <span class="exp">— expect: ${esc(expect)}</span>`; $('story').querySelector('ol').append(li); return li; }
   function storyResult(li, ok, text) { li.innerHTML += ` <span class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; li.scrollIntoView({ block: 'nearest' }); }
   const typedOf = (r) => `${r.typedStatements}/${r.statements.length} statements typed, ${r.typedTrees} trees, ${r.ms} ms`;
-  const needsGenerated = () => { if (currentFile) { storyStart('The stories run on the generated file: pick "A.scala (generated)" first.'); return true; } return false; };
+  const needsGenerated = () => { if (currentFile) { storyStart('The demos run on the generated file: pick "A.scala (generated)" first.'); return true; } return false; };
   $('demoSession').onclick = async () => {
     if (needsGenerated()) return;
-    storyStart('Story: one run serves a session of requests');
+    storyStart('Demo: one run serves a session of requests');
     let li = storyStep('Complete at `this.meth` in object 10', 'a fresh run; of 60 objects only M10 is typed, and in M10 only `val r`: method10 is skipped');
     gotoObject(10); let r = await send('complete', -1);
-    storyResult(li, r.outcome === 'fresh' && r.typedStatements === 1, `${r.outcome}, run ${r.runId}, ${typedOf(r)}; skipped members in M10: ${(r.statements[r.cursorStatement].skippedMembers || []).length}`); await sleep(400);
+    storyResult(li, r.outcome === 'fresh' && r.typedStatements === 1, `${r.outcome}, run ${r.runId}, ${typedOf(r)}; skipped members in M10: ${(r.statements[r.cursorStatement].skippedMembers || []).length}`); await sleep(800);
     li = storyStep('Complete in object 40', 'same run id, M40 typed in addition (a resume), nothing else');
     gotoObject(40); const r2 = await send('complete', -1);
-    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged && r2.typedNow === 1, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`); await sleep(400);
+    storyResult(li, r2.outcome === 'resumed' && !r2.runChanged && r2.typedNow === 1, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`); await sleep(800);
     li = storyStep('Complete in object 10 again', 'answered from what is typed: nothing typed, a few trees for the completion itself');
     gotoObject(10); const r3 = await send('complete', -1);
-    storyResult(li, r3.outcome === 'from-prefix' && r3.typedNow === 0, `${r3.outcome}, ${typedOf(r3)}`); await sleep(400);
+    storyResult(li, r3.outcome === 'served' && r3.typedNow === 0, `${r3.outcome}, ${typedOf(r3)}`); await sleep(800);
     li = storyStep('Complete inside the body of method20', 'M20 was skipped: typed now, in the same run; its other members stay skipped');
     gotoMethod(20); const r4 = await send('complete', -1);
     storyResult(li, r4.outcome === 'resumed' && !r4.runChanged, `${r4.outcome}, run ${r4.runId}, ${typedOf(r4)}, completions: ${(r4.completions || []).slice(0, 3).join(', ')}`);
   };
   $('demoCancel').onclick = async () => {
     if (needsGenerated()) return;
-    storyStart('Story: a cancellation lands exactly where we want it');
+    storyStart('Demo: a cancellation lands exactly where we want it');
     let li = storyStep('Complete inside `giant` of object 59, latched', 'the typer expands the `tests.macros.Latch.await` macro and blocks there, inside giant, with the rest of the file untouched');
     gotoGiant(); const p = sendLatched(); await whenLatched(); await sleep(1500);
     storyResult(li, true, `blocked: ${$('latchTrees').textContent} trees typed so far`);
     li = storyStep('Cancel the request', 'the latch opens, typing reaches the next checkpoint inside giant and unwinds; the run survives; giant is re-parsed and re-indexed, every symbol stays completable (Touched 0)');
     await fetch('/cancel', { method: 'POST' }); const r = await p;
-    storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(600);
+    storyResult(li, r.outcome === 'cancelled-resume' && r.touched === 0, `${r.outcome}; ${r.where}; run ${r.runId}, Touched ${r.touched}, ${r.typedTrees} trees typed before the abort`); await sleep(1200);
     li = storyStep('Complete there again', 'the same run types giant whole this time (the latch is not armed)');
     gotoGiant(); const r2 = await send('complete', -1);
     storyResult(li, r2.outcome === 'resumed' && !r2.runChanged, `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}, completions: ${(r2.completions || []).slice(0, 3).join(', ')}`);
   };
   $('demoEdit').onclick = async () => {
     if (needsGenerated()) return;
-    storyStart('Story: an edit starts a fresh run');
+    storyStart('Demo: an edit starts a fresh run');
     let li = storyStep('Complete in object 10', 'whatever the session state, M10 is typed or already was');
-    gotoObject(10); const r0 = await send('complete', -1); storyResult(li, r0.outcome !== 'error', `${r0.outcome}, run ${r0.runId}`); await sleep(300);
+    gotoObject(10); const r0 = await send('complete', -1); storyResult(li, r0.outcome !== 'error', `${r0.outcome}, run ${r0.runId}`); await sleep(600);
     li = storyStep('Type a comment into object 0, complete in object 10', 'the content changed: a new run id, and again only the path to the cursor is typed');
     const text = cm.getValue(), at = text.indexOf('object M0 {') + 'object M0 {'.length;
-    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(300); gotoObject(10); const r = await send('complete', -1);
+    cm.replaceRange(' // edited', cm.posFromIndex(at)); await sleep(600); gotoObject(10); const r = await send('complete', -1);
     storyResult(li, r.outcome === 'fresh' && r.runChanged, `${r.outcome}, run ${r.runIdBefore} → ${r.runId}, ${typedOf(r)}`);
   };
   $('demoFull').onclick = async () => {
     if (needsGenerated()) return;
-    storyStart('Story: the whole file, for comparison');
+    storyStart('Demo: the whole file, for comparison');
     let li = storyStep('Type the whole file (driver.run)', 'every statement typed, thousands of trees; no session is left');
-    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(300);
+    const r = await send('full', -1); storyResult(li, r.outcome === 'full', `${typedOf(r)}`); await sleep(600);
     li = storyStep('Complete in object 10', 'a fresh targeted run: the whole-file run left no session to resume');
     gotoObject(10); const r2 = await send('complete', -1); storyResult(li, r2.outcome === 'fresh', `${r2.outcome}, run ${r2.runId}, ${typedOf(r2)}`);
   };
