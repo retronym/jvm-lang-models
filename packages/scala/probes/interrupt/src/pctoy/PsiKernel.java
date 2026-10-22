@@ -33,15 +33,35 @@ public final class PsiKernel implements Kernel {
   // ---- stubs ------------------------------------------------------------------------------------------
 
   /** A member element: a declared one, or a light synthetic one. */
-  record Mem(String owner, String name, Set<String> mods, String declared, List<String> path, boolean synthetic, String file) {
-    boolean inferred() { return path != null; }
+  record Mem(String owner, String name, Set<String> mods, String declared, List<String> path, boolean synthetic, String file, Ast.Body body) {
+    Mem(String owner, String name, Set<String> mods, String declared, List<String> path, boolean synthetic, String file) { this(owner, name, mods, declared, path, synthetic, file, null); }
+    boolean inferred() { return path != null || body != null; }
   }
   record DeclRef(Ast.Decl decl, String file) {}
 
   private DeclRef typeDecl(String name) {
+    if (name.startsWith("<anon>$")) return anonDecl(name);
     for (Ast.Source s : files.values()) for (Ast.Decl d : s.decls()) if (!d.isObject() && d.name().equals(name)) return new DeclRef(d, s.name());
     return null;
   }
+  /** An anonymous class is a stub of the file too: its template's members, found by the member path in its name. */
+  private DeclRef anonDecl(String name) {
+    String path = name.substring("<anon>$".length());
+    for (Ast.Source s : files.values()) for (Ast.Decl d : s.decls()) for (Ast.Member m : d.members()) {
+      Ast.New n = findNew(d.name() + "." + m.name(), m, path);
+      if (n != null) return new DeclRef(new Ast.Decl(Set.of(), "class", name, List.of(), null, n.members(), -1), s.name());
+    }
+    return null;
+  }
+
+  private static Ast.New findNew(String at, Ast.Member m, String path) {
+    if (at.equals(path)) return m.body() instanceof Ast.New n ? n : null;
+    if (!path.startsWith(at + ".")) return null;
+    List<Ast.Member> inner = m.body() instanceof Ast.Block b ? b.locals() : m.body() instanceof Ast.New n ? n.members() : List.of();
+    for (Ast.Member l : inner) { Ast.New r = findNew(at + "." + l.name(), l, path); if (r != null) return r; }
+    return null;
+  }
+
   private DeclRef termDecl(String name) {
     for (Ast.Source s : files.values()) for (Ast.Decl d : s.decls()) if (d.isObject() && d.name().equals(name)) return new DeclRef(d, s.name());
     DeclRef c = typeDecl(name);                        // a case class's synthetic companion: a light element
@@ -96,7 +116,7 @@ public final class PsiKernel implements Kernel {
       Ast.Decl d = r.decl();
       List<Mem> ms = new ArrayList<>();
       if (d.isCase()) for (Ast.Param p : d.params()) ms.add(new Mem(name, p.name(), Set.of(), p.tpe(), null, false, r.file()));
-      for (Ast.Member m : d.members()) ms.add(new Mem(name, m.name(), m.mods(), m.declared(), m.path(), false, r.file()));
+      for (Ast.Member m : d.members()) ms.add(new Mem(name, m.name(), m.mods(), m.declared(), m.path(), false, r.file(), m.body()));
       if (d.isCase() && !term) for (String s : List.of("copy", "equals", "hashCode", "toString"))
         ms.add(new Mem(name, s, Set.of(), s.equals("copy") ? name : "<builtin>", null, true, r.file()));
       DeclRef cls;
@@ -125,7 +145,8 @@ public final class PsiKernel implements Kernel {
       if (!m.inferred()) {
         if (m.declared().equals("<builtin>")) t = Global.Type.builtin("Any");
         else t = typeDecl(m.declared()) != null ? typeRef(m.declared()) : Global.Type.err("not found: type " + m.declared());
-      } else t = typePath(term, owner, m.path(), where, ps);
+      } else if (m.body() != null) t = bodyType(term, owner, m.body(), null, owner.startsWith("<anon>$") ? owner.substring(7) + "." + name : where, ps);
+      else t = typePath(term, owner, m.path(), where, ps, null);
       if (t.isError()) ps.add(new Problem("error", m.file(), where, t.error()));
       checkCanceled("rhs " + where);
       return new Res(t, ps);
@@ -135,10 +156,33 @@ public final class PsiKernel implements Kernel {
   /** Types are names here: a class is identified by its stub, there is no symbol to be stale. */
   private Global.Type typeRef(String cls) { return new Global.Type(null, cls, null); }
 
-  private Global.Type typePath(boolean term, String owner, List<String> path, String where, List<Problem> ps) {
+  /** A body's type: a block's is its result path's, with the locals in scope (computed here, not cached: they are not
+   * stubs of their own); a template's is its anonymous class, whose members are stubs of the file. */
+  private Global.Type bodyType(boolean term, String owner, Ast.Body body, Map<String, Global.Type> outer, String path, List<Problem> ps) {
+    return switch (body) {
+      case Ast.Block b -> typePath(term, owner, b.result(), path, ps, blockLocals(term, owner, b, outer, path, ps));
+      case Ast.New n -> typeRef("<anon>$" + path);
+    };
+  }
+
+  private Map<String, Global.Type> blockLocals(boolean term, String owner, Ast.Block b, Map<String, Global.Type> outer, String path, List<Problem> ps) {
+    Map<String, Global.Type> locals = outer == null ? new LinkedHashMap<>() : new LinkedHashMap<>(outer);
+    for (Ast.Member l : b.locals()) {
+      String where = path + "." + l.name();
+      Global.Type t = l.body() != null ? bodyType(term, owner, l.body(), locals, where, ps)
+          : l.path() != null ? typePath(term, owner, l.path(), where, ps, locals)
+          : typeDecl(l.declared()) != null ? typeRef(l.declared()) : Global.Type.err("not found: type " + l.declared());
+      if (t.isError()) ps.add(new Problem("error", typeDecl(owner) != null ? typeDecl(owner).file() : termDecl(owner) != null ? termDecl(owner).file() : "?", where, t.error()));
+      locals.put(l.name(), t);
+    }
+    return locals;
+  }
+
+  private Global.Type typePath(boolean term, String owner, List<String> path, String where, List<Problem> ps, Map<String, Global.Type> locals) {
     String first = path.get(0);
     Global.Type t;
-    if (member(term, owner, first) != null) t = memberType(term, owner, first).type();
+    if (locals != null && locals.containsKey(first)) t = locals.get(first);
+    else if (member(term, owner, first) != null) t = memberType(term, owner, first).type();
     else if (termDecl(first) != null) t = new Global.Type(null, "object " + first, null);
     else return Global.Type.err("not found: value " + first);
     for (String n : path.subList(1, path.size())) {
@@ -173,6 +217,27 @@ public final class PsiKernel implements Kernel {
   }
 
   // ---- read actions, the daemon and requests -------------------------------------------------------
+
+  /** A target inside a body (`m.b`): a block's local, or an anonymous class's member. */
+  private Global.Type nestedType(boolean term, String owner, String member) {
+    String[] steps = member.split("\\.");
+    Mem m = member(term, owner, steps[0]);
+    String path = owner + "." + steps[0];
+    Global.Type t = Global.Type.err("not found: value " + member);
+    for (int k = 1; k < steps.length && m != null && m.body() != null; k++) {
+      String step = steps[k];
+      switch (m.body()) {
+        case Ast.Block b -> {
+          t = blockLocals(term, owner, b, null, path, new ArrayList<>()).getOrDefault(step, Global.Type.err("not found: value " + step));
+          Ast.Member l = b.locals().stream().filter(x -> x.name().equals(step)).findFirst().orElse(null);
+          m = l == null ? null : new Mem(owner, l.name(), l.mods(), l.declared(), l.path(), false, null, l.body());
+        }
+        case Ast.New n -> { String anon = "<anon>$" + path; t = memberType(false, anon, steps[k]).type(); m = member(false, anon, steps[k]); owner = anon; term = false; }
+      }
+      path = path + "." + steps[k];
+    }
+    return t;
+  }
 
   private void checkCanceled(String where) {
     Event ev = scheduler.at(where);
@@ -231,7 +296,7 @@ public final class PsiKernel implements Kernel {
     switch (ask) {
       case Ask.Completion c -> {
         boolean term = termDecl(c.decl()) != null && typeDecl(c.decl()) == null;
-        Global.Type t = memberType(term, c.decl(), c.member()).type();
+        Global.Type t = c.member().contains(".") ? nestedType(term, c.decl(), c.member()) : memberType(term, c.decl(), c.member()).type();
         if (t.isError()) return t.show() + ": <no members>";
         boolean objType = t.builtin().startsWith("object ");
         String cls = objType ? t.builtin().substring(7) : t.builtin();
@@ -251,6 +316,11 @@ public final class PsiKernel implements Kernel {
           TreeSet<String> body = new TreeSet<>();
           for (Mem m : members(d.isObject(), d.name())) if (m.owner().equals(d.name())) { body.add(m.name()); for (Problem p : memberType(d.isObject(), d.name(), m.name()).problems()) problems.add(p.toString()); }
           b.append(d.kind()).append(' ').append(d.name()).append(": ").append(Core.join(body)).append('\n');
+          for (Ast.Member m : d.members()) switch (m.body()) {
+            case Ast.Block bl -> b.append("body ").append(d.name()).append('.').append(m.name()).append(": ").append(Core.join(bl.locals().stream().map(Ast.Member::name).toList())).append('\n');
+            case Ast.New n -> b.append("body ").append(d.name()).append('.').append(m.name()).append(": ").append(Core.join(n.members().stream().map(Ast.Member::name).toList())).append('\n');
+            case null -> {}
+          }
           if (d.isCase() && !d.isObject() && s.decls().stream().noneMatch(o -> o.isObject() && o.name().equals(d.name()))) companions.add(d.name());
         }
         if (!companions.isEmpty()) b.append("synthetic companions: ").append(Core.join(companions)).append('\n');

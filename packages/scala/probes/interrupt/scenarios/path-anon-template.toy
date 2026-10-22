@@ -1,0 +1,14 @@
+// event: completion A Use.u
+// note: I25: Use.s's inference forces M.sel's completer, which types the anonymous template ahead under the target Use.s, off the path: its members are skipped, so they are never entered and the anonymous class has none; Use.u's sel.foo2 is not a member
+// requests: completion A Use.s; completion A Use.u; loadedTyped A
+// file: A
+class Int { def plus: Int }
+object M {
+  def sel = new { def foo: Int; def foo2 = foo }
+}
+object Use {
+  def s = M.sel
+  def u = M.sel.foo2
+}
+// file: B
+class Other {}

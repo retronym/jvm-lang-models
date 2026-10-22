@@ -619,8 +619,13 @@ theorem big_session :
 /-! ## Future work: what the dotc spike found that the model has no concept of
 
 I13 and I22 are absent by construction (`i13_burst_side_effect`, `replace_keeps_merged`): the
-model has no fact produced as a side effect and no tree mutated by another's desugaring. The other
-findings of the spike need concepts the model lacks.
+model has no fact produced as a side effect and no tree mutated by another's desugaring. I21 is
+modelled in [`ToyTreeNested`](ToyTreeNested.lean), which adds one nested statement list (a member
+whose body is a block of locals and a result path): targeting stays demand there
+(`nested_targeted_eq_whole`), and a kernel whose completer types a body ahead under the request's
+target and caches it answers a later request inside the block with a stub, which the rule "a typed
+form cached under a node not containing the target is computed whole" repairs
+(`i21_typed_ahead_stubs`). The other findings of the spike need concepts the model lacks.
 
 * **I17, completers of skipped statements run in a later run.** The store here is per revision
   and a skipped node simply has no entry; nothing is entered into a scope with a completer that is
@@ -628,12 +633,20 @@ findings of the spike need concepts the model lacks.
   entering a declaration installs a completer (an entry with a rule but no value) whose owner run
   is recorded, and a rule that forces it in a later revision; the theorem to state is that the
   value is the later revision's rule, not the earlier's.
-* **I20/I23, typed against skipped block statements.** The tree has no blocks: members are
-  declarations of a template, each its own fact. The smallest extension: a member whose body is a
-  list of statement nodes with local definitions visible to later ones, a typed form per statement,
-  and the block's typed form as the list of them; targeting a statement then has to say which
-  earlier statements it forces (their local symbols) and which it skips, and the bookkeeping of
-  typed against skipped becomes part of the block's fact rather than of a mutable tree.
+* **I20/I23, typed against skipped block statements.** `ToyTreeNested` has blocks, but its kernel
+  only reads a cached block, it never splices one: what remains is the bookkeeping of a block typed
+  with some statements skipped and later completed in place (the stubs replaced by typed forms, the
+  session poisoned when that fails, I23), as part of the block's fact rather than of a mutable tree.
+* **I25 and I28, the rest of I21's rule.** I25 needs a member set that comes from typing a
+  template: `def m = new { members }`, whose type's members are its typed members, so a stubbed
+  member is "not a member" of `m` rather than a stub at its own path; in `ToyTreeNested`'s terms an
+  anonymous template is a block whose result is its own members, and the theorem is the same pair
+  (demand agrees; the kernel caching it under an off-path target loses a member). I28 needs an
+  `inline` modifier, under which a caller reads the typed body rather than the signature, so that
+  the body is a value reused under other targets even when no completer typed it ahead; the kernel
+  rule is then "never target inside an inline body", a special case of the same one. A block
+  typed *with* the target inside it and cached (a completer forced from inside its own block) is
+  also left out: the spike does not cache it, and the model's kernel would stub its other locals.
 * **I24, the TyperState committed twice on a resume.** The model has no speculative state: a rule
   either finishes and its value is stored or does not. The smallest extension: a rule that writes
   into a nested, uncommitted layer of the store (constraints, or provisional facts) and a commit

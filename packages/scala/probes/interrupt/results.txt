@@ -214,6 +214,42 @@
               object Later: bar o
               warning A:Use.foo: method m in Old is deprecated
 
+== path-anon-template: completion A:Use.u
+   I25: Use.s's inference forces M.sel's completer, which types the anonymous template ahead under the target Use.s, off the path: its members are skipped, so they are never entered and the anonymous class has none; Use.u's sel.foo2 is not a member
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             16       0/16        16/19.8
+   scalac-after              16       0/16        16/19.8
+   dotc-metals               16       0/16        32/32.0
+   dotc-session              16       0/16        32/32.0
+   dotc-session-path         16       0/16        32/25.5
+   dotc-interrupted          16       0/16        32/25.5
+   psi                       14       0/14        12/12.5
+   reference:
+    answer 1: Int: plus
+    answer 2: class Int: plus
+              object M: sel
+              body M.sel: foo foo2
+              object Use: s u
+    answer 3: class Other:
+
+== path-inline-body: completion A:Use.u
+   I28: a completion inside the inline method M.m targets its block, on the path, so the local a is stubbed (recorded, resumable); a caller inlines the typed body as a value, and the stub has no typed tree to copy
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             14       0/14        14/16.8
+   scalac-after              14       0/14        14/16.8
+   dotc-metals               14       0/14        28/28.0
+   dotc-session              14       0/14        28/28.0
+   dotc-session-path         14       0/14        28/22.5
+   dotc-interrupted          14       0/14        28/22.5
+   psi                       10       0/10          8/8.2
+   reference:
+    answer 1: Int: plus
+    answer 2: class Int: plus
+              object M: m
+              body M.m: a b
+              object Use: u
+    answer 3: class Other:
+
 == path-leave-file: completion B:Client.g
    I17: a targeted run of A skips Lib, whose completers belong to that run; a request on B starts another run, in which Lib's class completer refuses to run, so Lib.w is not found
    kernel            safepoints  divergent  work ref/mean
@@ -295,6 +331,24 @@
               object Use: f h l
               synthetic companions: L
               object L (synthetic): apply unapply
+
+== path-typed-ahead: completion A:M.m.b
+   I21: Use.u's inference forces M.m's completer, which types its block ahead under the target Use.u, off the path: every local is stubbed, and the typed-ahead body is cached; the later completion inside M.m reuses it and finds the stub b
+   kernel            safepoints  divergent  work ref/mean
+   scalac-before             14       0/14        14/15.9
+   scalac-after              14       0/14        14/15.9
+   dotc-metals               14       0/14        28/28.0
+   dotc-session              14       0/14        28/28.0
+   dotc-session-path         14       0/14        28/22.5
+   dotc-interrupted          14       0/14        28/22.5
+   psi                       10       0/10          8/8.0
+   reference:
+    answer 1: Int: plus
+    answer 2: class Int: plus
+              object M: m
+              body M.m: a b
+              object Use: u
+    answer 3: class Other:
 
 == targeted-consumes-synthetics: completion A:Use.f
    scala/scala#11328 local-case-class-interleaved: a targeted check types the case class and uses up its synthetics; the full check in the same run must still have them
