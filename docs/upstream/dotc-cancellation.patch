@@ -31,10 +31,10 @@ index db34dbc88e..d196455401 100644
    def apply(clsd: ClassDenotation, unpickled: Tree, forceTrees: Boolean)(using Context): CompilationUnit =
      val compilationUnitInfo = clsd.symbol.compilationUnitInfo.nn
 diff --git a/compiler/src/dotty/tools/dotc/Run.scala b/compiler/src/dotty/tools/dotc/Run.scala
-index 2fdf622325..4d41e03b69 100644
+index 2fdf622325..80d37e85bb 100644
 --- a/compiler/src/dotty/tools/dotc/Run.scala
 +++ b/compiler/src/dotty/tools/dotc/Run.scala
-@@ -231,6 +231,21 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
+@@ -231,6 +231,37 @@ extends ImplicitRunInfo, ConstraintRunInfo, cc.CaptureRunInfo {
    def canProgress()(using Context): Boolean =
      foldProgress(true /* not cancelled by default */)(p => !p.checkCancellation())
  
@@ -49,6 +49,22 @@ index 2fdf622325..4d41e03b69 100644
 +  def checkCancelledTyping()(using Context): Unit =
 +    typedTreeCount += 1
 +    if (typedTreeCount & 1023) == 0
++       && ctx.mode.is(Mode.Interactive)
++       && !canProgress()
++    then throw CompilationUnit.CancelledCompilation()
++
++  private var implicitStepCount = 0
++
++  /** Called by implicit search for every candidate it checks for eligibility
++   *  (`filterMatching`) and for every candidate it types (`typedImplicit`).
++   *  A search over many candidates can run for a long time while typing few
++   *  trees, so `checkCancelledTyping` alone is not reached often enough
++   *  (scala/scala3#19320). Every 16 steps, in interactive mode, polls the
++   *  progress callback and aborts the run if it reports cancellation.
++   */
++  def checkCancelledImplicitSearch()(using Context): Unit =
++    implicitStepCount += 1
++    if (implicitStepCount & 15) == 0
 +       && ctx.mode.is(Mode.Interactive)
 +       && !canProgress()
 +    then throw CompilationUnit.CancelledCompilation()
@@ -260,6 +276,26 @@ index 5b78dc804b..f2094b71d7 100644
 +
 +object InteractiveDriver:
 +  private val neverCancelled: () => Boolean = () => false
+diff --git a/compiler/src/dotty/tools/dotc/typer/Implicits.scala b/compiler/src/dotty/tools/dotc/typer/Implicits.scala
+index f559513ebb..1695baac05 100644
+--- a/compiler/src/dotty/tools/dotc/typer/Implicits.scala
++++ b/compiler/src/dotty/tools/dotc/typer/Implicits.scala
+@@ -252,6 +252,7 @@ object Implicits:
+       else
+         val candidates = new mutable.ListBuffer[Candidate]
+         def tryCandidate(extensionOnly: Boolean)(ref: ImplicitRef) =
++          ctx.run.nn.checkCancelledImplicitSearch()
+           var ckind = exploreInFreshCtx { (ctx: FreshContext) ?=>
+             ctx.setMode(ctx.mode &~ Mode.SafeNulls | Mode.TypevarsMissContext)
+             candidateKind(ref.underlyingRef)
+@@ -1167,6 +1168,7 @@ trait Implicits:
+ 
+   /** Try to typecheck an implicit reference */
+   def typedImplicit(cand: Candidate, pt: Type, argument: Tree, span: Span)(using Context): SearchResult =  trace(i"typed implicit ${cand.ref}, pt = $pt, implicitsEnabled == ${ctx.mode is ImplicitsEnabled}", implicits, show = true) {
++    ctx.run.nn.checkCancelledImplicitSearch()
+     if ctx.run.nn.isCancelled then NoMatchingImplicitsFailure
+     else
+       record("typedImplicit")
 diff --git a/compiler/src/dotty/tools/dotc/typer/Typer.scala b/compiler/src/dotty/tools/dotc/typer/Typer.scala
 index d85b5bcc1b..48b03bc0ed 100644
 --- a/compiler/src/dotty/tools/dotc/typer/Typer.scala
@@ -370,6 +406,230 @@ index d197cc0f4f..3e6eb3cc91 100644
  
      def isInheritedFromScalaLibrary(sym: Symbol) =
        sym.owner == defn.AnyClass ||
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/BareCancellationSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/BareCancellationSuite.scala
+new file mode 100644
+index 0000000000..b6ed981102
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/BareCancellationSuite.scala
+@@ -0,0 +1,82 @@
++package dotty.tools.pc.tests
++
++import java.net.URI
++
++import scala.concurrent.duration.*
++import scala.language.unsafeNulls
++import scala.meta.internal.metals.EmptyCancelToken
++import scala.meta.internal.metals.PcQueryContext
++import scala.meta.pc.reports.EmptyReportContext
++
++import dotty.tools.dotc.ast.tpd
++import dotty.tools.dotc.core.Contexts.Context
++import dotty.tools.pc.CachingDriver
++import dotty.tools.pc.ScalaPresentationCompiler
++import dotty.tools.pc.base.BasePCSuite
++
++import org.junit.Test
++
++/** Finding I6: the cancellation added to `InteractiveDriver` in 3.8.0
++ *  (`isCancelled() = Thread.interrupted()`, no-op `cancel()`) cannot fire,
++ *  because `Run.Progress.checkCancellation` calls `Thread.interrupted()`
++ *  first, consuming the bit, before asking `isCancelled()`.
++ */
++class BareCancellationSuite extends BasePCSuite:
++
++  private val timeout = 120.seconds
++  private given PcQueryContext = PcQueryContext(None, () => "")(using EmptyReportContext())
++  private def pc = presentationCompiler.asInstanceOf[ScalaPresentationCompiler]
++
++  private val uri = URI.create("file:///Big.scala")
++
++  private def source(tag: String) =
++    val objs = (0 until 400).map(i => s"object O$i { def m(xs: List[Int]): Int = xs.map(_ + $i).filter(_ > $i).sum }").mkString("\n")
++    s"// $tag\n$objs\n"
++
++  private def withDriver[T](f: CachingDriver => T): T =
++    pc.compilerAccess.withNonInterruptableCompiler(null.asInstanceOf[T], EmptyCancelToken) { access =>
++      f(access.compiler())
++    }.get(timeout.length, timeout.unit)
++
++  /** Number of `def m` in the typed tree that carry a type. */
++  private def typedDefs(driver: CachingDriver): Int =
++    given Context = driver.currentCtx
++    driver.compilationUnits.get(uri) match
++      case None => -1
++      case Some(unit) =>
++        var n = 0
++        new tpd.TreeTraverser:
++          def traverse(tree: tpd.Tree)(using Context): Unit = tree match
++            case dd: tpd.DefDef if dd.name.toString == "m" && dd.tpe.exists && dd.rhs.tpe.exists => n += 1
++            case _ => traverseChildren(tree)
++        .traverse(unit.tpdTree)
++        n
++
++  private def runInterrupted(label: String, tag: String)(interrupt: Thread => Unit): Unit =
++    val report = withDriver { driver =>
++      val t0 = System.nanoTime()
++      val outcome =
++        try
++          interrupt(Thread.currentThread())
++          driver.run(uri, source(tag))
++          "completed"
++        catch case ex: (Exception | scala.util.control.ControlThrowable) => s"threw ${ex.getClass.getName}"
++      val ms = (System.nanoTime() - t0) / 1000000
++      val bitAfter = Thread.interrupted() // also clears it for the job queue
++      val typed = typedDefs(driver)
++      s"[$label] outcome=$outcome elapsedMs=$ms interruptBitAfter=$bitAfter typedDefs=$typed/400"
++    }
++    println(report)
++
++  @Test def `interrupt-is-consumed` =
++    // warm up, and measure an uninterrupted run
++    runInterrupted("warmup", "w0")(_ => ())
++    runInterrupted("no-interrupt", "w1")(_ => ())
++    // interrupt the compiler thread just before the synchronous run
++    runInterrupted("interrupt-before-run", "a")(_.interrupt())
++    // interrupt the compiler thread from another thread while it is typing
++    runInterrupted("interrupt-during-run", "b") { self =>
++      val t = new Thread((() => { Thread.sleep(30); self.interrupt() }): Runnable)
++      t.setDaemon(true)
++      t.start()
++    }
+diff --git a/presentation-compiler/test/dotty/tools/pc/tests/ImplicitSearchCancelSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/ImplicitSearchCancelSuite.scala
+new file mode 100644
+index 0000000000..edb260a88d
+--- /dev/null
++++ b/presentation-compiler/test/dotty/tools/pc/tests/ImplicitSearchCancelSuite.scala
+@@ -0,0 +1,130 @@
++package dotty.tools.pc.tests
++
++import java.net.URI
++
++import scala.concurrent.duration.*
++import scala.language.unsafeNulls
++import scala.meta.internal.metals.EmptyCancelToken
++import scala.meta.internal.metals.PcQueryContext
++import scala.meta.pc.reports.EmptyReportContext
++
++import dotty.tools.dotc.CompilationUnit.CancelledCompilation
++import dotty.tools.pc.CachingDriver
++import dotty.tools.pc.ScalaPresentationCompiler
++import dotty.tools.pc.base.BasePCSuite
++
++import org.junit.Test
++
++/** scala/scala3#19320: a request can spend a long time inside implicit search
++ *  (a missing implicit with many candidates) while typing few trees, so the
++ *  typer's checkpoint (`checkCancelledTyping`, every 1024 trees) is not reached
++ *  often enough. `checkCancelledImplicitSearch` polls from inside the search.
++ */
++class ImplicitSearchCancelSuite extends BasePCSuite:
++
++  private val timeout = 300.seconds
++  private given PcQueryContext = PcQueryContext(None, () => "")(using EmptyReportContext())
++  private def pc = presentationCompiler.asInstanceOf[ScalaPresentationCompiler]
++
++  private val uri = URI.create("file:///Implicits.scala")
++
++  /** `candidates` givens of `Foo[T]`, each eligible for every `Foo[Cj]` but
++   *  needing a `Bar[T]`, and as many givens of `Bar[T]`, each needing the
++   *  missing `Missing`: each of the `queries` summons tries
++   *  `candidates * candidates` nested candidates and fails.
++   */
++  private def source(tag: String, candidates: Int, queries: Int) =
++    val givens = (0 until candidates).flatMap(i => Seq(
++      s"  given g$i[T](using Bar[T]): Foo[T] = ???",
++      s"  given b$i[T](using Missing): Bar[T] = ???")).mkString("\n")
++    val classes = (0 until queries).map(j => s"class C$j").mkString("\n")
++    val summons = (0 until queries).map(j => s"  val r$j = summon[Foo[C$j]]").mkString("\n")
++    s"""|// $tag
++        |trait Foo[T]
++        |trait Bar[T]
++        |class Missing
++        |$classes
++        |object Gs:
++        |$givens
++        |import Gs.given
++        |object Use:
++        |$summons
++        |""".stripMargin
++
++  private def withDriver[T](f: CachingDriver => T): T =
++    pc.compilerAccess.withNonInterruptableCompiler(null.asInstanceOf[T], EmptyCancelToken) { access =>
++      f(access.compiler())
++    }.get(timeout.length, timeout.unit)
++
++  private def stack(): Array[StackTraceElement] = Thread.currentThread.getStackTrace
++  private def inImplicits(st: Array[StackTraceElement]) =
++    st.exists(_.getClassName.startsWith("dotty.tools.dotc.typer.Implicits"))
++  private def via(st: Array[StackTraceElement], method: String) = st.exists(_.getMethodName == method)
++
++  private class Polls:
++    var all, inImpl, implTick, typerTickInImpl = 0
++    def record(st: Array[StackTraceElement]): Unit =
++      all += 1
++      if inImplicits(st) then
++        inImpl += 1
++        if via(st, "checkCancelledImplicitSearch") then implTick += 1
++        else if via(st, "checkCancelledTyping") then typerTickInImpl += 1
++    override def toString = s"polls=$all inImplicits=$inImpl (implicit-search tick=$implTick, typer tick=$typerTickInImpl)"
++
++  /** Run to completion, counting polls; returns elapsed ms. */
++  private def measure(label: String, src: String): Long =
++    val (ms, polls, diags) = withDriver { driver =>
++      val polls = Polls()
++      val t0 = System.nanoTime()
++      val diags = driver.withCancelChecker(() => { polls.record(stack()); false }) {
++        driver.run(uri, src)
++      }
++      ((System.nanoTime() - t0) / 1000000, polls, diags.size)
++    }
++    println(s"[$label] completed elapsedMs=$ms diagnostics=$diags $polls")
++    ms
++
++  @Test def `cancel-inside-implicit-search` =
++    val candidates = 60
++    val queries = 10
++    measure("warmup 1", source("w1", candidates, queries))
++    measure("warmup 2", source("w2", candidates, queries))
++    val control = measure("control: 0 candidates", source("c", 0, queries))
++    val full = measure(s"full: $candidates candidates", source("f", candidates, queries))
++    assert(full - control > 200, s"implicit search must take >200 ms, took ${full - control} ms")
++
++    cancelAt("poll #5 in Implicits", source("cancelled-1", candidates, queries))(
++      (st, polls) => inImplicits(st) && polls.inImpl >= 5)
++    cancelAt("poll #1000 in Implicits, from typedImplicit", source("cancelled-2", candidates, queries))(
++      (st, polls) => inImplicits(st) && polls.inImpl >= 1000 && via(st, "typedImplicit"))
++
++  /** Cancel the run at the first poll satisfying `when`. */
++  private def cancelAt(label: String, src: String)(when: (Array[StackTraceElement], Polls) => Boolean): Unit =
++    val (thrown, polls, landing, ms) = withDriver { driver =>
++      val polls = Polls()
++      var landing: Array[StackTraceElement] = null
++      val t0 = System.nanoTime()
++      val thrown =
++        try
++          driver.withCancelChecker { () =>
++            val st = stack()
++            polls.record(st)
++            val cancel = when(st, polls)
++            if cancel && landing == null then landing = st
++            cancel
++          } {
++            driver.run(uri, src)
++          }
++          false
++        catch case _: CancelledCompilation => true
++      (thrown, polls, landing, (System.nanoTime() - t0) / 1000000)
++    }
++    println(s"[cancel at $label] thrown=$thrown elapsedMs=$ms $polls")
++    val frames = landing.iterator
++      .dropWhile(_.getMethodName != "canProgress")
++      .filter(f => f.getClassName.startsWith("dotty.tools.dotc"))
++      .take(8).map(f => s"    at ${f.getClassName}.${f.getMethodName}(${f.getFileName}:${f.getLineNumber})")
++    println("[landing stack]\n" + frames.mkString("\n"))
++    assert(thrown, "the run must be aborted with CancelledCompilation")
++    assert(inImplicits(landing), "cancellation must land inside Implicits")
++    assert(via(landing, "checkCancelledImplicitSearch"), "cancellation must land at the implicit-search checkpoint")
 diff --git a/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionAbortSuite.scala b/presentation-compiler/test/dotty/tools/pc/tests/completion/CompletionAbortSuite.scala
 new file mode 100644
 index 0000000000..4d5735e33a

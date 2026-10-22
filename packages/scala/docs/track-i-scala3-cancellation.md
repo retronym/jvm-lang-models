@@ -119,6 +119,19 @@ A scratch worktree of scala3 at `d168df2a76`, the change list of §3 as [`dotc-c
 
 What the tests pin down. `abort-via-token`, end to end through Metals' `CompilerAccess`: a token that cancels 20 ms after submission on a 400-method object; the request answers with `InterruptException()`, the driver is the same object before and after (`runId` 7 → 7, not recreated), and the next completion on the file is whole (`runId` 9: the aborted run consumed one id, so +2, where a recreated driver would restart at 2). `abort-from-typer`: the checker is driven directly and answers true at the second poll whose stack holds `checkCancelledTyping`, so the abort provably comes from the typer checkpoint; `myCtx`, the opened file and the compilation unit are the previous ones afterwards. `abort-inside-completion-of-sourcepath-symbol`: the cancellation lands inside `completeFrom` of a sourcepath symbol whose body is 2,000 trees (`polls=1`: the first 1,024 trees of the run are inside its Namer completion); after the abort the next completion lists it. **The control run** with `untouchIfIncomplete` made a no-op: the same completion comes back empty, because the symbol is a `CyclicReference` for the rest of the run. That is [`touched_stays_cyclic`](../../query/Query/Interrupt.lean#L287) on the real compiler, and the reset is the fix.
 
+**I6 confirmed on the bare head**, and the patch against it (`BareCancellationSuite`, 400 objects, `driver.run` synchronous on the compiler thread; the interrupt sent just before the run and 30 ms into it):
+
+```
+bare head:   [interrupt-before-run] outcome=completed elapsedMs=158 interruptBitAfter=false typedDefs=400/400
+             [interrupt-during-run] outcome=completed elapsedMs=134 interruptBitAfter=false typedDefs=400/400
+with patch:  [interrupt-before-run] outcome=threw CancelledCompilation elapsedMs=0
+             [interrupt-during-run] outcome=threw CancelledCompilation elapsedMs=38
+```
+
+At the head the interrupt is swallowed, the run completes and the bit is gone; with the patch `checkCancellation` still consumes the bit but calls a `cancel()` that sticks, and the next 1,024-tree checkpoint throws 38 ms in (before the run: the units are skipped and the check after `compileSources` throws).
+
+**A checkpoint inside implicit search** ([scala/scala3#19320](https://github.com/scala/scala3/issues/19320)'s shape). `Run.checkCancelledImplicitSearch()`, every 16 steps in `Mode.Interactive`, at the top of `ImplicitRefs.filterMatching`'s `tryCandidate` (once per eligibility check) and of `typedImplicit` (once per typed candidate, which covers `tryImplicit`, `rank` and `ImportSuggestions`). `ImplicitSearchCancelSuite`: 60 `given g_i[T](using Bar[T]): Foo[T]` and 60 `given b_i[T](using Missing): Bar[T]`, ten `summon[Foo[Cj]]`, so each query tries 60×60 candidates and fails; the search costs 218 ms of a 229 ms run. Over that run **the typer's tick polled zero times inside `Implicits`** (nine polls in the whole run, all outside it): without the new checkpoint no cancellation could land during the search. With it, about 2,600 polls per run, one every 0.1 ms; a cancellation at the fifth lands in `filterMatching` → `computeEligible` → `searchImplicit`, at the thousandth in `typedImplicit` → `tryImplicit` → `rank`. Thirteen tests across five suites pass. The patch file now carries this and both new suites.
+
 What the spike found beyond the change list:
 
 * **A cancellation before the typer drops the unit.** `tryEnterUnit` skips a unit when the callback is already cancelled, and `InteractiveDriver.run` then fails on `ctxRun.suspendedUnits.head`, which mtags would treat as a crash and discard the driver. The patch checks the callback after `compileSources` and throws `CancelledCompilation`; `CompletionCancelSuite.basic` (a token cancelled before the thunk runs) now exercises that path.
@@ -149,7 +162,7 @@ What exists to build on: `createOrRefine` and `lateCompile` (keep a symbol, swap
 
 - [x] Spike: the patch, three tests, the `Touched` leak reproduced on a sourcepath symbol and fixed (§6).
 - [ ] The two open questions of §6: `close(uri)` after an abort for the non-caching driver; a symbol first touched after its namer's run (I7).
-- [ ] The checkpoint inside implicit search (`searchImplicit`), for [scala/scala3#19320](https://github.com/scala/scala3/issues/19320)'s shape.
+- [x] The checkpoint inside implicit search, with the evidence that the typer's tick never reaches it (§6).
 - [x] Targeting and the session on dotc (§5): the spike, four tests, 250/250 with the existing suites.
 - [ ] Stage 3 on dotc in the order §7 gives: non-destructive attachments (I8), the re-enter mode, trace recording; `TestingWorkspaceSearch` made parse-only so the suite's timings measure the PC (I9).
 - [ ] The dotc kernel in Lean with abort, so that `abort_*` have dotc-shaped twins (facts dropped per run, diagnostics per run).
