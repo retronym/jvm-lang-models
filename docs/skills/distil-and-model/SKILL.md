@@ -53,6 +53,19 @@ Each rung has questions to answer before moving on; the artefact is the answer. 
 
 **9. Register and dashboard.** A findings register (id, what, where, evidence, status, next step); a theorems page stating each theorem once with where its hypotheses bite; a status page separating "proved for every program" from "checked on a space" from "calibrated against the real tool"; the note's future-work list with boxes ticked as they close.
 
+## Building on a previous toy and model
+
+The second climb rarely starts from the ground. A mechanism's questions come in a sequence (laziness and cycles, then interruption over the same facts, then targeting and sessions, then incrementality over edits), and each wants the last toy and model as its floor. Before writing anything, answer these:
+
+* **Does the existing toy language force the new state?** If the new mechanism's state is reached by the existing language's evaluation, the toy stays and the new question is a *mode* or a *kernel* on it (abort-and-restart was one `Mode` on the same kernel; the resumable session was one more kernel with a `runUpTo`). If it is not reached (edits inside a body, positions, identity across runs), the language needs a feature, and the fidelity list gains a claim per feature. If the feature would change what every existing scenario means, that is a new toy, and the old one is kept as the floor it is.
+* **Which of the old theorems become lemmas?** A theorem that quantified over hand-written rule sets should, once the toy's programs can be mapped to rules, be restated over every program of the toy language, by `decide` where it was by hand. The old statement is kept and the new one cites it. (Track L's order-dependence findings were two hand-written rule sets; with the namer as rules over programs they became theorems about the programs that showed them.)
+* **Does the old conformance theorem still hold?** Extending the language or the kernel regenerates the old results file and re-checks the old theorem before the new one is written; a number that moves is either a fidelity correction, recorded as such, or a regression.
+* **Which layer does the new question live in?** A mechanism that is about the *facts* (abort, reordering, peeking) goes into the theory beneath the kernel and is proved for every rule set; one that is about the kernel's *non-fact state* (a burst, a consumed map, a cache) goes into the kernel and is checked by `decide` on scenarios; one that is about what the facts are *keyed by* (runs, revisions, edits) is a new layer between the two. Putting it in the wrong layer either makes it unprovable or makes it a claim about one kernel.
+* **What does the old toy abstract away that the new question is about?** Read the old "what it cannot do" list; the new question is usually on it. If the answer is "trees", the next toy has trees, and the old one's kernels are its oracle for everything that is not about trees.
+* **Which findings of the old climb are hypotheses of the new one?** A triage row that the new toy can settle becomes its first scenario.
+
+The artefact is a section at the top of the new note saying what is inherited (the theory, the language, the kernel, the harness, the results file), what is added, and which old theorems are restated.
+
 ## Checks
 
 * Every file, declaration and tracker reference named in a note is a link, and a lint enforces it, so a renamed theorem breaks the note that cites it.

@@ -102,6 +102,10 @@ Each rung: what it is for, what it costs, what it finds and cannot find, and the
 
 **Leaves.** Rows I1 to I9, the Track I rows of [`theorems.md`](theorems.md) and [`status.md`](status.md), and the future-work boxes at the end of each track note, ticked as they close.
 
+### 1.10 The next climb on the same floor
+
+A second question about a mechanism starts from the previous toy and model, and the decision is which of three things it is. A *mode or kernel* on the existing toy, when the existing language already forces the new state: abort-and-restart was one `Mode` on the kernel ([`track-i.md`](../packages/scala/docs/track-i.md) §11), and the resumable session one more Java kernel ([`track-i-scala3-cancellation.md`](../packages/scala/docs/track-i-scala3-cancellation.md) §5). A *new layer* between the theory and the kernel, when the question is about what facts are keyed by: facts that outlive a run, re-validated by trace ([`Query/Revision.lean`](../packages/query/Query/Revision.lean)). A *new toy*, when the question is on the old toy's list of what it abstracts away: trees with positions and edits inside a body (§6 of the track note). In every case the old results file is regenerated and the old conformance theorem re-checked before the new one is written, and theorems the old climb proved over hand-written rule sets are restated over the toy's programs where the new toy allows it, as Track L's L2 and L9 were ([`l2_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L377), [`l9_dotc_order_dependent`](../packages/scala-types/ScalaTypes/ToyNamer.lean#L338)). The skill's "Building on a previous toy and model" section has the questions to answer first.
+
 ## 2. The process
 
 ```mermaid

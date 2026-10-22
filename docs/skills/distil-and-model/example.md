@@ -212,6 +212,21 @@ The third row was not foreseen. It became the first item in the design note for 
 
 Nine rows, each with the system, the evidence (a scenario, a theorem, a test), a status (triage, draft, filed, no action) and a next step. Two are confirmed on scalac with tests; two are patches on dotc passing its suites; one is confirmed by reading platform source; four are in triage with the test that would settle each named.
 
+## 10. The next rung, on this floor
+
+This climb was itself the second: the theory of lazy facts with a black hole came from the previous question (why a well-founded program gets a cyclic-reference error in one compiler and not another, and why a wildcard export silently drops a member by file order), whose theorems quantified over rule sets written by hand. The interruption question added a layer beneath the kernel (abort budgets, a touched set in place of the stack, taint on peeked answers) and proved it for every rule set; then the namer as rules over programs let the previous climb's two hand-written findings be restated as theorems over the programs that showed them.
+
+The questions after this one, each answered on the same floor until it gave way:
+
+| question | where it went | what it needed |
+|---|---|---|
+| abort and restart instead of nested servicing | one `Mode` on the same kernel; four theorems over the same seven scenarios | nothing new in the language |
+| a targeted, resumable session for the never-interrupting design | one more kernel in the Java toy with a `runUpTo`, and a replay harness over an editing session | an edit event that appends to a file |
+| facts that outlive a run, re-validated by the trace they recorded | a new layer between the theory and the kernel: facts keyed by revision | the theory's existing trace theorem, applied to the namer's rules |
+| which subtrees a request may leave untyped, and what an edit inside a body invalidates | a new toy | trees with positions, an edit as a tree replacement, a dependency from facts to subtrees: the first three items of this toy's "cannot do" list |
+
+The rule the sequence shows: stay on the floor while the existing language forces the new state, add a layer when the question is about what facts are keyed by, and start a new toy when the question is about what the old one abstracted away.
+
 ## Why the model step was worth it, in one paragraph
 
 The toy alone reproduced the PR's bugs and predicted one more. The model ran a space the toy could not have run in reasonable time, and the space did three things the toy could not: it found the toy's own fidelity errors, by producing programs the toy's author had not thought to write; it isolated the one shape that survives every policy, which is a statement about the mechanism and not about a fix; and it stated the obligations of a design that did not exist yet as theorems, one of which nobody had anticipated. The conformance theorem is what makes those results about the toy, and the real system's tests are what make them about scalac.
