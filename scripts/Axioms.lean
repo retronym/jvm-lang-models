@@ -6,6 +6,7 @@ import Links.ZincBridgeLibs
 import Query.Lazy
 import Query.Freeze
 import Query.Interrupt
+import Query.Revision
 import ScalaTypes.Laziness
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
@@ -147,6 +148,9 @@ import ScalaTypes.Fusion
 #print axioms Query.Interrupt.consuming_add_one_owner
 #print axioms Query.Interrupt.keep_cache_sound
 #print axioms ScalaTypes.Laziness.implicitSkip_taint_rejects
+-- Track I: revisions
+#print axioms Query.Revision.reuse_sound
+#print axioms Query.Revision.session_eq_fresh
 -- Track I: the namer and the kernel
 #print axioms ScalaTypes.ToyNamer.l9_dotc_order_dependent
 #print axioms ScalaTypes.ToyNamer.l2_dotc_order_dependent
