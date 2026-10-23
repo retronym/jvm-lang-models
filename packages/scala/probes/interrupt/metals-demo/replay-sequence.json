@@ -1,0 +1,452 @@
+[
+{
+"file": "core/Contexts.scala",
+"line": 762,
+"col": 24
+},
+{
+"file": "core/Contexts.scala",
+"line": 398,
+"col": 90
+},
+{
+"file": "core/Contexts.scala",
+"line": 851,
+"col": 53
+},
+{
+"file": "core/Contexts.scala",
+"line": 199,
+"col": 47
+},
+{
+"file": "core/Contexts.scala",
+"line": 258,
+"col": 37
+},
+{
+"file": "core/Contexts.scala",
+"line": 1185,
+"col": 83
+},
+{
+"file": "core/Contexts.scala",
+"line": 289,
+"col": 12
+},
+{
+"file": "core/Contexts.scala",
+"line": 807,
+"col": 36
+},
+{
+"file": "core/Contexts.scala",
+"line": 225,
+"col": 38
+},
+{
+"file": "core/Contexts.scala",
+"line": 1112,
+"col": 85
+},
+{
+"file": "core/Contexts.scala",
+"line": 550,
+"col": 14
+},
+{
+"file": "core/Contexts.scala",
+"line": 181,
+"col": 16
+},
+{
+"file": "core/Types.scala",
+"line": 659,
+"col": 12
+},
+{
+"file": "core/Types.scala",
+"line": 3475,
+"col": 12
+},
+{
+"file": "core/Types.scala",
+"line": 3359,
+"col": 38
+},
+{
+"file": "core/Types.scala",
+"line": 525,
+"col": 12
+},
+{
+"file": "core/Types.scala",
+"line": 1839,
+"col": 43
+},
+{
+"file": "core/Types.scala",
+"line": 688,
+"col": 22
+},
+{
+"file": "core/Types.scala",
+"line": 4198,
+"col": 35
+},
+{
+"file": "core/Types.scala",
+"line": 3400,
+"col": 18
+},
+{
+"file": "core/Types.scala",
+"line": 451,
+"col": 29
+},
+{
+"file": "core/Types.scala",
+"line": 6183,
+"col": 37
+},
+{
+"file": "core/Types.scala",
+"line": 4270,
+"col": 31
+},
+{
+"file": "core/Types.scala",
+"line": 911,
+"col": 30
+},
+{
+"file": "core/Contexts.scala",
+"line": 560,
+"col": 43
+},
+{
+"file": "core/Contexts.scala",
+"line": 235,
+"col": 25
+},
+{
+"file": "core/Contexts.scala",
+"line": 852,
+"col": 61
+},
+{
+"file": "core/Contexts.scala",
+"line": 204,
+"col": 24
+},
+{
+"file": "core/Contexts.scala",
+"line": 557,
+"col": 63
+},
+{
+"file": "core/Contexts.scala",
+"line": 196,
+"col": 10
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 2456,
+"col": 15
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 3723,
+"col": 35
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 681,
+"col": 18
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 1275,
+"col": 12
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 1821,
+"col": 18
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 716,
+"col": 47
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 2396,
+"col": 10
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 619,
+"col": 33
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 2515,
+"col": 25
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 1372,
+"col": 44
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 2467,
+"col": 46
+},
+{
+"file": "core/TypeComparer.scala",
+"line": 3530,
+"col": 15
+},
+{
+"file": "core/Phases.scala",
+"line": 182,
+"col": 26
+},
+{
+"file": "core/Phases.scala",
+"line": 108,
+"col": 91
+},
+{
+"file": "core/Phases.scala",
+"line": 535,
+"col": 38
+},
+{
+"file": "core/Phases.scala",
+"line": 525,
+"col": 27
+},
+{
+"file": "core/Phases.scala",
+"line": 187,
+"col": 31
+},
+{
+"file": "core/Phases.scala",
+"line": 328,
+"col": 15
+},
+{
+"file": "core/Phases.scala",
+"line": 105,
+"col": 108
+},
+{
+"file": "core/Phases.scala",
+"line": 508,
+"col": 58
+},
+{
+"file": "core/Phases.scala",
+"line": 78,
+"col": 41
+},
+{
+"file": "core/Phases.scala",
+"line": 519,
+"col": 30
+},
+{
+"file": "core/Phases.scala",
+"line": 77,
+"col": 25
+},
+{
+"file": "core/Phases.scala",
+"line": 212,
+"col": 33
+},
+{
+"file": "core/Types.scala",
+"line": 3841,
+"col": 72
+},
+{
+"file": "core/Types.scala",
+"line": 5142,
+"col": 18
+},
+{
+"file": "core/Types.scala",
+"line": 4068,
+"col": 17
+},
+{
+"file": "core/Types.scala",
+"line": 3429,
+"col": 18
+},
+{
+"file": "core/Types.scala",
+"line": 5765,
+"col": 67
+},
+{
+"file": "core/Types.scala",
+"line": 2567,
+"col": 11
+},
+{
+"file": "core/Scopes.scala",
+"line": 303,
+"col": 15
+},
+{
+"file": "core/Scopes.scala",
+"line": 356,
+"col": 28
+},
+{
+"file": "core/Scopes.scala",
+"line": 296,
+"col": 57
+},
+{
+"file": "core/Scopes.scala",
+"line": 267,
+"col": 26
+},
+{
+"file": "core/Scopes.scala",
+"line": 240,
+"col": 37
+},
+{
+"file": "core/Scopes.scala",
+"line": 214,
+"col": 28
+},
+{
+"file": "core/Scopes.scala",
+"line": 467,
+"col": 30
+},
+{
+"file": "core/Scopes.scala",
+"line": 162,
+"col": 34
+},
+{
+"file": "core/Scopes.scala",
+"line": 413,
+"col": 53
+},
+{
+"file": "core/Scopes.scala",
+"line": 463,
+"col": 18
+},
+{
+"file": "core/Scopes.scala",
+"line": 208,
+"col": 25
+},
+{
+"file": "core/Scopes.scala",
+"line": 110,
+"col": 9
+},
+{
+"file": "core/Symbols.scala",
+"line": 629,
+"col": 69
+},
+{
+"file": "core/Symbols.scala",
+"line": 991,
+"col": 51
+},
+{
+"file": "core/Symbols.scala",
+"line": 945,
+"col": 71
+},
+{
+"file": "core/Symbols.scala",
+"line": 698,
+"col": 13
+},
+{
+"file": "core/Symbols.scala",
+"line": 874,
+"col": 60
+},
+{
+"file": "core/Symbols.scala",
+"line": 610,
+"col": 38
+},
+{
+"file": "core/Symbols.scala",
+"line": 210,
+"col": 30
+},
+{
+"file": "core/Symbols.scala",
+"line": 310,
+"col": 35
+},
+{
+"file": "core/Symbols.scala",
+"line": 967,
+"col": 46
+},
+{
+"file": "core/Symbols.scala",
+"line": 811,
+"col": 60
+},
+{
+"file": "core/Symbols.scala",
+"line": 383,
+"col": 40
+},
+{
+"file": "core/Symbols.scala",
+"line": 687,
+"col": 32
+},
+{
+"file": "core/Contexts.scala",
+"line": 424,
+"col": 9
+},
+{
+"file": "core/Contexts.scala",
+"line": 1058,
+"col": 21
+},
+{
+"file": "core/Contexts.scala",
+"line": 898,
+"col": 48
+},
+{
+"file": "core/Contexts.scala",
+"line": 183,
+"col": 10
+},
+{
+"file": "core/Contexts.scala",
+"line": 265,
+"col": 26
+},
+{
+"file": "core/Contexts.scala",
+"line": 742,
+"col": 12
+}
+]
