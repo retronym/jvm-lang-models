@@ -6,3 +6,4 @@ import Query.Lazy
 import Query.Freeze
 import Query.Interrupt
 import Query.Revision
+import Query.Concurrent
