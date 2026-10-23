@@ -1,0 +1,326 @@
+[
+{
+"file": "core/Types.scala",
+"edit_line": 6279,
+"line": 6420,
+"col": 14
+},
+{
+"file": "core/Types.scala",
+"edit_line": 6928,
+"line": 2668,
+"col": 17
+},
+{
+"file": "core/Types.scala",
+"edit_line": 6973,
+"line": 6574,
+"col": 27
+},
+{
+"file": "core/Types.scala",
+"edit_line": 1280,
+"line": 6216,
+"col": 17
+},
+{
+"file": "core/Types.scala",
+"edit_line": 645,
+"line": 5482,
+"col": 95
+},
+{
+"file": "core/Types.scala",
+"edit_line": 2254,
+"line": 285,
+"col": 49
+},
+{
+"file": "core/Types.scala",
+"edit_line": 874,
+"line": 844,
+"col": 15
+},
+{
+"file": "core/Types.scala",
+"edit_line": 2671,
+"line": 3426,
+"col": 44
+},
+{
+"file": "core/Types.scala",
+"edit_line": 454,
+"line": 6400,
+"col": 18
+},
+{
+"file": "core/Types.scala",
+"edit_line": 6146,
+"line": 2728,
+"col": 12
+},
+{
+"file": "core/Types.scala",
+"edit_line": 4068,
+"line": 6841,
+"col": 10
+},
+{
+"file": "core/Types.scala",
+"edit_line": 3891,
+"line": 5611,
+"col": 36
+},
+{
+"file": "core/Types.scala",
+"edit_line": 1121,
+"line": 3571,
+"col": 19
+},
+{
+"file": "core/Types.scala",
+"edit_line": 3219,
+"line": 6984,
+"col": 28
+},
+{
+"file": "core/Types.scala",
+"edit_line": 451,
+"line": 957,
+"col": 13
+},
+{
+"file": "core/Types.scala",
+"edit_line": 5544,
+"line": 1476,
+"col": 17
+},
+{
+"file": "core/Types.scala",
+"edit_line": 5358,
+"line": 918,
+"col": 14
+},
+{
+"file": "core/Types.scala",
+"edit_line": 122,
+"line": 2939,
+"col": 16
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 431,
+"line": 3216,
+"col": 69
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2706,
+"line": 2891,
+"col": 25
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 3956,
+"line": 1283,
+"col": 7
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2269,
+"line": 601,
+"col": 9
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2246,
+"line": 192,
+"col": 25
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 1582,
+"line": 679,
+"col": 12
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 462,
+"line": 3184,
+"col": 16
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 1102,
+"line": 3912,
+"col": 17
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 3051,
+"line": 3556,
+"col": 15
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 853,
+"line": 2889,
+"col": 65
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2609,
+"line": 760,
+"col": 70
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2895,
+"line": 1409,
+"col": 28
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 1720,
+"line": 4111,
+"col": 17
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 254,
+"line": 1393,
+"col": 23
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2683,
+"line": 4161,
+"col": 7
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 389,
+"line": 928,
+"col": 17
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 3013,
+"line": 1654,
+"col": 8
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 2202,
+"line": 1927,
+"col": 43
+},
+{
+"file": "core/TypeComparer.scala",
+"edit_line": 519,
+"line": 523,
+"col": 16
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 484,
+"line": 1112,
+"col": 45
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 136,
+"line": 1165,
+"col": 15
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 746,
+"line": 857,
+"col": 21
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 1127,
+"line": 914,
+"col": 71
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 1083,
+"line": 325,
+"col": 53
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 439,
+"line": 359,
+"col": 34
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 528,
+"line": 1175,
+"col": 7
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 446,
+"line": 370,
+"col": 25
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 767,
+"line": 913,
+"col": 8
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 809,
+"line": 196,
+"col": 10
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 292,
+"line": 182,
+"col": 19
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 554,
+"line": 771,
+"col": 14
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 807,
+"line": 1157,
+"col": 51
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 313,
+"line": 528,
+"col": 22
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 1039,
+"line": 1185,
+"col": 19
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 622,
+"line": 491,
+"col": 24
+},
+{
+"file": "core/Contexts.scala",
+"edit_line": 591,
+"line": 795,
+"col": 33
+}
+]
