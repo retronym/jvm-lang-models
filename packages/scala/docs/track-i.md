@@ -230,6 +230,10 @@ I14 and I19 are about dotc's representations, a run-indexed period and a span th
 
 **What the session told the design.** The editor's expensive questions are ranges, not points: semantic tokens, inlay hints and folding over the visible lines, and document highlight, a whole-file run on every cursor move (136 of 142 whole-file runs in one session), so once a hover is served in 20 ms the next targeting is by range ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11). An edit inside a body should keep the run, which is IntelliJ's block modification count and §12's first tier ([`tier1_body_edit`](../../scala-types/ScalaTypes/ToyTree.lean#L461)) brought to dotc: re-type the definition alone, in its recorded context, when its signature tree is unchanged. And Metals restarts the presentation compiler after every build compile, which discards a session still valid for the file being edited.
 
+## 14. Two readers
+
+The multi-reader step (the scala3 checkout's `interactive-multi-reader.md`): two forcers over one store with owner-tagged black holes and a barrier, in `Query/Concurrent.lean`, and a `dotc-concurrent` kernel with a deterministic two-reader scheduler in the toy. Linearizability for every interleaving from a fixed point alone, a wait-for cycle as a dependency cycle, the peek at another reader's hole as the race, and the aborted owner's waiter taking over unless `Touched` is left set: [track-i-concurrent.md](track-i-concurrent.md), with [`results-concurrent.txt`](../probes/interrupt/results-concurrent.txt).
+
 ## References
 
 * Acar, U. A., Blelloch, G. E., Harper, R. (2002). Adaptive functional programming. *POPL 2002*; journal version *ACM TOPLAS* 28(6), 2006. Self-adjusting computation: a demand-driven dependency graph re-evaluated after a change, the model behind incremental typing.
@@ -267,3 +271,4 @@ I14 and I19 are about dotc's representations, a run-indexed period and a span th
 - [ ] Metals: `textDocument/semanticTokens/range` for Scala 3, and inlay hints answered from a range target rather than a whole-file `run` ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11).
 - [ ] An edit inside a body keeps the session's run in dotc: re-index and re-type that definition alone when its signature tree is unchanged, §12's first tier on the real system ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11, §13).
 - [ ] Metals: restart the presentation compiler after a build compile only when a dependency's classes changed, so the session of the file being edited survives it ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11).
+- [x] Two readers over one session, the model and the toy (§14, [track-i-concurrent.md](track-i-concurrent.md)); the `Reader`, the read/write regime and completion as lazy resolve in dotc are the plan's steps 2 to 4.

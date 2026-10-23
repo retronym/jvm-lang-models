@@ -7,6 +7,7 @@ import Query.Lazy
 import Query.Freeze
 import Query.Interrupt
 import Query.Revision
+import Query.Concurrent
 import ScalaTypes.Laziness
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
@@ -149,6 +150,15 @@ import ScalaTypes.ToyTree
 #print axioms Query.Interrupt.consuming_add_one_owner
 #print axioms Query.Interrupt.keep_cache_sound
 #print axioms ScalaTypes.Laziness.implicitSkip_taint_rejects
+-- Track I: two forcers
+#print axioms Query.Concurrent.run_agree
+#print axioms Query.Concurrent.run_ranked_no_cyc
+#print axioms Query.Concurrent.waitCycle_unranked
+#print axioms Query.Concurrent.cross_cycle_both_report
+#print axioms Query.Concurrent.peek_any_races
+#print axioms Query.Concurrent.peek_own_agrees
+#print axioms Query.Concurrent.abort_waiter_takes_over
+#print axioms Query.Concurrent.abort_keep_hole_waiter_stuck
 -- Track I: revisions
 #print axioms Query.Revision.reuse_sound
 #print axioms Query.Revision.session_eq_fresh
