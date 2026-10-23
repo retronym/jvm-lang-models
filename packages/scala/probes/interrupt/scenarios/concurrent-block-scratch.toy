@@ -1,0 +1,10 @@
+// event: completion A C.m.q
+// concurrent: completion A C.m.q; completion A D.n.s
+// note: two readers with targets inside blocks of different declarations: the request's target path is per-reader scratch (kind A of the design's table); shared, a reader resuming after a switch types its block against the other reader's target
+// file: A
+class Int {}
+class String {}
+class C { def m = { def p: Int; def q = M.m.i; q } }
+class D { def n = { def r: String; def s = M.m.s; s } }
+object M { def m = N }
+object N { def i: Int; def s: String }

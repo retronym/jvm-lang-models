@@ -1,0 +1,10 @@
+// event: completion A Ops.foo
+// concurrent: completion A Ops.foo; completion A Use.a
+// note: the peek (isCompleting, scalac's isCyclicOrErroneous): Use.a resolves t.foo through the implicit view Ops while the other reader is inside Ops.foo's completer; a peek that sees the other reader's hole skips the view and answers "not a member"; one that sees only its own waits and answers Int
+// file: A
+class Int {}
+class T {}
+implicit class Ops(t: T) { def foo = M.m.n }
+object M { def m = N }
+object N { def n: Int }
+class Use { def t: T; def a = t.foo }

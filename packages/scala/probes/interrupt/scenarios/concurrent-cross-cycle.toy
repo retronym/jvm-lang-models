@@ -1,0 +1,9 @@
+// event: completion A A.x
+// concurrent: completion A A.x; completion A B.y
+// note: A.x's signature needs B.y's and B.y's needs A.x's, each through a view that gives its completer a safepoint before the cross reference; forced from two readers it is a wait-for cycle, closed by whichever reader asks second, which reports CyclicReference; the other's wait then succeeds. Sequentially both are cycles too; only the site named differs
+// file: A
+class Int {}
+object A { def x = M.m.y; def ok: Int }
+object B { def y = N.n.x; def ok: Int }
+object M { def m = B }
+object N { def n = A }

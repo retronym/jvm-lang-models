@@ -1,0 +1,9 @@
+// event: completion A C.a
+// concurrent: completion A C.a; completion A C.d
+// note: two readers whose targets are in one declaration: the declaration's typing is a fact with a barrier, the second reader waits for the first to finish it
+// file: A
+class Int {}
+class String {}
+class C { def a = M.m.i; def b: String; def d = M.m.s }
+object M { def m = N }
+object N { def i: Int; def s: String }

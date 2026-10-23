@@ -1,0 +1,11 @@
+// event: completion A Use1.a
+// concurrent: completion A Use1.a; completion A Use2.b
+// note: two readers in different declarations both need Lib.v; whoever is first completes it and the other waits on its barrier; every interleaving answers as the sequential run
+// file: A
+class Int {}
+class String {}
+object Lib { def v = M.m.i; def w = v }
+object M { def m = N }
+object N { def i: Int; def s: String }
+class Use1 { def a = Lib.v; def c = Lib.w }
+class Use2 { def b = Lib.w; def d = M.m.s }

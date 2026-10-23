@@ -1,0 +1,180 @@
+== concurrent-block-scratch: completion A:C.m.q | completion A:D.n.s
+   two readers with targets inside blocks of different declarations: the request's target path is per-reader scratch (kind A of the design's table); shared, a reader resuming after a switch types its block against the other reader's target
+   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
+   dotc-concurrent                    64 (7x7)          0            0          0   same
+   dotc-concurrent-peek-any           64 (7x7)          0            0          0   same
+   dotc-concurrent-shared-scratch     64 (7x7)          0            0          0   same
+   reference (A then B):
+    answer 1: Int:
+    answer 2: String:
+    answer 3: class Int: 
+              class String: 
+              class C: m
+              body C.m: p q
+              class D: n
+              body D.n: r s
+              object M: m
+              object N: i s
+
+== concurrent-cross-cycle: completion A:A.x | completion A:B.y
+   A.x's signature needs B.y's and B.y's needs A.x's, each through a view that gives its completer a safepoint before the cross reference; forced from two readers it is a wait-for cycle, closed by whichever reader asks second, which reports CyclicReference; the other's wait then succeeds. Sequentially both are cycles too; only the site named differs
+   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
+   dotc-concurrent                    81 (8x8)          0           15          0   same
+   dotc-concurrent-peek-any           81 (8x8)          0           15          0   same
+   dotc-concurrent-shared-scratch     81 (8x8)          0           15          0   same
+   dotc-concurrent reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-peek-any reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-shared-scratch reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   reference (A then B):
+    answer 1: <error: cyclic reference involving x>: <no members>
+    answer 2: <error: cyclic reference involving x>: <no members>
+    answer 3: class Int: 
+              object A: ok x
+              object B: ok y
+              object M: m
+              object N: n
+              error A:A.x: cyclic reference involving x
+              error A:B.y: cyclic reference involving x
+
+== concurrent-peek-implicit: completion A:Ops.foo | completion A:Use.a
+   the peek (isCompleting, scalac's isCyclicOrErroneous): Use.a resolves t.foo through the implicit view Ops while the other reader is inside Ops.foo's completer; a peek that sees the other reader's hole skips the view and answers "not a member"; one that sees only its own waits and answers Int
+   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
+   dotc-concurrent                    63 (6x8)          0            0          0   same
+   dotc-concurrent-peek-any           63 (6x8)         24            0          0   same
+   dotc-concurrent-shared-scratch     63 (6x8)          0            0          0   same
+   dotc-concurrent-peek-any races at (i,j) = [0,0, 0,1, 0,2, 1,1, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8, 2,2, 2,3, 2,4, 2,5, 2,6, 2,7, 2,8, 3,3, 3,4, 3,5, 3,6, 3,7, 3,8]
+    (i,j)=0,0 race:
+      A: rhs M.m, rhs N.n, rhs Ops.foo, member Ops.foo, class Ops, synthetic <toplevel>.Ops
+      B: rhs Use.t, member Use.t, peek Ops.foo completing, rhs Use.a, member Use.a, class Use
+      answer 2:
+        - Int: 
+        + <error: value foo is not a member of T>: <no members>
+      answer 3:
+        + error A:Use.a: value foo is not a member of T
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              class T: 
+              class Ops: foo
+              object M: m
+              object N: n
+              class Use: a t
+              synthetic companions: Ops
+
+== concurrent-same-decl: completion A:C.a | completion A:C.d
+   two readers whose targets are in one declaration: the declaration's typing is a fact with a barrier, the second reader waits for the first to finish it
+   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
+   dotc-concurrent                  121 (10x10)          0            0          0   same
+   dotc-concurrent-peek-any         121 (10x10)          0            0          0   same
+   dotc-concurrent-shared-scratch   121 (10x10)          0            0          0   same
+   reference (A then B):
+    answer 1: Int:
+    answer 2: String:
+    answer 3: class Int: 
+              class String: 
+              class C: a b d
+              object M: m
+              object N: i s
+
+== concurrent-shared-facts: completion A:Use1.a | completion A:Use2.b
+   two readers in different declarations both need Lib.v; whoever is first completes it and the other waits on its barrier; every interleaving answers as the sequential run
+   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
+   dotc-concurrent                  110 (9x10)          0            0          0   same
+   dotc-concurrent-peek-any         110 (9x10)          0            0          0   same
+   dotc-concurrent-shared-scratch   110 (9x10)          0            0          0   same
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              class String: 
+              object Lib: v w
+              object M: m
+              object N: i s
+              class Use1: a c
+              class Use2: b d
+

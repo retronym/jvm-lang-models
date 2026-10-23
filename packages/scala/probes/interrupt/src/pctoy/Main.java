@@ -3,17 +3,18 @@ package pctoy;
 import java.nio.file.*;
 import java.util.*;
 
-/** `java pctoy.Main <scenarios dir> [--all] [--trace] [--sessions | --tiers] [--kernel name]...` */
+/** `java pctoy.Main <scenarios dir> [--all] [--trace] [--sessions | --tiers | --concurrent] [--kernel name]...` */
 public final class Main {
   public static void main(String[] args) throws Exception {
     Path dir = Path.of(args[0]);
-    boolean all = false, trace = false, sessions = false, tiers = false;
+    boolean all = false, trace = false, sessions = false, tiers = false, concurrent = false;
     List<String> kernels = new ArrayList<>();
     for (int i = 1; i < args.length; i++) {
       switch (args[i]) {
         case "--all" -> all = true;
         case "--sessions" -> sessions = true;
         case "--tiers" -> tiers = true;
+        case "--concurrent" -> concurrent = true;
         case "--trace" -> trace = true;
         case "--kernel" -> kernels.add(args[++i]);
         default -> throw new IllegalArgumentException(args[i]);
@@ -23,8 +24,14 @@ public final class Main {
     List<Path> files = new ArrayList<>();
     try (var ds = Files.newDirectoryStream(dir, "*.toy")) { for (Path p : ds) files.add(p); }
     Collections.sort(files);
-    final boolean onlyTiers = tiers;
+    final boolean onlyTiers = tiers, onlyConcurrent = concurrent;
     files.removeIf(p -> p.getFileName().toString().startsWith("tier") != onlyTiers);   // the tier scenarios are for --tiers alone
+    files.removeIf(p -> p.getFileName().toString().startsWith("concurrent") != onlyConcurrent);   // and the two-reader ones for --concurrent
+    if (concurrent) {
+      List<String> ks = kernels.isEmpty() || kernels.equals(new ArrayList<>(Harness.KERNELS.keySet())) ? new ArrayList<>(ConcurrentHarness.KERNELS.keySet()) : kernels;
+      for (Path p : files) System.out.println(ConcurrentHarness.report(Harness.load(p), ks, all));
+      return;
+    }
     if (tiers) {
       for (Path p : files) {
         String out = Harness.tiers(Harness.load(p));
