@@ -13,6 +13,11 @@ schedules see different trees:
 * fused, `g` at a node sees ancestors and right siblings that `f` has not reached yet: a
   `prepareFor*` pre-pass sees the group's input, not `f`'s output (the reason for
   `runsAfterGroupsOf`);
+* fused, a miniphase can meet siblings in another order than the tree's: a parent's transform
+  hands trees it creates to the rest of the group (`transformFollowing`) after its children are
+  done, so a later miniphase transforms them after the parent's own children; unfused it meets
+  them in tree order. A miniphase that passes facts between siblings through the symbol table
+  then sees a different table (Memoize: a getter enters a field that a setter looks up by name);
 * fused, every miniphase runs at the phase after the group's *last* miniphase
   (`atPhase(miniPhases.last.next)`, [scala/scala3#3350](https://github.com/scala/scala3/pull/3350),
   for 6-7% speed), so an early miniphase sees the infos that later ones in its group produce.
@@ -26,10 +31,13 @@ and fused, `PatternMatcher`, later in the same group, has already replaced that 
 forwarder's line number differs. The others, measured the same way: `CapturedVars` collects the
 mutable locals that closures capture in a pre-pass over its group's input, before `LazyVals` (same
 group) makes lazy-val holders `Mutable`, so unfused it boxes the holders in `ObjectRef`s; `Memoize`
-reads "no field yet" as "no field needed" and fused only sees Mixin's trait setter after the getter
-(`transformFollowing`), so unfused a trait's val initializer is dropped and `tests/run/final-fields`
-prints `0` for `-4`; and `DropOuterAccessors`, fused, sees owners after `Flatten`, so it keeps outer
-accessors that `CountOuterAccesses` (another group) counted as droppable.
+gives a trait setter a body if a field named like its val exists, and fused it reaches the setter
+Mixin made (`transformFollowing`) after the overriding val's getter has made one, so the setter
+writes the trait's value into the overriding val's field: `tests/run/final-fields` prints `-4`
+where Scala 2 and the unfused schedule print `0`, and a narrowed override throws
+`ClassCastException` (scala/scala3#25108, a bug in the shipped, fused, compiler); and
+`DropOuterAccessors`, fused, sees owners after `Flatten`, so it keeps outer accessors that
+`CountOuterAccesses` (another group) counted as droppable.
 -/
 
 namespace ScalaTypes.Fusion
