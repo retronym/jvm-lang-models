@@ -234,6 +234,9 @@ I14 and I19 are about dotc's representations, a run-indexed period and a span th
 
 The multi-reader step (the scala3 checkout's `interactive-multi-reader.md`): two forcers over one store with owner-tagged black holes and a barrier, in `Query/Concurrent.lean`, and a `dotc-concurrent` kernel with a deterministic two-reader scheduler in the toy. Linearizability for every interleaving from a fixed point alone, a wait-for cycle as a dependency cycle, the peek at another reader's hole as the race, and the aborted owner's waiter taking over unless `Touched` is left set: [track-i-concurrent.md](track-i-concurrent.md), with [`results-concurrent.txt`](../probes/interrupt/results-concurrent.txt).
 
+
+The design as built ([track-i-multi-reader.md](track-i-multi-reader.md)): a claim per root coarser than a fact, the wait-for graph walked without a snapshot, the victim rule, the read/write regime, the publication idioms of `dotty.tools.sharing`, and the body-edit rule, each modelled against [retronym/scala3#84](https://github.com/retronym/scala3/issues/84)'s branch, with three findings for it (a leaked `PoisonTree` in `TreeUnpickler.readIndexedDef`, the report-or-back-off refinement of the cycle rule, the victim's retry needing a backoff).
+
 ## References
 
 * Acar, U. A., Blelloch, G. E., Harper, R. (2002). Adaptive functional programming. *POPL 2002*; journal version *ACM TOPLAS* 28(6), 2006. Self-adjusting computation: a demand-driven dependency graph re-evaluated after a change, the model behind incremental typing.
@@ -272,3 +275,4 @@ The multi-reader step (the scala3 checkout's `interactive-multi-reader.md`): two
 - [ ] An edit inside a body keeps the session's run in dotc: re-index and re-type that definition alone when its signature tree is unchanged, §12's first tier on the real system ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11, §13).
 - [ ] Metals: restart the presentation compiler after a build compile only when a dependency's classes changed, so the session of the file being edited survives it ([track-i-dotc-session-design.md](track-i-dotc-session-design.md) §11).
 - [x] Two readers over one session, the model and the toy (§14, [track-i-concurrent.md](track-i-concurrent.md)); the `Reader`, the read/write regime and completion as lazy resolve in dotc are the plan's steps 2 to 4.
+- [x] The multi-reader design as built in [retronym/scala3#84](https://github.com/retronym/scala3/issues/84), modelled: roots coarser than facts, the wait-for graph read without a snapshot, the victim rule and the regime, the publication idioms, the body-edit rule, and the toy with roots and cancellations ([track-i-multi-reader.md](track-i-multi-reader.md)).

@@ -1,0 +1,11 @@
+// event: completion A A.x
+// concurrent: completion A A.x; completion B B.v
+// note: the same lock order through file roots (TASTy's): A.x in file A needs B.v in file B, which needs Q.p in file A, a chain x -> v -> p. With a root per fact or per pair no cycle; with a root per file, reader A holds file A inside x while it waits for file B, and reader B holds file B inside v and asks for file A to complete Q: a false cycle under RAISE, an abort and retry under VICTIM
+// file: A
+class Int {}
+class A { def x = M.m.v }
+object Q { def p: Int }
+object M { def m = B }
+// file: B
+object B { def v = N.n.p }
+object N { def n = Q }

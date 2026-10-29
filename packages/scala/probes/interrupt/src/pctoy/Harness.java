@@ -8,7 +8,7 @@ import pctoy.Core.*;
  * turn, and the answers (the event's, then the fully typed units afterwards) are compared with the
  * reference, where the event arrives after the background work is done. */
 public final class Harness {
-  public record Scenario(String name, List<Ast.Source> sources, Event event, String note, List<Step> requests, List<Ask> concurrent) {}
+  public record Scenario(String name, List<Ast.Source> sources, Event event, String note, List<Step> requests, List<Ask> concurrent, String cancel) {}
 
   /** A request of a replay; with `cancelAt` ≥ 0 the same request is sent again at that safepoint of its job, which
    * interrupts the job on an interruptible kernel (the user typed on); the request's answer is the last one. */
@@ -38,12 +38,13 @@ public final class Harness {
   /** A scenario file: `// event: <event>` and `// note: ...` lines, optionally `// requests: <step>; <step>...` (the
    * replay of `--sessions` instead of `sweep`; a step is an event, optionally prefixed by `cancel@N`), then `// file: <Name>` sections and,
    * for an edit, an `// edit: <Name>` section with the new text; `// concurrent: <ask>; <ask>` names the two requests of
-   * `--concurrent` ({@link ConcurrentHarness}). Events: `completion F Decl.member`,
+   * `--concurrent` ({@link ConcurrentHarness}), and `// cancel: A` adds its third dimension, the first reader cancelled at
+   * each of its safepoints. Events: `completion F Decl.member`,
    * `loadedTyped F`, `edit F then <event>`. */
   public static Scenario load(Path p) throws java.io.IOException {
     String name = p.getFileName().toString().replaceAll("\\.toy$", "");
     List<String> lines = Files.readAllLines(p);
-    String eventLine = null, note = "", requestsLine = null, concurrentLine = null;
+    String eventLine = null, note = "", requestsLine = null, concurrentLine = null, cancel = null;
     Map<String, StringBuilder> files = new LinkedHashMap<>(), edits = new LinkedHashMap<>();
     StringBuilder cur = null;
     for (String l : lines) {
@@ -51,6 +52,7 @@ public final class Harness {
       else if (l.startsWith("// note:")) note = l.substring(8).trim();
       else if (l.startsWith("// requests:")) requestsLine = l.substring(12).trim();
       else if (l.startsWith("// concurrent:")) concurrentLine = l.substring(14).trim();
+      else if (l.startsWith("// cancel:")) cancel = l.substring(10).trim();
       else if (l.startsWith("// file:")) cur = files.computeIfAbsent(l.substring(8).trim(), k -> new StringBuilder());
       else if (l.startsWith("// edit:")) cur = edits.computeIfAbsent(l.substring(8).trim(), k -> new StringBuilder());
       else if (cur != null) cur.append(l).append('\n');
@@ -62,9 +64,9 @@ public final class Harness {
       requests = new ArrayList<>();
       for (String r : requestsLine.split(";")) {
         r = r.trim();
-        int cancel = -1;
-        if (r.startsWith("cancel@")) { cancel = Integer.parseInt(r.substring(7, r.indexOf(' '))); r = r.substring(r.indexOf(' ') + 1); }
-        requests.add(new Step(parseEvent(r, edits), cancel));
+        int cancelAt = -1;
+        if (r.startsWith("cancel@")) { cancelAt = Integer.parseInt(r.substring(7, r.indexOf(' '))); r = r.substring(r.indexOf(' ') + 1); }
+        requests.add(new Step(parseEvent(r, edits), cancelAt));
       }
     }
     List<Ask> concurrent = null;
@@ -72,7 +74,7 @@ public final class Harness {
       concurrent = new ArrayList<>();
       for (String r : concurrentLine.split(";")) concurrent.add(parseAsk(r.trim().split("\\s+")));
     }
-    return new Scenario(name, sources, parseEvent(eventLine, edits), note, requests, concurrent);
+    return new Scenario(name, sources, parseEvent(eventLine, edits), note, requests, concurrent, cancel);
   }
 
   private static Event parseEvent(String s, Map<String, StringBuilder> edits) {

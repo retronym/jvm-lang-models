@@ -68,6 +68,7 @@ Three things for steps 3 and 4 of the plan.
 ## Future work
 
 - [ ] A general progress theorem: under a ranked fixed point and a fair schedule, both forcers finish (a measure over the two stacks and the demands).
-- [ ] The abort with a waiter in the Java toy (a cancellation of one reader at every safepoint of every pair), and the unit's `problems` per reader, so that §4.3's diagnostics rule has a toy.
+- [x] The abort with a waiter in the Java toy (a cancellation of one reader at every safepoint of every pair): [track-i-multi-reader.md](track-i-multi-reader.md) §6, 0 races in 900 runs with the hole released, 573 false cycles with `readIndexedDef`'s leaked sentinel. Still open: the unit's `problems` per reader, so that §4.3's diagnostics rule has a toy.
 - [ ] Peeks at a declaration in progress (`u.typing`, I13's `synthesizeAhead`), the toy's second `isCompleting`.
-- [ ] More than two forcers: the wait-for graph becomes a graph, and `closesCycle` a search along owners.
+- [x] More than two forcers, at the claims level: [track-i-multi-reader.md](track-i-multi-reader.md) §2 and §3 (`Query/WaitGraph.lean`, `Query/Victim.lean`). Still open over the facts: a three-forcer `Query/Concurrent.lean`.
+- [x] What the design built next, modelled: roots coarser than facts, the victim rule, the publication idioms and the body-edit rule are [track-i-multi-reader.md](track-i-multi-reader.md).

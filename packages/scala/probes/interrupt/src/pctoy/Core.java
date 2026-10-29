@@ -76,6 +76,12 @@ public final class Core {
     public CyclicReference(String sym) { super("cyclic reference involving " + sym, null, false, false); this.sym = sym; }
   }
 
+  /** TASTy's `UnpicklingError` for a `PoisonTree` met in `treeAtAddr` ("Cyclic reference while unpickling definition"):
+   * not a `CyclicReference` the typer catches, it fails the request that meets it. */
+  public static final class UnpicklingError extends RuntimeException {
+    public UnpicklingError(String sym) { super("cyclic reference while unpickling definition " + sym, null, false, false); }
+  }
+
   /** scalac's `TyperResult`: a targeted type check has reached its target and unwinds with the answer. */
   public static final class TyperResult extends RuntimeException {
     public final String answer;

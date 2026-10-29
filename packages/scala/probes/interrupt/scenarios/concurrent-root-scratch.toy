@@ -1,0 +1,11 @@
+// event: completion A Use.a
+// concurrent: completion A Use.a; completion B Lib.w
+// cancel: A
+// note: shared scratch on a root (TASTy's treeAtAddr): reader A, cancelled while completing Lib.v in file B, leaves file B's reading sentinel on v when the kernel clears it only on publication (readIndexedDef has no try/finally); reader B, taking the root over for Lib.w, forces v and reports "cyclic reference while unpickling", a false cycle (I87's second source). Clearing the sentinel in a finally removes it; a root per fact has no such scratch
+// file: A
+class Int {}
+class Use { def a = Lib.v }
+// file: B
+object Lib { def v = M.m.i; def w = v }
+object M { def m = N }
+object N { def i: Int }

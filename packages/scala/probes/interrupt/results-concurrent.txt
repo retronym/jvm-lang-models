@@ -1,9 +1,57 @@
+== concurrent-abort-waiter: completion A:Use1.a | completion A:Use2.b | cancel A at each safepoint
+   the abort with a waiter (§3.1; abort_waiter_takes_over in the model): reader A is cancelled at each of its safepoints, at every pair; whatever A was completing is released unpublished, and B, waiting on it or arriving later, completes it itself and answers as the sequential run. Under a file root whose reading sentinel is cleared only on publication (dotc's readIndexedDef) the waiter meets the sentinel instead and reports a false cycle
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                  100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any         100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch   100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-victim           100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair        100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim 100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-root-file        100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim 100 (9x9) x9          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak   100 (9x9) x9          0            0          573          0        0        0   same
+   dotc-concurrent-root-file-leak reports a false cycle at (i,j) = [0,0@1, 0,0@2, 0,0@3, 0,0@4, 0,0@6, 0,0@7, 0,1@1, 0,1@3, 0,1@4, 0,2@1, 0,2@3, 0,2@4, 0,3@1, 0,3@3, 0,3@4, 0,4@1, 0,4@3, 0,4@4, 0,5@1, 0,5@3, 0,5@4, 0,6@1, 0,6@3, 0,6@4, 0,7@1, 0,7@3, 0,7@4, 0,8@1, 0,8@3, 0,8@4, 0,9@1, 0,9@3, 0,9@4, 1,0@1, 1,0@2, 1,0@3, 1,0@4, 1,0@6, 1,0@7, 1,1@1, ... 533 more]
+    (i,j)=0,0@1 false cycle:
+      A: rhs M.m, cancelled
+      B: 
+      answer 1:
+        - Int: 
+        + <cancelled>
+      answer 2:
+        - Int: 
+        + <failed: pctoy.Core$UnpicklingError: cyclic reference while unpickling definition v>
+      answer 3:
+        - class Int: 
+        - class String: 
+        - object Lib: v w
+        - object M: m
+        - object N: i s
+        - class Use1: a c
+        - class Use2: b d
+        + <failed: cyclic reference while unpickling definition v>
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              class String: 
+              object Lib: v w
+              object M: m
+              object N: i s
+              class Use1: a c
+              class Use2: b d
+
 == concurrent-block-scratch: completion A:C.m.q | completion A:D.n.s
    two readers with targets inside blocks of different declarations: the request's target path is per-reader scratch (kind A of the design's table); shared, a reader resuming after a switch types its block against the other reader's target
-   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
-   dotc-concurrent                    64 (7x7)          0            0          0   same
-   dotc-concurrent-peek-any           64 (7x7)          0            0          0   same
-   dotc-concurrent-shared-scratch     64 (7x7)          0            0          0   same
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                    64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any           64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch     64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-victim             64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair          64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim   64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file          64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim   64 (7x7)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak     64 (7x7)          0            0            0          0        0        0   same
    reference (A then B):
     answer 1: Int:
     answer 2: String:
@@ -18,10 +66,16 @@
 
 == concurrent-cross-cycle: completion A:A.x | completion A:B.y
    A.x's signature needs B.y's and B.y's needs A.x's, each through a view that gives its completer a safepoint before the cross reference; forced from two readers it is a wait-for cycle, closed by whichever reader asks second, which reports CyclicReference; the other's wait then succeeds. Sequentially both are cycles too; only the site named differs
-   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
-   dotc-concurrent                    81 (8x8)          0           15          0   same
-   dotc-concurrent-peek-any           81 (8x8)          0           15          0   same
-   dotc-concurrent-shared-scratch     81 (8x8)          0           15          0   same
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                    81 (8x8)          0           15            0          0        0        0   same
+   dotc-concurrent-peek-any           81 (8x8)          0           15            0          0        0        0   same
+   dotc-concurrent-shared-scratch     81 (8x8)          0           15            0          0        0        0   same
+   dotc-concurrent-victim             81 (8x8)          0           17            0          0        0        0   same
+   dotc-concurrent-root-pair          81 (8x8)          0           15            0          0        0        0   same
+   dotc-concurrent-root-pair-victim   81 (8x8)          0           15            0          0       10        0   same
+   dotc-concurrent-root-file          81 (8x8)          0            8            0          0        0        0   same
+   dotc-concurrent-root-file-victim   81 (8x8)          0            8            0          0        0        0   same
+   dotc-concurrent-root-file-leak     81 (8x8)          0            8            0          0        0        0   same
    dotc-concurrent reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
     (i,j)=0,1 cycle site:
       A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
@@ -109,6 +163,181 @@
         - error A:B.y: cyclic reference involving x
         + error A:A.x: cyclic reference involving y
         + error A:B.y: cyclic reference involving y
+   dotc-concurrent-victim reports the cycle elsewhere at (i,j) = [0,0, 0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,1, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,0 cycle site:
+      A: rhs M.m, wait y, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-root-pair reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, rhs A.x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-root-pair-victim aborts a victim at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+   dotc-concurrent-root-pair-victim reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8]
+    (i,j)=0,1 cycle site:
+      A: rhs M.m, abort victim at y, retry, wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, wait x, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-root-file reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8]
+    (i,j)=0,1 cycle site:
+      A: wait A, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, wait ok, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-root-file-victim reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8]
+    (i,j)=0,1 cycle site:
+      A: wait A, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, wait ok, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+   dotc-concurrent-root-file-leak reports the cycle elsewhere at (i,j) = [0,1, 0,2, 0,3, 0,4, 0,5, 0,6, 0,7, 0,8]
+    (i,j)=0,1 cycle site:
+      A: wait A, member A.x, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
+    (i,j)=0,2 cycle site:
+      A: wait x, member A.x, wait ok, rhs A.ok, member A.ok, class A
+      B: rhs N.n, rhs M.m, rhs A.x, rhs B.y, member B.y, rhs B.ok, member B.ok, class B
+      answer 1:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 2:
+        - <error: cyclic reference involving x>: <no members>
+        + <error: cyclic reference involving y>: <no members>
+      answer 3:
+        - error A:A.x: cyclic reference involving x
+        - error A:B.y: cyclic reference involving x
+        + error A:A.x: cyclic reference involving y
+        + error A:B.y: cyclic reference involving y
    reference (A then B):
     answer 1: <error: cyclic reference involving x>: <no members>
     answer 2: <error: cyclic reference involving x>: <no members>
@@ -122,10 +351,16 @@
 
 == concurrent-peek-implicit: completion A:Ops.foo | completion A:Use.a
    the peek (isCompleting, scalac's isCyclicOrErroneous): Use.a resolves t.foo through the implicit view Ops while the other reader is inside Ops.foo's completer; a peek that sees the other reader's hole skips the view and answers "not a member"; one that sees only its own waits and answers Int
-   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
-   dotc-concurrent                    63 (6x8)          0            0          0   same
-   dotc-concurrent-peek-any           63 (6x8)         24            0          0   same
-   dotc-concurrent-shared-scratch     63 (6x8)          0            0          0   same
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                    63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any           63 (6x8)         24            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch     63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-victim             63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair          63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim   63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file          63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim   63 (6x8)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak     63 (6x8)          0            0            0          0        0        0   same
    dotc-concurrent-peek-any races at (i,j) = [0,0, 0,1, 0,2, 1,1, 1,2, 1,3, 1,4, 1,5, 1,6, 1,7, 1,8, 2,2, 2,3, 2,4, 2,5, 2,6, 2,7, 2,8, 3,3, 3,4, 3,5, 3,6, 3,7, 3,8]
     (i,j)=0,0 race:
       A: rhs M.m, rhs N.n, rhs Ops.foo, member Ops.foo, class Ops, synthetic <toplevel>.Ops
@@ -146,12 +381,152 @@
               class Use: a t
               synthetic companions: Ops
 
+== concurrent-root-file: completion A:A.x | completion B:B.v
+   the same lock order through file roots (TASTy's): A.x in file A needs B.v in file B, which needs Q.p in file A, a chain x -> v -> p. With a root per fact or per pair no cycle; with a root per file, reader A holds file A inside x while it waits for file B, and reader B holds file B inside v and asks for file A to complete Q: a false cycle under RAISE, an abort and retry under VICTIM
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                    48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any           48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch     48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-victim             48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair          48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim   48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file          48 (7x5)          0            0            7          0        0        0   same
+   dotc-concurrent-root-file-victim   48 (7x5)          0            0            0          0        7        0   same
+   dotc-concurrent-root-file-leak     48 (7x5)          0            0            7          0        7        0   same
+   dotc-concurrent-root-file reports a false cycle at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+    (i,j)=0,0 false cycle:
+      A: rhs M.m, wait v, rhs A.x, member A.x, class A
+      B: rhs N.n, rhs B.v, member B.v, class B
+      answer 1:
+        - Int: 
+        + <error: cyclic reference involving Q>: <no members>
+      answer 2:
+        - Int: 
+        + <error: cyclic reference involving Q>: <no members>
+      answer 3:
+        + error A:A.x: cyclic reference involving Q
+      answer 4:
+        + error B:B.v: cyclic reference involving Q
+   dotc-concurrent-root-file-victim aborts a victim at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+   dotc-concurrent-root-file-leak aborts a victim at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+   dotc-concurrent-root-file-leak reports a false cycle at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+    (i,j)=0,0 false cycle:
+      A: rhs M.m, wait v
+      B: rhs N.n, abort victim at Q, retry
+      answer 1:
+        - Int: 
+        + <failed: pctoy.Core$UnpicklingError: cyclic reference while unpickling definition v>
+      answer 2:
+        - Int: 
+        + <failed: pctoy.Core$UnpicklingError: cyclic reference while unpickling definition v>
+      answer 3:
+        - class Int: 
+        - class A: x
+        - object Q: p
+        - object M: m
+        + <failed: cyclic reference while unpickling definition x>
+      answer 4:
+        - object B: v
+        - object N: n
+        + <failed: cyclic reference while unpickling definition v>
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              class A: x
+              object Q: p
+              object M: m
+    answer 4: object B: v
+              object N: n
+
+== concurrent-root-pair: completion A:A.x | completion A:B.v
+   a lock order that is no dependency cycle: A.x (in class A) needs B.v, and B.v needs object A's p, a chain x -> v -> p. With a root per fact no pair of safepoints finds a cycle. With a class and its companion one root (the loader's), reader A holds pair A inside x while it waits for pair B, and reader B holds pair B inside v and asks for pair A to complete object A: a wait-for cycle the sequential run never has; RAISE reports it as a cyclic reference (I54, lesson 6), VICTIM aborts and retries the reader that closes it
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                    48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any           48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch     48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-victim             48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair          48 (7x5)          0            0            7          0        0        0   same
+   dotc-concurrent-root-pair-victim   48 (7x5)          0            0            0          0        7        0   same
+   dotc-concurrent-root-file          48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim   48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak     48 (7x5)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair reports a false cycle at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+    (i,j)=0,0 false cycle:
+      A: rhs M.m, wait v, rhs A.x, member A.x, class A
+      B: rhs N.n, rhs B.v, member B.v, class B
+      answer 1:
+        - Int: 
+        + <error: cyclic reference involving A>: <no members>
+      answer 2:
+        - Int: 
+        + <error: cyclic reference involving A>: <no members>
+      answer 3:
+        + error A:A.x: cyclic reference involving A
+        + error A:B.v: cyclic reference involving A
+   dotc-concurrent-root-pair-victim aborts a victim at (i,j) = [0,0, 0,1, 1,1, 1,2, 1,3, 1,4, 1,5]
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              object A: p
+              class A: x
+              object B: v
+              object M: m
+              object N: n
+
+== concurrent-root-scratch: completion A:Use.a | completion B:Lib.w | cancel A at each safepoint
+   shared scratch on a root (TASTy's treeAtAddr): reader A, cancelled while completing Lib.v in file B, leaves file B's reading sentinel on v when the kernel clears it only on publication (readIndexedDef has no try/finally); reader B, taking the root over for Lib.w, forces v and reports "cyclic reference while unpickling", a false cycle (I87's second source). Clearing the sentinel in a finally removes it; a root per fact has no such scratch
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                  56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any         56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch   56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-victim           56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair        56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim 56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-root-file        56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim 56 (6x7) x6          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak   56 (6x7) x6          0            0          203          0        0        0   same
+   dotc-concurrent-root-file-leak reports a false cycle at (i,j) = [0,0@1, 0,0@2, 0,0@3, 0,0@4, 0,1@1, 0,2@1, 0,3@1, 0,4@1, 0,5@1, 0,6@1, 0,7@1, 1,0@1, 1,0@2, 1,0@3, 1,0@4, 1,1@1, 1,1@2, 1,1@3, 1,1@4, 1,2@1, 1,2@2, 1,2@3, 1,2@4, 1,3@1, 1,3@2, 1,3@3, 1,3@4, 1,4@1, 1,4@2, 1,4@3, 1,4@4, 1,5@1, 1,5@2, 1,5@3, 1,5@4, 1,6@1, 1,6@2, 1,6@3, 1,6@4, 1,7@1, ... 163 more]
+    (i,j)=0,0@1 false cycle:
+      A: rhs M.m, cancelled
+      B: 
+      answer 1:
+        - Int: 
+        + <cancelled>
+      answer 2:
+        - Int: 
+        + <failed: pctoy.Core$UnpicklingError: cyclic reference while unpickling definition v>
+      answer 3:
+        - class Int: 
+        - class Use: a
+        + <failed: cyclic reference while unpickling definition a>
+      answer 4:
+        - object Lib: v w
+        - object M: m
+        - object N: i
+        + <failed: cyclic reference while unpickling definition v>
+   reference (A then B):
+    answer 1: Int:
+    answer 2: Int:
+    answer 3: class Int: 
+              class Use: a
+    answer 4: object Lib: v w
+              object M: m
+              object N: i
+
 == concurrent-same-decl: completion A:C.a | completion A:C.d
    two readers whose targets are in one declaration: the declaration's typing is a fact with a barrier, the second reader waits for the first to finish it
-   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
-   dotc-concurrent                  121 (10x10)          0            0          0   same
-   dotc-concurrent-peek-any         121 (10x10)          0            0          0   same
-   dotc-concurrent-shared-scratch   121 (10x10)          0            0          0   same
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                  121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any         121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch   121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-victim           121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair        121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim 121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file        121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim 121 (10x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak   121 (10x10)          0            0            0          0        0        0   same
    reference (A then B):
     answer 1: Int:
     answer 2: String:
@@ -163,10 +538,16 @@
 
 == concurrent-shared-facts: completion A:Use1.a | completion A:Use2.b
    two readers in different declarations both need Lib.v; whoever is first completes it and the other waits on its barrier; every interleaving answers as the sequential run
-   kernel                                pairs  divergent   cycle site   deadlock   A then B = dotc-session-path
-   dotc-concurrent                  110 (9x10)          0            0          0   same
-   dotc-concurrent-peek-any         110 (9x10)          0            0          0   same
-   dotc-concurrent-shared-scratch   110 (9x10)          0            0          0   same
+   kernel                                pairs      races   cycle site  false cycle   deadlock   aborts livelock   A then B = dotc-session-path
+   dotc-concurrent                  110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-peek-any         110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-shared-scratch   110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-victim           110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair        110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-pair-victim 110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file        110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-victim 110 (9x10)          0            0            0          0        0        0   same
+   dotc-concurrent-root-file-leak   110 (9x10)          0            0            0          0        0        0   same
    reference (A then B):
     answer 1: Int:
     answer 2: Int:
