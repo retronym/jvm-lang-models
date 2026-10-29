@@ -8,10 +8,16 @@ import Query.Freeze
 import Query.Interrupt
 import Query.Revision
 import Query.Concurrent
+import Query.Roots
+import Query.WaitGraph
+import Query.Victim
+import Query.Regime
+import Query.Publication
 import ScalaTypes.Laziness
 import ScalaTypes.Scopes
 import ScalaTypes.Fusion
 import ScalaTypes.ToyTree
+import ScalaTypes.ToyBodyEdit
 /-! The core theorems' axioms, checked by `scripts/check_axioms.py`: only `propext`,
 `Classical.choice` and `Quot.sound` are allowed (no `sorryAx`, no `Lean.ofReduceBool` from
 `native_decide`). -/
@@ -159,6 +165,25 @@ import ScalaTypes.ToyTree
 #print axioms Query.Concurrent.peek_own_agrees
 #print axioms Query.Concurrent.abort_waiter_takes_over
 #print axioms Query.Concurrent.abort_keep_hole_waiter_stuck
+-- Track I: the multi-reader design as built
+#print axioms Query.Roots.run_agree
+#print axioms Query.Roots.run_ranked_no_cyc
+#print axioms Query.Roots.depCycle_unranked
+#print axioms Query.Roots.lock_order_false_cycle
+#print axioms Query.Roots.lock_order_refine_ok
+#print axioms Query.Roots.peekBoth_report_false_cycle
+#print axioms Query.Roots.peekBoth_yield_sequential
+#print axioms Query.WaitGraph.release_window_false_chain
+#print axioms Query.WaitGraph.edge_check_sound
+#print axioms Query.Victim.livelock_forever
+#print axioms Query.Victim.backoff_progress
+#print axioms Query.Victim.raised_implies_depCycle
+#print axioms Query.Regime.done_one_version
+#print axioms Query.Publication.stamped_whole
+#print axioms Query.Publication.fields_valueFirst_weak_torn
+#print axioms Query.Publication.clear_loses_invalidation
+#print axioms ScalaTypes.ToyBodyEdit.rulesOf_erase
+#print axioms ScalaTypes.ToyBodyEdit.bodyEdit_kept_run_sound
 -- Track I: revisions
 #print axioms Query.Revision.reuse_sound
 #print axioms Query.Revision.session_eq_fresh

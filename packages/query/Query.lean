@@ -7,3 +7,8 @@ import Query.Freeze
 import Query.Interrupt
 import Query.Revision
 import Query.Concurrent
+import Query.Roots
+import Query.WaitGraph
+import Query.Victim
+import Query.Regime
+import Query.Publication

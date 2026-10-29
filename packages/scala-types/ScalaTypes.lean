@@ -17,3 +17,4 @@ import ScalaTypes.ToyKernel
 import ScalaTypes.ToySpace
 import ScalaTypes.ToyTree
 import ScalaTypes.ToyTreeNested
+import ScalaTypes.ToyBodyEdit

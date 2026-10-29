@@ -1,0 +1,10 @@
+// event: completion A A.x
+// concurrent: completion A A.x; completion A B.v
+// note: a lock order that is no dependency cycle: A.x (in class A) needs B.v, and B.v needs object A's p, a chain x -> v -> p. With a root per fact no pair of safepoints finds a cycle. With a class and its companion one root (the loader's), reader A holds pair A inside x while it waits for pair B, and reader B holds pair B inside v and asks for pair A to complete object A: a wait-for cycle the sequential run never has; RAISE reports it as a cyclic reference (I54, lesson 6), VICTIM aborts and retries the reader that closes it
+// file: A
+class Int {}
+object A { def p: Int }
+class A { def x = M.m.v }
+object B { def v = N.n.p }
+object M { def m = B }
+object N { def n = A }
